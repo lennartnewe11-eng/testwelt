@@ -1,0 +1,13 @@
+{
+  "name": "naehzelle-sim",
+  "version": "1.0.0",
+  "description": "Physikalische 3D-Simulation des Materialhandlings biegeschlaffer Textilien für automatisierte Nähprozesse",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node tests/validate.mjs",
+    "scenario": "node tests/scenario.mjs"
+  },
+  "license": "MIT"
+}
