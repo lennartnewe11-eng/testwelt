@@ -50,6 +50,8 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
+#cellLeft, #lineLeft, #cellRight, #lineRight { display: flex; flex-direction: column; gap: 14px; }
 html, body { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--font-body); }
 button, input, select, textarea { font: inherit; color: inherit; }
@@ -152,10 +154,20 @@ details summary { cursor: pointer; color: var(--ink-2); font-weight: 500; }
 .legend i { display: inline-block; width: 12px; height: 2px; vertical-align: middle; margin-right: 4px; }
 .tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 4px 8px; font: 12px var(--font-mono); display: none; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
 .tablewrap { overflow-x: auto; }
+table.stations { width: 100%; border-collapse: collapse; font-size: 12.5px; table-layout: fixed; }
+table.stations th { text-align: left; font: 600 11px var(--font-display); letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); padding: 4px; border-bottom: 1px solid var(--line); }
+table.stations td { padding: 6px 4px; border-bottom: 1px dashed var(--line); vertical-align: top; }
+table.stations td:nth-child(2) { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.stations .note { display: block; color: var(--ink-3); font-size: 11.5px; line-height: 1.35; margin-top: 2px; }
+table.stations col.c2 { width: 58px; } table.stations col.c3 { width: 52px; } table.stations col.c4 { width: 62px; }
 table.plies { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 table.plies th { text-align: left; font: 600 11px var(--font-display); letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); padding: 4px 4px; border-bottom: 1px solid var(--line); }
 table.plies td { padding: 4px; border-bottom: 1px dashed var(--line); font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 table.plies td:first-child { font-family: var(--font-body); }
+.ubar { display: grid; grid-template-columns: minmax(0, 1fr) 46px; gap: 2px 8px; align-items: center; font-size: 12.5px; }
+.ubar .ub { grid-column: 1 / -1; display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--line); }
+.ubar .ub i { display: block; height: 100%; }
+.ubar.bneck span:first-child { font-weight: 600; color: var(--warn); }
 .log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; font-size: 12.5px; }
 .log li { display: grid; grid-template-columns: 56px 1fr; gap: 6px; padding: 3px 6px; border-left: 3px solid var(--line); background: var(--panel-2); border-radius: 0 4px 4px 0; }
 .log li.warn { border-left-color: var(--warn); }
@@ -202,7 +214,11 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
 <div class="app">
   <header class="bar">
     <div class="brand"><h1>Nähzelle Materialfluss</h1><span>Physikalische Simulation biegeschlaffer Halbzeuge</span></div>
-    <div class="controls">
+    <div class="seg" id="modeSeg" aria-label="Ansicht">
+      <button data-mode="zelle" aria-pressed="true" type="button">Nähzelle (Physik)</button>
+      <button data-mode="linie" aria-pressed="false" type="button">Produktionsstraße</button>
+    </div>
+    <div class="controls" id="cellControls">
       <button class="btn primary" id="btnRun" type="button"><svg viewBox="0 0 16 16"><path d="M4 2l10 6-10 6z"/></svg><span>Programm starten</span></button>
       <button class="btn" id="btnPause" type="button" title="Physik anhalten/fortsetzen">Pause</button>
       <button class="btn" id="btnReset" type="button" title="Welt mit den aktuellen Einstellungen neu aufbauen">Zurücksetzen</button>
@@ -216,6 +232,7 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
   </header>
   <div class="layout">
     <aside class="panel left" aria-label="Aufbau und Programm">
+      <div id="cellLeft">
       <div class="tabs" role="tablist">
         <button role="tab" aria-selected="true" data-tab="setup" id="tab-setup">Aufbau</button>
         <button role="tab" aria-selected="false" data-tab="prog" id="tab-prog">Programm</button>
@@ -327,9 +344,43 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
         </section>
       </div>
       <div data-pane="info" class="pane" hidden id="modelInfo"></div>
+          </div>
+      <div id="lineLeft" hidden>
+        <section class="block">
+          <h2>Produktionsstraße</h2>
+          <p class="note">T-Shirt Gr. 86 aus Single Jersey: von der Stoffrolle bis zum verpackten Shirt. Materialfluss als ereignisdiskrete Simulation; Zykluszeiten aus den Nahtlängen der Schnittteile und den in der Nähzelle validierten Prozessparametern.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn primary" id="lineRun" type="button">Pause</button>
+            <button class="btn" id="lineReset" type="button">Neu starten</button>
+            <select id="lineSpeed" aria-label="Tempo" style="width:auto"><option value="1">1×</option><option value="4" selected>4×</option><option value="15">15×</option><option value="60">60×</option></select>
+          </div>
+        </section>
+        <section class="block">
+          <h2>Zuschnitt</h2>
+          <label class="row"><span>Stoffbreite [cm]</span><input type="number" id="lnWidth" min="100" max="200" step="5"></label>
+          <label class="row"><span>Shirts je Schnittbild</span><input type="number" id="lnShirts" min="1" max="12" step="1"></label>
+          <label class="row"><span>Lagen je Stapel</span><input type="number" id="lnLayers" min="1" max="60" step="1"></label>
+          <label class="row"><span>Schnittgeschwindigkeit [m/s]</span><input type="number" id="lnCut" min="0.05" max="0.6" step="0.01"></label>
+          <p class="note" id="lnMarker"></p>
+        </section>
+        <section class="block">
+          <h2>Transfer und Nähtechnik</h2>
+          <label class="row"><span>Werkstückträger</span><input type="number" id="lnCarriers" min="4" max="60" step="1"></label>
+          <label class="row"><span>Bandgeschwindigkeit [m/s]</span><input type="number" id="lnConv" min="0.05" max="0.6" step="0.05"></label>
+          <label class="row"><span>Kommissionier-Roboter</span><input type="number" id="lnKit" min="1" max="2" step="1"></label>
+          <label class="row"><span>Drehzahl gerade Nähte [1/min]</span><input type="number" id="lnRpmS" min="500" max="6000" step="100"></label>
+          <label class="row"><span>Max. Drehzahl Kurven [1/min]</span><input type="number" id="lnRpmC" min="300" max="5000" step="100"></label>
+          <label class="row"><span>Drehgeschw. C-Achse [rad/s]</span><input type="number" id="lnOmega" min="0.2" max="8" step="0.1"></label>
+        </section>
+        <section class="block">
+          <h2>Stationen</h2>
+          <div class="tablewrap"><table class="stations" id="lnStations"></table></div>
+          <p class="note">Maschinenzahl ändern, um den Engpass zu entlasten. „Physik“ öffnet die Station in der Nähzelle.</p>
+        </section>
+      </div>
     </aside>
     <section class="viewport" id="viewport" aria-label="3D-Ansicht der Nähzelle">
-      <div class="overlay">
+      <div class="overlay" id="cellOverlay">
         <div class="seg" id="views" aria-label="Kamera">
           <button data-view="gesamt" aria-pressed="true" type="button">Gesamt</button>
           <button data-view="stapel" aria-pressed="false" type="button">Stapel</button>
@@ -343,11 +394,16 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
         </div>
         <div class="seg"><button id="btnContacts" aria-pressed="false" type="button">Greifpunkte</button></div>
       </div>
+      <div class="overlay" id="lineOverlay" hidden>
+        <select id="lnView" aria-label="Kamera" style="width:auto;pointer-events:auto"></select>
+        <div class="seg"><button id="lnLabels" aria-pressed="true" type="button">Beschriftung</button></div>
+      </div>
       <div class="statusline">
         <span class="prog-now" id="progNow">Programm bereit</span>
       </div>
     </section>
     <aside class="panel right" aria-label="Messwerte">
+      <div id="cellRight">
       <section class="block">
         <h2>Zustand</h2>
         <div class="kpis">
@@ -380,6 +436,27 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
         <ul class="log" id="log"></ul>
         <button class="btn small" id="btnCsv" type="button" style="align-self:flex-start">Messdaten als CSV kopieren</button>
       </section>
+          </div>
+      <div id="lineRight" hidden>
+        <section class="block">
+          <h2>Linienleistung</h2>
+          <div class="kpis">
+            <div class="kpi"><div class="lbl">Ausbringung</div><div class="val" id="lkRate">–</div><div class="sub" id="lkRateSub">Stück/h, gleitend 10 min</div></div>
+            <div class="kpi"><div class="lbl">Fertige Shirts</div><div class="val" id="lkDone">0</div><div class="sub" id="lkTime">Laufzeit –</div></div>
+            <div class="kpi"><div class="lbl">Taktzeit</div><div class="val" id="lkTakt">–</div><div class="sub" id="lkBneck">Engpass –</div></div>
+            <div class="kpi"><div class="lbl">Durchlaufzeit</div><div class="val" id="lkFlow">–</div><div class="sub" id="lkWip">Umlaufbestand –</div></div>
+          </div>
+        </section>
+        <section class="block">
+          <h2>Auslastung der Stationen</h2>
+          <div class="legend"><span><i style="background:var(--good);height:8px;width:14px;border-radius:2px"></i>arbeitet</span><span><i style="background:var(--warn);height:8px;width:14px;border-radius:2px"></i>blockiert</span><span><i style="background:var(--crit);height:8px;width:14px;border-radius:2px"></i>Störung</span><span><i style="background:var(--line);height:8px;width:14px;border-radius:2px"></i>wartet auf Teile</span></div>
+          <div id="lkUtil" style="display:grid;gap:6px"></div>
+        </section>
+        <section class="block">
+          <h2>Ereignisse</h2>
+          <ul class="log" id="lkLog"></ul>
+        </section>
+      </div>
     </aside>
   </div>
 </div>

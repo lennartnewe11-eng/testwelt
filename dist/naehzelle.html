@@ -50,6 +50,8 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
+#cellLeft, #lineLeft, #cellRight, #lineRight { display: flex; flex-direction: column; gap: 14px; }
 html, body { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--font-body); }
 button, input, select, textarea { font: inherit; color: inherit; }
@@ -152,10 +154,20 @@ details summary { cursor: pointer; color: var(--ink-2); font-weight: 500; }
 .legend i { display: inline-block; width: 12px; height: 2px; vertical-align: middle; margin-right: 4px; }
 .tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 4px 8px; font: 12px var(--font-mono); display: none; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
 .tablewrap { overflow-x: auto; }
+table.stations { width: 100%; border-collapse: collapse; font-size: 12.5px; table-layout: fixed; }
+table.stations th { text-align: left; font: 600 11px var(--font-display); letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); padding: 4px; border-bottom: 1px solid var(--line); }
+table.stations td { padding: 6px 4px; border-bottom: 1px dashed var(--line); vertical-align: top; }
+table.stations td:nth-child(2) { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.stations .note { display: block; color: var(--ink-3); font-size: 11.5px; line-height: 1.35; margin-top: 2px; }
+table.stations col.c2 { width: 58px; } table.stations col.c3 { width: 52px; } table.stations col.c4 { width: 62px; }
 table.plies { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 table.plies th { text-align: left; font: 600 11px var(--font-display); letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); padding: 4px 4px; border-bottom: 1px solid var(--line); }
 table.plies td { padding: 4px; border-bottom: 1px dashed var(--line); font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 table.plies td:first-child { font-family: var(--font-body); }
+.ubar { display: grid; grid-template-columns: minmax(0, 1fr) 46px; gap: 2px 8px; align-items: center; font-size: 12.5px; }
+.ubar .ub { grid-column: 1 / -1; display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--line); }
+.ubar .ub i { display: block; height: 100%; }
+.ubar.bneck span:first-child { font-weight: 600; color: var(--warn); }
 .log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; font-size: 12.5px; }
 .log li { display: grid; grid-template-columns: 56px 1fr; gap: 6px; padding: 3px 6px; border-left: 3px solid var(--line); background: var(--panel-2); border-radius: 0 4px 4px 0; }
 .log li.warn { border-left-color: var(--warn); }
@@ -202,7 +214,11 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
 <div class="app">
   <header class="bar">
     <div class="brand"><h1>Nähzelle Materialfluss</h1><span>Physikalische Simulation biegeschlaffer Halbzeuge</span></div>
-    <div class="controls">
+    <div class="seg" id="modeSeg" aria-label="Ansicht">
+      <button data-mode="zelle" aria-pressed="true" type="button">Nähzelle (Physik)</button>
+      <button data-mode="linie" aria-pressed="false" type="button">Produktionsstraße</button>
+    </div>
+    <div class="controls" id="cellControls">
       <button class="btn primary" id="btnRun" type="button"><svg viewBox="0 0 16 16"><path d="M4 2l10 6-10 6z"/></svg><span>Programm starten</span></button>
       <button class="btn" id="btnPause" type="button" title="Physik anhalten/fortsetzen">Pause</button>
       <button class="btn" id="btnReset" type="button" title="Welt mit den aktuellen Einstellungen neu aufbauen">Zurücksetzen</button>
@@ -216,6 +232,7 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
   </header>
   <div class="layout">
     <aside class="panel left" aria-label="Aufbau und Programm">
+      <div id="cellLeft">
       <div class="tabs" role="tablist">
         <button role="tab" aria-selected="true" data-tab="setup" id="tab-setup">Aufbau</button>
         <button role="tab" aria-selected="false" data-tab="prog" id="tab-prog">Programm</button>
@@ -327,9 +344,43 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
         </section>
       </div>
       <div data-pane="info" class="pane" hidden id="modelInfo"></div>
+          </div>
+      <div id="lineLeft" hidden>
+        <section class="block">
+          <h2>Produktionsstraße</h2>
+          <p class="note">T-Shirt Gr. 86 aus Single Jersey: von der Stoffrolle bis zum verpackten Shirt. Materialfluss als ereignisdiskrete Simulation; Zykluszeiten aus den Nahtlängen der Schnittteile und den in der Nähzelle validierten Prozessparametern.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn primary" id="lineRun" type="button">Pause</button>
+            <button class="btn" id="lineReset" type="button">Neu starten</button>
+            <select id="lineSpeed" aria-label="Tempo" style="width:auto"><option value="1">1×</option><option value="4" selected>4×</option><option value="15">15×</option><option value="60">60×</option></select>
+          </div>
+        </section>
+        <section class="block">
+          <h2>Zuschnitt</h2>
+          <label class="row"><span>Stoffbreite [cm]</span><input type="number" id="lnWidth" min="100" max="200" step="5"></label>
+          <label class="row"><span>Shirts je Schnittbild</span><input type="number" id="lnShirts" min="1" max="12" step="1"></label>
+          <label class="row"><span>Lagen je Stapel</span><input type="number" id="lnLayers" min="1" max="60" step="1"></label>
+          <label class="row"><span>Schnittgeschwindigkeit [m/s]</span><input type="number" id="lnCut" min="0.05" max="0.6" step="0.01"></label>
+          <p class="note" id="lnMarker"></p>
+        </section>
+        <section class="block">
+          <h2>Transfer und Nähtechnik</h2>
+          <label class="row"><span>Werkstückträger</span><input type="number" id="lnCarriers" min="4" max="60" step="1"></label>
+          <label class="row"><span>Bandgeschwindigkeit [m/s]</span><input type="number" id="lnConv" min="0.05" max="0.6" step="0.05"></label>
+          <label class="row"><span>Kommissionier-Roboter</span><input type="number" id="lnKit" min="1" max="2" step="1"></label>
+          <label class="row"><span>Drehzahl gerade Nähte [1/min]</span><input type="number" id="lnRpmS" min="500" max="6000" step="100"></label>
+          <label class="row"><span>Max. Drehzahl Kurven [1/min]</span><input type="number" id="lnRpmC" min="300" max="5000" step="100"></label>
+          <label class="row"><span>Drehgeschw. C-Achse [rad/s]</span><input type="number" id="lnOmega" min="0.2" max="8" step="0.1"></label>
+        </section>
+        <section class="block">
+          <h2>Stationen</h2>
+          <div class="tablewrap"><table class="stations" id="lnStations"></table></div>
+          <p class="note">Maschinenzahl ändern, um den Engpass zu entlasten. „Physik“ öffnet die Station in der Nähzelle.</p>
+        </section>
+      </div>
     </aside>
     <section class="viewport" id="viewport" aria-label="3D-Ansicht der Nähzelle">
-      <div class="overlay">
+      <div class="overlay" id="cellOverlay">
         <div class="seg" id="views" aria-label="Kamera">
           <button data-view="gesamt" aria-pressed="true" type="button">Gesamt</button>
           <button data-view="stapel" aria-pressed="false" type="button">Stapel</button>
@@ -343,11 +394,16 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
         </div>
         <div class="seg"><button id="btnContacts" aria-pressed="false" type="button">Greifpunkte</button></div>
       </div>
+      <div class="overlay" id="lineOverlay" hidden>
+        <select id="lnView" aria-label="Kamera" style="width:auto;pointer-events:auto"></select>
+        <div class="seg"><button id="lnLabels" aria-pressed="true" type="button">Beschriftung</button></div>
+      </div>
       <div class="statusline">
         <span class="prog-now" id="progNow">Programm bereit</span>
       </div>
     </section>
     <aside class="panel right" aria-label="Messwerte">
+      <div id="cellRight">
       <section class="block">
         <h2>Zustand</h2>
         <div class="kpis">
@@ -380,11 +436,33 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
         <ul class="log" id="log"></ul>
         <button class="btn small" id="btnCsv" type="button" style="align-self:flex-start">Messdaten als CSV kopieren</button>
       </section>
+          </div>
+      <div id="lineRight" hidden>
+        <section class="block">
+          <h2>Linienleistung</h2>
+          <div class="kpis">
+            <div class="kpi"><div class="lbl">Ausbringung</div><div class="val" id="lkRate">–</div><div class="sub" id="lkRateSub">Stück/h, gleitend 10 min</div></div>
+            <div class="kpi"><div class="lbl">Fertige Shirts</div><div class="val" id="lkDone">0</div><div class="sub" id="lkTime">Laufzeit –</div></div>
+            <div class="kpi"><div class="lbl">Taktzeit</div><div class="val" id="lkTakt">–</div><div class="sub" id="lkBneck">Engpass –</div></div>
+            <div class="kpi"><div class="lbl">Durchlaufzeit</div><div class="val" id="lkFlow">–</div><div class="sub" id="lkWip">Umlaufbestand –</div></div>
+          </div>
+        </section>
+        <section class="block">
+          <h2>Auslastung der Stationen</h2>
+          <div class="legend"><span><i style="background:var(--good);height:8px;width:14px;border-radius:2px"></i>arbeitet</span><span><i style="background:var(--warn);height:8px;width:14px;border-radius:2px"></i>blockiert</span><span><i style="background:var(--crit);height:8px;width:14px;border-radius:2px"></i>Störung</span><span><i style="background:var(--line);height:8px;width:14px;border-radius:2px"></i>wartet auf Teile</span></div>
+          <div id="lkUtil" style="display:grid;gap:6px"></div>
+        </section>
+        <section class="block">
+          <h2>Ereignisse</h2>
+          <ul class="log" id="lkLog"></ul>
+        </section>
+      </div>
     </aside>
   </div>
 </div>
 <dialog id="dlg"><div class="dh"><h3 id="dlgTitle">Validierung</h3><button class="btn small" id="dlgClose" type="button">Schließen</button></div><div class="db" id="dlgBody"></div></dialog>
 <script type="module">
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import * as THREE from 'three';
@@ -4123,6 +4201,500 @@ function gridTexture(base = '#9aa09d', line = '#868c89', size = 512) {
 return { fabricTexture, gridTexture };
 })();
 
+// ---- src/render/models.js ----
+const __M_render_models = (() => {
+// Detaillierte prozedurale 3D-Modelle für Zelle und Produktionsstraße (Maße in m).
+
+
+// ---------------------------------------------------------------- Werkstoffe
+let M = null;
+function mats() {
+  if (M) return M;
+  const std = (color, roughness = 0.6, metalness = 0, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness, metalness, ...extra });
+  M = {
+    alu: std(0xc3c9cf, 0.35, 0.75),
+    aluDark: std(0x8d969e, 0.4, 0.7),
+    steel: std(0xb7bdc4, 0.25, 0.9),
+    chrome: std(0xe9edf0, 0.12, 1.0),
+    blackSteel: std(0x2a2d30, 0.45, 0.6),
+    paintWhite: std(0xe9ebe8, 0.45, 0.05),        // Nähmaschinen-Gehäuse
+    paintGrey: std(0xc9ccc8, 0.5, 0.05),          // Schaltschrank RAL 7035
+    paintDark: std(0x3a3f43, 0.55, 0.1),
+    machineGreen: std(0x5f7a6e, 0.45, 0.1),
+    robotOrange: std(0xe86f1c, 0.4, 0.15),
+    robotGrey: std(0x4a4e52, 0.45, 0.2),
+    safetyYellow: std(0xe0b000, 0.5, 0.1),
+    rubber: std(0x1d1f21, 0.85, 0),
+    belt: std(0x2b2e31, 0.8, 0),
+    plastic: std(0x26292c, 0.55, 0),
+    hpl: std(0x474d4b, 0.6, 0),
+    wood: std(0xc4a27a, 0.65, 0),
+    glass: new THREE.MeshPhysicalMaterial({ color: 0xdfeef3, transparent: true, opacity: 0.22, roughness: 0.05, metalness: 0, transmission: 0, depthWrite: false }),
+    screen: std(0x0d2a33, 0.3, 0, { emissive: 0x0c4a5a, emissiveIntensity: 0.6 }),
+    ledGreen: std(0x0f3d1d, 0.4, 0, { emissive: 0x22c55e, emissiveIntensity: 0 }),
+    ledAmber: std(0x3d2c0f, 0.4, 0, { emissive: 0xf59e0b, emissiveIntensity: 0 }),
+    ledRed: std(0x3d0f0f, 0.4, 0, { emissive: 0xef4444, emissiveIntensity: 0 }),
+    lamp: std(0xffffff, 0.3, 0, { emissive: 0xfff6e0, emissiveIntensity: 0.8 }),
+    copper: std(0xb87333, 0.35, 0.8),
+    kapton: std(0xc8822a, 0.5, 0.1),
+    film: new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, roughness: 0.1, depthWrite: false }),
+    carton: std(0xb08a5a, 0.85, 0),
+  };
+  return M;
+}
+
+const box = (w, h, d, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; return m; };
+const rbox = (w, h, d, r, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 3, r), mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; return m; };
+const cyl = (r, h, mat, x = 0, y = 0, z = 0, seg = 24, axis = 'y') => {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, seg), mat);
+  if (axis === 'x') m.rotation.z = Math.PI / 2; else if (axis === 'z') m.rotation.x = Math.PI / 2;
+  m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; return m;
+};
+const group = (...c) => { const g = new THREE.Group(); c.forEach((o) => o && g.add(o)); return g; };
+
+// ---------------------------------------------------------------- Aluprofil 40×40 mit Nuten
+let profGeo = null;
+function profileGeometry() {
+  if (profGeo) return profGeo;
+  const s = 0.02, n = 0.004, d = 0.006; // halbe Kante, halbe Nutbreite, Nuttiefe
+  const sh = new THREE.Shape();
+  sh.moveTo(-s, -s);
+  const side = (ax, ay, bx, by, nx, ny) => {
+    const mx = (ax + bx) / 2, my = (ay + by) / 2, tx = (bx - ax) / (2 * s), ty = (by - ay) / (2 * s);
+    sh.lineTo(mx - tx * n, my - ty * n); sh.lineTo(mx - tx * n - nx * d, my - ty * n - ny * d);
+    sh.lineTo(mx + tx * n - nx * d, my + ty * n - ny * d); sh.lineTo(mx + tx * n, my + ty * n); sh.lineTo(bx, by);
+  };
+  side(-s, -s, s, -s, 0, -1); side(s, -s, s, s, 1, 0); side(s, s, -s, s, 0, 1); side(-s, s, -s, -s, -1, 0);
+  const hole = new THREE.Path(); hole.absarc(0, 0, 0.0042, 0, Math.PI * 2, true); sh.holes.push(hole);
+  profGeo = new THREE.ExtrudeGeometry(sh, { depth: 1, bevelEnabled: false });
+  profGeo.translate(0, 0, -0.5);
+  return profGeo;
+}
+// Profil der Länge L entlang Achse ('x' | 'y' | 'z'), Mitte bei (x, y, z)
+function profile(L, axis, x, y, z, mat = mats().alu) {
+  const m = new THREE.Mesh(profileGeometry(), mat);
+  m.scale.z = L;
+  if (axis === 'x') m.rotation.y = Math.PI / 2; else if (axis === 'y') m.rotation.x = Math.PI / 2;
+  m.position.set(x, y, z); m.castShadow = m.receiveShadow = true;
+  return m;
+}
+
+// ---------------------------------------------------------------- Beschriftung
+function label(title, sub = '', color = '#0b6e69') {
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 160;
+  const g = cv.getContext('2d');
+  g.fillStyle = 'rgba(20,26,25,0.86)'; g.beginPath(); g.roundRect(4, 4, 504, 152, 18); g.fill();
+  g.fillStyle = color; g.fillRect(4, 4, 14, 152);
+  g.fillStyle = '#ffffff'; g.font = '600 46px "Barlow Semi Condensed", Arial, sans-serif'; g.fillText(title, 36, 66);
+  g.fillStyle = '#b9c4c0'; g.font = '400 32px "IBM Plex Mono", monospace'; g.fillText(sub, 36, 122);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: true, transparent: true }));
+  sp.scale.set(0.96, 0.3, 1);
+  sp.userData.update = (t2, s2) => {
+    g.clearRect(0, 0, 512, 160);
+    g.fillStyle = 'rgba(20,26,25,0.86)'; g.beginPath(); g.roundRect(4, 4, 504, 152, 18); g.fill();
+    g.fillStyle = color; g.fillRect(4, 4, 14, 152);
+    g.fillStyle = '#ffffff'; g.font = '600 46px "Barlow Semi Condensed", Arial, sans-serif'; g.fillText(t2, 36, 66);
+    g.fillStyle = '#b9c4c0'; g.font = '400 32px "IBM Plex Mono", monospace'; g.fillText(s2, 36, 122);
+    tex.needsUpdate = true;
+  };
+  return sp;
+}
+
+// ---------------------------------------------------------------- Signalsäule
+function signalTower() {
+  const m = mats();
+  const g = group(cyl(0.012, 0.18, m.blackSteel, 0, 0.09, 0));
+  const leds = { green: m.ledGreen.clone(), amber: m.ledAmber.clone(), red: m.ledRed.clone() };
+  [['red', 0.27], ['amber', 0.225], ['green', 0.18]].forEach(([k, y]) => g.add(cyl(0.022, 0.042, leds[k], 0, y, 0, 20)));
+  g.add(cyl(0.024, 0.01, m.plastic, 0, 0.297, 0, 20));
+  g.userData.set = (state) => { leds.green.emissiveIntensity = state === 'busy' ? 1.6 : 0.05; leds.amber.emissiveIntensity = state === 'wait' ? 1.6 : 0.05; leds.red.emissiveIntensity = state === 'fault' ? 2.0 : 0.05; };
+  return g;
+}
+
+// ---------------------------------------------------------------- Schutzzaun
+let meshTex = null;
+function fenceTexture() {
+  if (meshTex) return meshTex;
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+  const g = cv.getContext('2d'); g.clearRect(0, 0, 64, 64); g.strokeStyle = 'rgba(40,44,46,0.95)'; g.lineWidth = 3;
+  g.strokeRect(1.5, 1.5, 61, 61);
+  meshTex = new THREE.CanvasTexture(cv); meshTex.wrapS = meshTex.wrapT = THREE.RepeatWrapping;
+  return meshTex;
+}
+function fence(L, h = 1.4, along = 'x') {
+  const m = mats();
+  const g = new THREE.Group();
+  const posts = Math.max(2, Math.ceil(L / 1.2) + 1);
+  for (let k = 0; k < posts; k++) {
+    const u = -L / 2 + (k * L) / (posts - 1);
+    g.add(box(0.04, h, 0.04, m.safetyYellow, along === 'x' ? u : 0, h / 2, along === 'x' ? 0 : u));
+  }
+  const tex = fenceTexture().clone(); tex.needsUpdate = true; tex.repeat.set(L / 0.05, (h - 0.15) / 0.05);
+  const panel = new THREE.Mesh(new THREE.PlaneGeometry(L, h - 0.15), new THREE.MeshStandardMaterial({ map: tex, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, color: 0x2b2f31, metalness: 0.5, roughness: 0.5 }));
+  panel.position.y = (h - 0.15) / 2 + 0.1; if (along === 'z') panel.rotation.y = Math.PI / 2;
+  g.add(panel);
+  g.add(box(along === 'x' ? L : 0.03, 0.03, along === 'x' ? 0.03 : L, m.safetyYellow, 0, h - 0.02, 0));
+  return g;
+}
+
+// ---------------------------------------------------------------- Schaltschrank mit Bedienpanel
+function cabinet(w = 0.6, h = 1.8, d = 0.4) {
+  const m = mats();
+  const g = group(rbox(w, h, d, 0.01, m.paintGrey, 0, h / 2, 0));
+  g.add(box(w - 0.04, h - 0.1, 0.004, m.paintGrey, 0, h / 2, d / 2 + 0.002));
+  g.add(box(0.012, 0.12, 0.02, m.blackSteel, w / 2 - 0.05, h / 2, d / 2 + 0.012));
+  g.add(box(0.16, 0.11, 0.01, m.screen, -0.08, h * 0.72, d / 2 + 0.01));
+  g.add(cyl(0.018, 0.02, m.ledRed, 0.12, h * 0.72, d / 2 + 0.012, 16, 'z'));
+  // Lüftungsgitter
+  for (let k = 0; k < 6; k++) g.add(box(w * 0.5, 0.006, 0.004, m.paintDark, 0, 0.2 + k * 0.025, d / 2 + 0.005));
+  return g;
+}
+
+// ---------------------------------------------------------------- Industrie-Nähmaschine
+// type: 'steppstich' (Flachbett, Doppelsteppstich), 'overlock', 'cover'
+function sewingMachine(type = 'steppstich', threadColor = 0xe8e2d6) {
+  const m = mats();
+  const g = new THREE.Group();
+  const anim = {};
+  const body = type === 'overlock' ? m.paintWhite : m.paintWhite;
+  if (type === 'overlock' || type === 'cover') {
+    // kompakte Bauform: Grundkörper, Greiferabdeckung, Nadelkopf, Fadenspannung oben
+    g.add(rbox(0.30, 0.10, 0.22, 0.02, body, 0.02, 0.05, 0));
+    g.add(rbox(0.12, 0.17, 0.16, 0.02, body, 0.13, 0.16, 0));
+    g.add(rbox(0.22, 0.07, 0.12, 0.02, body, 0.05, 0.27, -0.01));
+    g.add(rbox(0.07, 0.10, 0.10, 0.015, body, -0.06, 0.21, 0));             // Nadelkopf
+    g.add(box(0.11, 0.004, 0.08, m.steel, -0.06, 0.102, 0.02));               // Stichplatte
+    g.add(box(0.06, 0.012, 0.004, m.paintDark, -0.06, 0.06, 0.112));          // Greiferklappe Spalt
+    g.add(cyl(0.05, 0.02, m.paintDark, 0.19, 0.17, 0, 32, 'x'));              // Handrad
+    for (let k = 0; k < (type === 'cover' ? 5 : 4); k++) {                      // Spannungsscheiben
+      g.add(cyl(0.012, 0.006, m.chrome, -0.02 + k * 0.03, 0.315, 0.05, 16, 'z'));
+      g.add(cyl(0.003, 0.02, m.blackSteel, -0.02 + k * 0.03, 0.315, 0.04, 8, 'z'));
+    }
+  } else {
+    // Flachbett-Doppelsteppstich: Arm, Ständer, Kopf
+    g.add(rbox(0.48, 0.05, 0.18, 0.012, body, 0.12, 0.025, 0));                 // Bett
+    g.add(rbox(0.09, 0.26, 0.15, 0.02, body, 0.31, 0.16, 0));                   // Ständer
+    g.add(rbox(0.36, 0.07, 0.11, 0.02, body, 0.14, 0.29, 0));                   // Arm
+    g.add(rbox(0.09, 0.16, 0.12, 0.02, body, -0.02, 0.22, 0));                  // Kopf
+    g.add(box(0.075, 0.13, 0.004, m.steel, -0.02, 0.22, 0.062));                // Kopfdeckel
+    g.add(box(0.12, 0.003, 0.09, m.steel, 0, 0.051, 0.0));                      // Stichplatte
+    g.add(box(0.06, 0.002, 0.07, m.chrome, 0.08, 0.051, 0.0));                  // Schieber (Greiferabdeckung)
+    g.add(cyl(0.065, 0.025, m.paintDark, 0.37, 0.24, 0, 36, 'x'));              // Handrad
+    g.add(rbox(0.035, 0.09, 0.08, 0.01, m.paintDark, 0.33, 0.29, -0.07));       // Stichsteller
+    // Fadenhebel, Spannung, Fadenführung
+    anim.takeup = box(0.008, 0.05, 0.006, m.chrome, -0.035, 0.27, 0.066); g.add(anim.takeup);
+    g.add(cyl(0.013, 0.008, m.chrome, 0.02, 0.27, 0.06, 16, 'z'));
+    g.add(cyl(0.004, 0.03, m.blackSteel, 0.02, 0.27, 0.05, 8, 'z'));
+    // LED-Nählicht unter dem Kopf
+    g.add(box(0.03, 0.006, 0.02, m.lamp, -0.035, 0.137, 0.04));
+  }
+  // Nadelstange, Nadel, Nähfuß (gemeinsam für alle Bauarten, Nadel bei x = 0, Fuß auf y ≈ Bett)
+  const bedTop = type === 'steppstich' ? 0.052 : 0.104;
+  const nb = new THREE.Group();
+  nb.add(cyl(0.0045, 0.10, m.chrome, 0, 0.05, 0, 12));
+  nb.add(cyl(0.006, 0.012, m.blackSteel, 0, 0.0, 0, 12));
+  const needle = cyl(0.0009, 0.035, m.chrome, 0, -0.022, 0, 8); nb.add(needle);
+  const thread = new THREE.Mesh(new THREE.CylinderGeometry(0.00045, 0.00045, 0.12, 4), new THREE.MeshStandardMaterial({ color: threadColor, roughness: 0.8 }));
+  thread.position.set(0.0012, 0.03, 0); nb.add(thread);
+  if (type === 'cover') { nb.add(cyl(0.0009, 0.035, m.chrome, 0.003, -0.022, 0, 8)); nb.add(cyl(0.0009, 0.035, m.chrome, -0.003, -0.022, 0, 8)); }
+  nb.position.set(type === 'steppstich' ? -0.035 : -0.06, bedTop + 0.045, 0.02);
+  g.add(nb); anim.needleBar = nb; anim.needleY0 = nb.position.y;
+  const foot = group(cyl(0.004, 0.09, m.chrome, 0.006, 0.045, -0.006, 10), box(0.016, 0.004, 0.03, m.steel, 0.004, 0.002, 0.0), box(0.012, 0.006, 0.004, m.steel, 0.004, 0.004, 0.014));
+  foot.position.set(nb.position.x, bedTop + 0.001, 0.02);
+  g.add(foot); anim.foot = foot;
+  // Handrad zum Drehen
+  anim.wheel = g.children.find((c) => c.geometry && c.geometry.type === 'CylinderGeometry' && c.geometry.parameters.radiusTop >= 0.05) || null;
+  anim.needleX = nb.position.x; anim.bedTop = bedTop;
+  g.userData.anim = anim;
+  g.userData.needle = new THREE.Vector3(nb.position.x, bedTop, 0.02);
+  g.userData.update = (t, sewing, rpm = 3000) => {
+    const ph = sewing ? t * (rpm / 60) * Math.min(1, 25 / (rpm / 60)) : 0.25; // sichtbar verlangsamt
+    const y = Math.cos(ph * 2 * Math.PI);
+    anim.needleBar.position.y = anim.needleY0 + 0.012 * y;
+    if (anim.wheel) anim.wheel.rotation.x = -ph * 2 * Math.PI;
+    if (anim.takeup) anim.takeup.position.y = 0.27 + 0.012 * Math.sin(ph * 2 * Math.PI);
+  };
+  return g;
+}
+
+// Nähtisch mit Gestell, Motor, Steuerung, Fadenständer und Konen
+function sewingTable(w = 1.1, d = 0.55, h = 0.76, cones = 2, threadColor = 0xe8e2d6) {
+  const m = mats();
+  const g = new THREE.Group();
+  g.add(rbox(w, 0.03, d, 0.006, m.hpl, 0, h - 0.015, 0));
+  g.add(box(w, 0.032, 0.006, m.plastic, 0, h - 0.015, d / 2));                  // Kantenumleimer
+  for (const sx of [-1, 1]) {
+    g.add(profile(h - 0.03, 'y', sx * (w / 2 - 0.08), (h - 0.03) / 2, -d / 2 + 0.06, m.aluDark));
+    g.add(profile(h - 0.03, 'y', sx * (w / 2 - 0.08), (h - 0.03) / 2, d / 2 - 0.06, m.aluDark));
+    g.add(profile(d - 0.12, 'z', sx * (w / 2 - 0.08), 0.1, 0, m.aluDark));
+    for (const sz of [-1, 1]) g.add(cyl(0.022, 0.015, m.rubber, sx * (w / 2 - 0.08), 0.008, sz * (d / 2 - 0.06), 16));
+  }
+  g.add(profile(w - 0.16, 'x', 0, 0.1, 0, m.aluDark));
+  // Servomotor und Steuerkasten unter der Platte
+  g.add(rbox(0.13, 0.11, 0.12, 0.01, m.paintDark, 0.25, h - 0.09, 0.05));
+  g.add(cyl(0.02, 0.03, m.blackSteel, 0.18, h - 0.09, 0.05, 16, 'x'));
+  g.add(rbox(0.2, 0.08, 0.14, 0.01, m.paintGrey, -0.25, h - 0.08, 0.08));
+  g.add(box(0.06, 0.035, 0.005, m.screen, -0.25, h - 0.08, 0.152));
+  // Fadenständer
+  const sx = -w / 2 + 0.1, sz = -d / 2 + 0.08;
+  g.add(cyl(0.006, 0.55, m.chrome, sx, h + 0.275, sz, 10));
+  g.add(cyl(0.004, 0.18, m.chrome, sx, h + 0.54, sz, 8, 'x'));
+  const tm = new THREE.MeshStandardMaterial({ color: threadColor, roughness: 0.85 });
+  for (let k = 0; k < cones; k++) {
+    const cx = sx - 0.06 + k * 0.05;
+    g.add(cyl(0.02, 0.006, m.plastic, cx, h + 0.003, sz, 16));
+    const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.028, 0.11, 18), tm); cone.position.set(cx, h + 0.06, sz); cone.castShadow = true; g.add(cone);
+    g.add(cyl(0.0035, 0.01, m.chrome, cx, h + 0.54, sz, 8));
+  }
+  // Pedal / Kniehebel
+  g.add(rbox(0.22, 0.03, 0.12, 0.01, m.plastic, 0, 0.05, d / 2 - 0.1));
+  return g;
+}
+
+// ---------------------------------------------------------------- 6-Achs-Industrieroboter
+// Kinematik (vereinfacht): Basis-Drehung, Schulter- und Ellbogen-Nicken (2-Glieder-IK),
+// Handgelenk hält das Werkzeug senkrecht nach unten und dreht um die Hochachse.
+function robot6(scale = 1) {
+  const m = mats();
+  const L1 = 0.62 * scale, L2 = 0.58 * scale, h0 = 0.42 * scale, wrist = 0.14 * scale;
+  const root = new THREE.Group();
+  root.add(cyl(0.2 * scale, 0.08 * scale, m.robotGrey, 0, 0.04 * scale, 0, 32));                 // Fuß
+  for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; root.add(cyl(0.012 * scale, 0.02 * scale, m.chrome, Math.cos(a) * 0.17 * scale, 0.085 * scale, Math.sin(a) * 0.17 * scale, 8)); }
+  const j1 = new THREE.Group(); j1.position.y = 0.08 * scale; root.add(j1);
+  j1.add(cyl(0.16 * scale, 0.22 * scale, m.robotOrange, 0, 0.11 * scale, 0, 32));
+  j1.add(rbox(0.26 * scale, 0.2 * scale, 0.22 * scale, 0.04 * scale, m.robotOrange, 0.04 * scale, 0.28 * scale, 0));
+  j1.add(cyl(0.06 * scale, 0.1 * scale, m.robotGrey, -0.12 * scale, 0.22 * scale, 0, 20, 'z'));     // Motor A1
+  const j2 = new THREE.Group(); j2.position.set(0.08 * scale, h0 - 0.08 * scale, 0); j1.add(j2);
+  j2.add(cyl(0.11 * scale, 0.26 * scale, m.robotGrey, 0, 0, 0, 28, 'z'));
+  const arm1 = rbox(0.14 * scale, L1, 0.16 * scale, 0.05 * scale, m.robotOrange, 0, L1 / 2, 0); j2.add(arm1);
+  j2.add(cyl(0.055 * scale, 0.09 * scale, m.robotGrey, 0, 0.12 * scale, -0.13 * scale, 18, 'z'));   // Motor A2
+  const j3 = new THREE.Group(); j3.position.y = L1; j2.add(j3);
+  j3.add(cyl(0.09 * scale, 0.2 * scale, m.robotGrey, 0, 0, 0, 24, 'z'));
+  j3.add(rbox(0.16 * scale, 0.16 * scale, 0.18 * scale, 0.04 * scale, m.robotOrange, -0.05 * scale, 0, 0));
+  const arm2 = rbox(L2, 0.1 * scale, 0.11 * scale, 0.04 * scale, m.robotOrange, L2 / 2, 0, 0); j3.add(arm2);
+  j3.add(cyl(0.045 * scale, 0.12 * scale, m.robotGrey, -0.14 * scale, 0, 0, 16, 'x'));               // Motoren A4–A6
+  const j5 = new THREE.Group(); j5.position.x = L2; j3.add(j5);
+  j5.add(cyl(0.05 * scale, 0.11 * scale, m.robotGrey, 0, 0, 0, 20, 'z'));
+  const j6 = new THREE.Group(); j5.add(j6);
+  j6.add(cyl(0.04 * scale, wrist * 0.6, m.robotOrange, 0, -wrist * 0.3, 0, 20));
+  j6.add(cyl(0.032 * scale, 0.02 * scale, m.chrome, 0, -wrist * 0.65, 0, 20));                      // Flansch
+  const tool = new THREE.Group(); tool.position.y = -wrist; j6.add(tool);
+  // Energiezuführung (Kabelschlauch) als gebogene Röhre
+  const hose = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(-0.1, 0.25, 0.1), new THREE.Vector3(-0.05, 0.6, 0.14), new THREE.Vector3(0.1, 0.9, 0.12)].map((v) => v.multiplyScalar(scale))), 16, 0.018 * scale, 8), m.plastic);
+  j1.add(hose);
+  root.userData = { j1, j2, j3, j5, j6, tool, L1, L2, h0, wrist, scale, base: new THREE.Vector3() };
+  // Werkzeugspitze an Punkt p (im Roboter-Koordinatensystem), Werkzeug senkrecht, Drehung yaw
+  root.userData.reach = (p, yaw = 0) => {
+    const u = root.userData;
+    const a1 = Math.atan2(-p.z, p.x);
+    u.j1.rotation.y = a1;
+    const r = Math.hypot(p.x, p.z) - 0.08 * scale;
+    const y = p.y + u.wrist - (u.h0);
+    const d = Math.min(u.L1 + u.L2 - 1e-4, Math.max(0.05, Math.hypot(r, y)));
+    const c2 = (d * d - u.L1 * u.L1 - u.L2 * u.L2) / (2 * u.L1 * u.L2);
+    const q2 = Math.acos(Math.max(-1, Math.min(1, c2)));                 // Ellbogen
+    const q1 = Math.atan2(y, r) + Math.atan2(u.L2 * Math.sin(q2), u.L1 + u.L2 * Math.cos(q2));
+    // Arm1 zeigt bei rotation.z = 0 nach oben (+y); Winkel zur Horizontalen = q1
+    u.j2.rotation.z = q1 - Math.PI / 2;
+    u.j3.rotation.z = Math.PI / 2 - q2;                                    // Arm2 relativ (bei 0: waagrecht nach vorn)
+    // Handgelenk: Werkzeug senkrecht nach unten
+    const abs = (q1 - Math.PI / 2) + (Math.PI / 2 - q2);
+    u.j5.rotation.z = -abs - (q1 - Math.PI / 2) * 0 ;
+    u.j5.rotation.z = -(u.j2.rotation.z + u.j3.rotation.z) - Math.PI / 2 + Math.PI / 2;
+    u.j6.rotation.y = yaw - a1;
+  };
+  return root;
+}
+
+// ---------------------------------------------------------------- Transfersystem (Doppelgurt)
+function conveyor(L, h = 0.85, width = 0.62) {
+  const m = mats();
+  const g = new THREE.Group();
+  for (const sz of [-1, 1]) {
+    g.add(profile(L, 'x', L / 2, h - 0.02, sz * width / 2, m.alu));                 // Laufprofil
+    g.add(box(L, 0.006, 0.03, m.belt, L / 2, h + 0.003, sz * width / 2));          // Zahngurt
+    g.add(profile(L, 'x', L / 2, 0.36, sz * width / 2, m.alu));                     // Rücklauf
+    g.add(box(L, 0.006, 0.03, m.belt, L / 2, 0.383, sz * width / 2));
+  }
+  const legs = Math.ceil(L / 1.5) + 1;
+  for (let k = 0; k < legs; k++) {
+    const x = (k * L) / (legs - 1);
+    for (const sz of [-1, 1]) { g.add(profile(h - 0.04, 'y', x, (h - 0.04) / 2, sz * (width / 2 + 0.05), m.aluDark)); g.add(cyl(0.025, 0.02, m.rubber, x, 0.01, sz * (width / 2 + 0.05), 16)); }
+    g.add(profile(width + 0.1, 'z', x, h - 0.06, 0, m.aluDark));
+    g.add(profile(width + 0.1, 'z', x, 0.32, 0, m.aluDark));
+  }
+  // Antriebe mit Getriebemotor je 6 m
+  for (let x = 0; x < L; x += 6) g.add(rbox(0.12, 0.12, 0.16, 0.01, m.paintDark, x + 0.3, h - 0.09, width / 2 + 0.14));
+  return g;
+}
+
+// Werkstückträger: Palette mit Zentrierbuchsen, RFID-Datenträger, Trägerblech
+function carrier(w = 0.66, d = 0.56) {
+  const m = mats();
+  const g = new THREE.Group();
+  g.add(rbox(w, 0.025, d, 0.006, m.aluDark, 0, 0.0125, 0));
+  g.add(box(w - 0.04, 0.003, d - 0.04, m.steel, 0, 0.027, 0));                    // Trägerblech
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(0.012, 0.03, m.chrome, sx * (w / 2 - 0.04), 0.015, sz * (d / 2 - 0.04), 12));
+  g.add(box(0.05, 0.012, 0.03, m.safetyYellow, w / 2 - 0.05, 0.03, -d / 2 + 0.03));  // RFID-Tag
+  // Nadelleisten (Kammleisten) an den Rändern
+  for (const sz of [-1, 1]) g.add(box(w - 0.12, 0.008, 0.012, m.blackSteel, 0, 0.032, sz * (d / 2 - 0.05)));
+  return g;
+}
+
+// ---------------------------------------------------------------- Legetisch mit Legemaschine
+function spreader(L = 3.2, W = 1.8, h = 0.85) {
+  const m = mats();
+  const g = new THREE.Group();
+  g.add(rbox(L, 0.04, W, 0.01, m.paintGrey, L / 2, h - 0.02, 0));
+  for (let x = 0.15; x < L; x += 1.0) for (const sz of [-1, 1]) g.add(profile(h - 0.04, 'y', x, (h - 0.04) / 2, sz * (W / 2 - 0.08), m.aluDark));
+  for (const sz of [-1, 1]) g.add(box(L, 0.03, 0.05, m.steel, L / 2, h + 0.015, sz * (W / 2 + 0.03)));      // Laufschienen
+  const car = new THREE.Group();                                                                               // Wagen
+  for (const sz of [-1, 1]) {
+    car.add(rbox(0.5, 0.55, 0.12, 0.02, m.machineGreen, 0, 0.3, sz * (W / 2 + 0.05)));
+    car.add(cyl(0.04, 0.05, m.rubber, -0.15, 0.04, sz * (W / 2 + 0.03), 16, 'z'));
+    car.add(cyl(0.04, 0.05, m.rubber, 0.15, 0.04, sz * (W / 2 + 0.03), 16, 'z'));
+  }
+  car.add(rbox(0.48, 0.08, W + 0.2, 0.02, m.machineGreen, 0, 0.58, 0));
+  const roll = cyl(0.14, W - 0.1, new THREE.MeshStandardMaterial({ color: 0xe9c46a, roughness: 0.9 }), 0.05, 0.42, 0, 40, 'z');
+  car.add(roll);
+  car.add(cyl(0.025, W + 0.05, m.steel, 0.05, 0.42, 0, 16, 'z'));
+  car.add(box(0.04, 0.02, W - 0.1, m.blackSteel, -0.2, 0.08, 0));                 // Abschneidmesser-Schiene
+  car.add(rbox(0.16, 0.2, 0.06, 0.01, m.paintGrey, 0.12, 0.75, W / 2 + 0.1));    // Bedienpanel
+  car.add(box(0.1, 0.07, 0.005, m.screen, 0.12, 0.77, W / 2 + 0.133));
+  car.position.y = h;
+  g.add(car);
+  g.userData = { carriage: car, roll, L, W, h };
+  return g;
+}
+
+// ---------------------------------------------------------------- CNC-Cutter (Saugtisch mit Bürstenband)
+function cutter(L = 3.0, W = 1.8, h = 0.85) {
+  const m = mats();
+  const g = new THREE.Group();
+  // Bürstenblöcke (Saugtisch-Oberfläche)
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+  const c2 = cv.getContext('2d'); c2.fillStyle = '#2f3436'; c2.fillRect(0, 0, 64, 64);
+  for (let i = 0; i < 64; i += 4) for (let j = 0; j < 64; j += 4) { c2.fillStyle = (i + j) % 8 ? '#3d4346' : '#272b2d'; c2.fillRect(i, j, 3, 3); }
+  const bt = new THREE.CanvasTexture(cv); bt.wrapS = bt.wrapT = THREE.RepeatWrapping; bt.repeat.set(L * 6, W * 6);
+  g.add(box(L, 0.08, W, new THREE.MeshStandardMaterial({ map: bt, roughness: 0.95 }), L / 2, h - 0.04, 0));
+  g.add(rbox(L + 0.1, 0.5, W + 0.1, 0.02, m.paintGrey, L / 2, h - 0.34, 0));
+  g.add(rbox(0.6, 0.6, 0.5, 0.02, m.paintGrey, L + 0.4, 0.3, W / 2 - 0.2));      // Vakuumpumpe
+  for (const sz of [-1, 1]) g.add(box(L, 0.05, 0.08, m.aluDark, L / 2, h + 0.05, sz * (W / 2 + 0.06)));
+  const gantry = new THREE.Group();
+  for (const sz of [-1, 1]) gantry.add(rbox(0.22, 0.3, 0.14, 0.02, m.paintWhite, 0, 0.2, sz * (W / 2 + 0.06)));
+  gantry.add(rbox(0.18, 0.16, W + 0.25, 0.02, m.paintWhite, 0, 0.42, 0));
+  gantry.add(box(0.05, 0.05, W, m.alu, 0.1, 0.42, 0));
+  const head = new THREE.Group();
+  head.add(rbox(0.2, 0.28, 0.2, 0.02, m.paintDark, 0.13, 0.32, 0));
+  head.add(cyl(0.035, 0.12, m.steel, 0.13, 0.12, 0, 16));
+  const knife = box(0.003, 0.08, 0.012, m.chrome, 0.13, 0.03, 0); head.add(knife);
+  head.add(box(0.03, 0.03, 0.03, m.ledRed, 0.2, 0.2, 0.08));
+  gantry.add(head);
+  gantry.position.y = h;
+  g.add(gantry);
+  // Folienrolle (Abdeckfolie für das Vakuum)
+  g.add(cyl(0.06, W, m.film, -0.15, h + 0.08, 0, 24, 'z'));
+  g.add(cyl(0.02, W + 0.1, m.steel, -0.15, h + 0.08, 0, 12, 'z'));
+  g.userData = { gantry, head, knife, L, W, h };
+  return g;
+}
+
+// ---------------------------------------------------------------- Stationen der Ausrüstung
+function foldTable(w = 1.0, d = 0.8, h = 0.85) {
+  const m = mats();
+  const g = new THREE.Group();
+  g.add(rbox(w, 0.06, d, 0.01, m.paintGrey, 0, h - 0.03, 0));
+  const flap = new THREE.Group(); flap.position.set(0, h, 0);
+  flap.add(box(w * 0.9, 0.012, d / 2 - 0.02, m.alu, 0, 0.006, -(d / 4)));
+  for (let k = 0; k < 8; k++) flap.add(cyl(0.006, 0.004, m.blackSteel, -w * 0.4 + k * w * 0.11, 0.013, -d / 4, 10));
+  g.add(flap);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(profile(h - 0.06, 'y', sx * (w / 2 - 0.05), (h - 0.06) / 2, sz * (d / 2 - 0.05), m.aluDark));
+  g.add(cyl(0.03, w * 0.92, m.steel, 0, h + 0.01, 0, 16, 'x'));                    // Scharnierwelle
+  g.add(rbox(0.12, 0.08, 0.1, 0.01, m.paintDark, w / 2 - 0.1, h - 0.1, 0));      // Schwenkantrieb
+  g.userData = { flap };
+  return g;
+}
+
+function turner(h = 0.85) {
+  const m = mats();
+  const g = new THREE.Group();
+  g.add(rbox(0.7, h - 0.05, 0.6, 0.02, m.paintGrey, 0, (h - 0.05) / 2, 0));
+  g.add(cyl(0.11, 0.9, m.steel, 0, h + 0.45, 0, 32));                              // Wenderohr
+  g.add(cyl(0.14, 0.05, m.paintDark, 0, h + 0.9, 0, 32));                          // Klemmring
+  g.add(cyl(0.13, 0.04, m.safetyYellow, 0, h + 0.03, 0, 32));
+  g.add(rbox(0.3, 0.4, 0.3, 0.02, m.paintDark, 0.36, h + 0.2, 0));               // Gebläse
+  g.add(cyl(0.05, 0.4, m.plastic, 0.2, h + 0.62, 0, 16, 'x'));
+  return g;
+}
+
+function visionTunnel(len = 0.9, width = 0.9, h = 0.85) {
+  const m = mats();
+  const g = new THREE.Group();
+  for (const sz of [-1, 1]) g.add(rbox(len, 0.7, 0.04, 0.01, m.paintDark, 0, h + 0.35, sz * width / 2));
+  g.add(rbox(len, 0.04, width + 0.04, 0.01, m.paintDark, 0, h + 0.72, 0));
+  g.add(box(len - 0.1, 0.01, width - 0.1, m.lamp, 0, h + 0.695, 0));             // LED-Flächenleuchte
+  for (const x of [-0.25, 0.25]) { g.add(rbox(0.07, 0.1, 0.07, 0.01, m.blackSteel, x, h + 0.62, 0)); g.add(cyl(0.022, 0.03, m.chrome, x, h + 0.56, 0, 16)); }
+  g.add(rbox(0.12, 0.18, 0.1, 0.01, m.paintDark, 0, h + 0.5, width / 2 - 0.1));  // Fadenkapp-Einheit (Laser)
+  return g;
+}
+
+function pressFolder(h = 0.85) {
+  const m = mats();
+  const g = new THREE.Group();
+  g.add(rbox(1.0, h - 0.05, 0.8, 0.02, m.paintWhite, 0, (h - 0.05) / 2, 0));
+  g.add(rbox(0.7, 0.04, 0.55, 0.01, m.paintGrey, 0, h + 0.02, 0));               // Bügelunterteil (Vakuum)
+  const lid = new THREE.Group(); lid.position.set(0, h + 0.05, -0.3);
+  lid.add(rbox(0.68, 0.05, 0.53, 0.01, m.steel, 0, 0.025, 0.28));
+  lid.add(rbox(0.2, 0.08, 0.1, 0.01, m.paintDark, 0, 0.08, 0.28));
+  g.add(lid);
+  g.add(rbox(0.12, 0.6, 0.12, 0.02, m.paintWhite, 0, h + 0.3, -0.42));           // Säule mit Zylinder
+  g.add(cyl(0.025, 0.25, m.chrome, 0, h + 0.55, -0.32, 16));
+  g.add(cyl(0.004, 0.6, m.plastic, -0.4, h + 0.3, -0.38, 6));                     // Dampfschlauch
+  g.add(rbox(0.2, 0.15, 0.06, 0.01, m.paintGrey, 0.4, h + 0.3, 0.42));           // Bedienteil
+  g.add(box(0.12, 0.07, 0.005, m.screen, 0.4, h + 0.32, 0.453));
+  g.userData = { lid };
+  return g;
+}
+
+function bagger(h = 0.85) {
+  const m = mats();
+  const g = new THREE.Group();
+  g.add(rbox(0.9, h - 0.05, 0.7, 0.02, m.paintWhite, 0, (h - 0.05) / 2, 0));
+  g.add(cyl(0.09, 0.6, m.film, -0.25, h + 0.35, -0.2, 28, 'z'));                  // Folienrolle
+  g.add(cyl(0.03, 0.66, m.steel, -0.25, h + 0.35, -0.2, 12, 'z'));
+  const bar = rbox(0.5, 0.04, 0.05, 0.01, m.copper, 0.15, h + 0.25, 0); g.add(bar); // Schweißbalken
+  g.add(rbox(0.06, 0.4, 0.06, 0.01, m.paintWhite, 0.4, h + 0.2, 0));
+  g.add(rbox(0.06, 0.4, 0.06, 0.01, m.paintWhite, -0.1, h + 0.2, 0.3));
+  g.userData = { bar };
+  return g;
+}
+
+function pallet() {
+  const m = mats();
+  const g = new THREE.Group();
+  for (let k = 0; k < 5; k++) g.add(box(1.2, 0.022, 0.1, m.wood, 0, 0.133, -0.36 + k * 0.18));
+  for (const z of [-0.36, 0, 0.36]) for (const x of [-0.5, 0, 0.5]) g.add(box(0.14, 0.078, 0.1, m.wood, x, 0.078, z));
+  for (let k = 0; k < 3; k++) g.add(box(1.2, 0.022, 0.1, m.wood, 0, 0.028, -0.36 + k * 0.36));
+  return g;
+}
+
+function fabricRollRack() {
+  const m = mats();
+  const g = new THREE.Group();
+  for (const sx of [-1, 1]) { g.add(profile(1.6, 'y', sx * 0.95, 0.8, -0.3)); g.add(profile(1.6, 'y', sx * 0.95, 0.8, 0.3)); }
+  const colors = [0xe9c46a, 0xdfe6ee, 0x4d6fa0, 0x8a8f99, 0xe9c46a, 0xf4d6d6];
+  for (let r = 0; r < 3; r++) {
+    for (const sx of [-1, 1]) g.add(profile(0.64, 'z', sx * 0.95, 0.3 + r * 0.55, 0));
+    g.add(cyl(0.02, 2.0, m.steel, 0, 0.32 + r * 0.55, 0, 12, 'x'));
+    for (let k = 0; k < 2; k++) g.add(cyl(0.16, 1.55, new THREE.MeshStandardMaterial({ color: colors[r * 2 + k], roughness: 0.9 }), 0, 0.48 + r * 0.55, (k - 0.5) * 0.34, 36, 'x'));
+  }
+  return g;
+}
+
+return { mats, profile, label, signalTower, fence, cabinet, sewingMachine, sewingTable, robot6, conveyor, carrier, spreader, cutter, foldTable, turner, visionTunnel, pressFolder, bagger, pallet, fabricRollRack };
+})();
+
 // ---- src/render/scene.js ----
 const __M_render_scene = (() => {
 // 3D-Darstellung der Nähzelle mit Three.js.
@@ -4133,6 +4705,7 @@ const { fabricTexture, gridTexture } = __M_render_textures;
 const { SOLIDS } = __M_physics_materials;
 const { NEEDLE, TABLE_TOP } = __M_physics_world;
 const { locateRest } = __M_physics_cloth;
+const { mats, profile, fence, cabinet, signalTower } = __M_render_models;
 const VIEWS = {
   gesamt: { pos: [1.55, 2.0, 2.6], target: [0.05, 0.78, -0.05] },
   stapel: { pos: [-0.25, 1.3, 0.85], target: [-0.5, 0.8, 0.05] },
@@ -4167,8 +4740,8 @@ class SceneView {
     const sun = new THREE.DirectionalLight(0xffffff, 2.2);
     sun.position.set(1.6, 3.2, 1.4);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    const sc = sun.shadow.camera; sc.left = -1.4; sc.right = 1.4; sc.top = 1.2; sc.bottom = -1.2; sc.near = 0.5; sc.far = 7;
+    sun.shadow.mapSize.set(4096, 4096);
+    const sc = sun.shadow.camera; sc.left = -1.9; sc.right = 1.9; sc.top = 1.6; sc.bottom = -1.6; sc.near = 0.5; sc.far = 7;
     sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.002;
     this.scene.add(sun);
     const fill = new THREE.DirectionalLight(0xdfe8ff, 0.6);
@@ -4237,6 +4810,84 @@ class SceneView {
   }
 
   // Szene für eine (neue) Welt aufbauen
+  // Detailgeometrie der Zelle (rein visuell, ohne Einfluss auf die Physik)
+  _cellDetails(world) {
+    const M = mats(), S = this.static, T = TABLE_TOP;
+    const [nx, ny, nz] = NEEDLE;
+    const add = (o) => { S.add(o); return o; };
+    const bx = (w, h, d, mat, x, y, z) => add(this._box(w, h, d, mat, x, y, z));
+    const cy = (r, h, mat, x, y, z, axis = 'y', seg = 24) => {
+      const o = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, seg), mat);
+      if (axis === 'x') o.rotation.z = Math.PI / 2; else if (axis === 'z') o.rotation.x = Math.PI / 2;
+      o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; return add(o);
+    };
+    // Tischgestelle aus Aluprofil 40×40 mit Stellfüßen, Zarge und Ablageboden
+    for (const [cx, cz, hx, hz] of [[-0.5, 0.05, 0.35, 0.3], [0.55, -0.05, 0.45, 0.4]]) {
+      const lh = T - 0.04 - 0.03;
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        const x = cx + sx * (hx - 0.05), z = cz + sz * (hz - 0.05);
+        add(profile(lh, 'y', x, 0.03 + lh / 2, z));
+        cy(0.025, 0.012, M.rubber, x, 0.006, z); cy(0.006, 0.03, M.steel, x, 0.022, z);
+      }
+      for (const sz of [-1, 1]) { add(profile(hx * 2 - 0.1, 'x', cx, T - 0.06, cz + sz * (hz - 0.05))); add(profile(hx * 2 - 0.1, 'x', cx, 0.16, cz + sz * (hz - 0.05))); }
+      for (const sx of [-1, 1]) { add(profile(hz * 2 - 0.14, 'z', cx + sx * (hx - 0.05), T - 0.06, cz)); add(profile(hz * 2 - 0.14, 'z', cx + sx * (hx - 0.05), 0.16, cz)); }
+      bx(hx * 2 - 0.12, 0.012, hz * 2 - 0.12, M.hpl, cx, 0.186, cz);
+    }
+    // Vakuumtisch: Saugbohrungen im Raster 25 mm (dunkle Punkte) um die Stichplatte
+    const holeGeo = new THREE.CircleGeometry(0.0016, 10), holeMat = new THREE.MeshBasicMaterial({ color: 0x1a1d1c });
+    const holes = new THREE.InstancedMesh(holeGeo, holeMat, 900); let hn = 0;
+    const dm = new THREE.Matrix4(), q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)), one = new THREE.Vector3(1, 1, 1);
+    for (let x = 0.15; x <= 0.96 && hn < 900; x += 0.025) for (let z = -0.42; z <= 0.32 && hn < 900; z += 0.025) {
+      if (Math.abs(z - nz) < 0.085 && x > nx - 0.06 && x < nx + 0.32) continue; // Stichplatte
+      if (x > nx + 0.25 && Math.abs(z - nz) < 0.08) continue;
+      dm.compose(new THREE.Vector3(x, T + 0.0002, z), q, one); holes.setMatrixAt(hn++, dm);
+    }
+    holes.count = hn; add(holes);
+    // Stichplatte: Transporteur-Schlitze, Greiferschieber, Stichplattenschrauben
+    const slot = new THREE.MeshBasicMaterial({ color: 0x0e0f10 });
+    for (const dx of [-0.007, -0.0025, 0.0025, 0.007]) { const o = new THREE.Mesh(new THREE.PlaneGeometry(0.0016, 0.024), slot); o.rotation.x = -Math.PI / 2; o.position.set(nx + dx, T + 0.0004, nz + (Math.abs(dx) < 0.003 ? 0.006 : 0)); add(o); }
+    bx(0.07, 0.0008, 0.07, M.alu, nx + 0.075, T + 0.0004, nz);
+    for (const [dx, dz] of [[-0.03, -0.04], [-0.03, 0.04], [0.03, 0.045]]) cy(0.003, 0.001, M.blackSteel, nx + dx, T + 0.0005, nz + dz);
+    // Nähkopf: Kopfdeckel, Fadenhebel, Spannung, Fadenführungen, Nählicht
+    const fz = nz + 0.05;
+    bx(0.085, 0.13, 0.004, M.steel, nx + 0.02, T + 0.2, fz + 0.002);
+    this.takeup = bx(0.008, 0.045, 0.006, M.chrome, nx + 0.045, T + 0.25, fz + 0.007);
+    cy(0.014, 0.008, M.chrome, nx + 0.11, T + 0.235, nz + 0.049, 'z'); cy(0.009, 0.012, M.chrome, nx + 0.11, T + 0.235, nz + 0.057, 'z'); cy(0.004, 0.03, M.blackSteel, nx + 0.11, T + 0.235, nz + 0.06, 'z');
+    for (const x of [nx + 0.075, nx + 0.15]) cy(0.003, 0.012, M.chrome, x, T + 0.258, nz + 0.05, 'z');
+    bx(0.035, 0.006, 0.022, M.lamp, nx + 0.035, T + 0.117, nz + 0.03);
+    // Bedienfeld am Arm, Rückwärtstaste, Stichsteller am Ständer
+    bx(0.07, 0.04, 0.004, M.plastic, nx + 0.24, T + 0.23, nz + 0.046); bx(0.05, 0.025, 0.002, M.screen, nx + 0.24, T + 0.232, nz + 0.049);
+    bx(0.03, 0.012, 0.012, M.paintDark, nx + 0.295, T + 0.175, nz + 0.06);
+    cy(0.018, 0.012, M.paintDark, nx + 0.33, T + 0.12, nz + 0.061, 'z'); bx(0.006, 0.03, 0.006, M.chrome, nx + 0.33, T + 0.13, nz + 0.068);
+    // Direktantrieb (Servomotor) hinter dem Handrad, Steuerung unter dem Tisch
+    cy(0.045, 0.055, M.blackSteel, nx + 0.44, T + 0.2, nz, 'x', 32); cy(0.02, 0.01, M.alu, nx + 0.472, T + 0.2, nz, 'x');
+    bx(0.26, 0.12, 0.2, M.paintDark, nx + 0.15, T - 0.14, nz - 0.12); bx(0.06, 0.03, 0.002, M.screen, nx + 0.1, T - 0.13, nz - 0.019);
+    // Garnständer mit zwei Konen und Fadenlauf zur Nadel
+    const gx = nx + 0.33, gz = -0.4;
+    add(profile(0.62, 'y', gx, T + 0.31, gz, M.steel));
+    bx(0.26, 0.006, 0.12, M.paintDark, gx, T + 0.003, gz);
+    bx(0.24, 0.01, 0.01, M.steel, gx, T + 0.6, gz);
+    const coneMat = this._mat(0xe8e2d6, 0.85);
+    for (const dx of [-0.08, 0.08]) {
+      const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.034, 0.15, 28), coneMat); cone.position.set(gx + dx, T + 0.084, gz); cone.castShadow = true; add(cone);
+      cy(0.004, 0.18, M.steel, gx + dx, T + 0.09, gz);
+      cy(0.006, 0.004, M.chrome, gx + dx, T + 0.6, gz + 0.006);
+    }
+    const thread = new THREE.BufferGeometry().setFromPoints([
+      [gx - 0.08, T + 0.16, gz], [gx - 0.08, T + 0.6, gz + 0.006], [nx + 0.15, T + 0.27, nz + 0.05], [nx + 0.11, T + 0.235, nz + 0.062],
+      [nx + 0.075, T + 0.258, nz + 0.056], [nx + 0.045, T + 0.27, fz + 0.01], [nx + 0.01, T + 0.16, fz + 0.004], [nx + 0.001, T + 0.06, nz + 0.004],
+    ].map((a) => new THREE.Vector3(...a)));
+    add(new THREE.Line(thread, new THREE.LineBasicMaterial({ color: 0xd8d0c0 })));
+    // Schutzzaun (Rückseite und Seiten), Schaltschrank, Signalsäule
+    const fb = fence(3.6, 1.6, 'x'); fb.position.set(0.1, 0, -1.25); add(fb);
+    const fl = fence(2.2, 1.6, 'z'); fl.position.set(-1.7, 0, -0.15); add(fl);
+    const fr = fence(2.2, 1.6, 'z'); fr.position.set(1.9, 0, -0.15); add(fr);
+    const cab = cabinet(0.6, 1.8, 0.4); cab.position.set(1.35, 0, -1.5); add(cab);
+    const tw = signalTower(); tw.position.set(1.15, 1.62, 0.6); add(tw); tw.userData.set?.('busy'); this.tower = tw;
+    // Kabelkette am Portal
+    for (let k = 0; k < 14; k++) bx(0.05, 0.03, 0.06, M.plastic, -0.95 + k * 0.07, 1.72, -0.58);
+  }
+
   build(world) {
     this.world = world;
     for (const g of [this.static, this.dynamic]) {
@@ -4251,26 +4902,20 @@ class SceneView {
       const s = SOLIDS[col.material];
       const color = col.color || (col.material === 'hpl' ? '#474d4b' : col.material === 'guss' ? '#5f6f68' : s.color);
       const mat = this._mat(color, col.material === 'stahl' ? 0.3 : 0.65, col.material === 'stahl' ? 0.7 : 0.05);
-      const m = this._box(col.half[0] * 2, col.half[1] * 2, col.half[2] * 2, mat, ...col.c);
+      // gerundete Kanten (Guss r = 12 mm, Tischplatte 3 mm); Abmessungen bleiben exakt die des Kolliders
+      const r = col.material === 'guss' ? 0.012 : col.material === 'stahl' ? 0 : 0.003;
+      const m = r > 0 ? new THREE.Mesh(new RoundedBoxGeometry(col.half[0] * 2, col.half[1] * 2, col.half[2] * 2, 3, r), mat) : this._box(col.half[0] * 2, col.half[1] * 2, col.half[2] * 2, mat, 0, 0, 0);
+      m.position.set(...col.c); m.castShadow = m.receiveShadow = true;
       m.rotation.set(col.euler[1], col.euler[0], col.euler[2], 'YXZ');
       this.static.add(m);
     }
-    // Tischbeine und Zargen
-    for (const [cx, cz, hx, hz] of [[-0.5, 0.05, 0.35, 0.3], [0.55, -0.05, 0.45, 0.4]]) {
-      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-        this.static.add(this._box(0.04, TABLE_TOP - 0.04, 0.04, steel, cx + sx * (hx - 0.05), (TABLE_TOP - 0.04) / 2, cz + sz * (hz - 0.05)));
-      }
-      this.static.add(this._box(hx * 2 - 0.06, 0.06, 0.02, dark, cx, TABLE_TOP - 0.07, cz + hz - 0.04));
-    }
+    this._cellDetails(world);
     // Nähmaschine: Handrad, Fadenrolle, Nadelstange, Nähfuß
     const [nx, ny, nz] = NEEDLE;
     const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.03, 40), this._mat(0x3b4442, 0.4, 0.4));
     wheel.rotation.z = Math.PI / 2; wheel.position.set(nx + 0.395, ny + 0.2, nz); wheel.castShadow = true;
     this.static.add(wheel);
     this.wheel = wheel;
-    const spool = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.05, 24), this._mat(0xb3261e, 0.7));
-    spool.position.set(nx + 0.25, ny + 0.3, nz); spool.castShadow = true;
-    this.static.add(spool);
     this.needleBar = new THREE.Group();
     const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.09, 12), steel);
     bar.position.y = 0.06;
@@ -4516,6 +5161,8 @@ class SceneView {
     const footY = m.footUp ? ny + m.footLift : m.footY;
     this.footMesh.position.set(nx, footY, nz);
     this.wheel.rotation.x = -m.phase * 2 * Math.PI;
+    if (this.takeup) this.takeup.position.y = TABLE_TOP + 0.25 + 0.012 * Math.sin(m.phase * 2 * Math.PI);
+    this.tower?.userData.set?.(world.machine.sewing ? 'busy' : 'wait');
 
     // Stofflagen
     const cmode = this.colorMode;
@@ -4577,6 +5224,1044 @@ class SceneView {
 }
 
 return { SceneView };
+})();
+
+// ---- src/line/garment.js ----
+const __M_line_garment = (() => {
+// Schnittteile, Nähte und Schnittbild eines T-Shirts Gr. 86 (Kleinkind) für die Produktionsstraße.
+// Koordinaten [m]: x quer (Schuss), z längs (Kette). Gleiche Konstruktion wie in der
+// Physik-Zelle (setInBody / fitSleeve), hier in die Einzelteile zerlegt.
+
+const { setInBody, fitSleeve, seamPath } = __M_physics_garments;
+function bez(p0, p1, p2, n) {
+  const out = [];
+  for (let k = 1; k <= n; k++) { const t = k / n, u = 1 - t; out.push([u * u * p0[0] + 2 * u * t * p1[0] + t * t * p2[0], u * u * p0[1] + 2 * u * t * p1[1] + t * t * p2[1]]); }
+  return out;
+}
+const polyLen = (P) => P.slice(1).reduce((a, p, i) => a + Math.hypot(p[0] - P[i][0], p[1] - P[i][1]), 0);
+const mirrorX = (P) => P.map(([x, z]) => [-x, z]);
+const bbox = (P) => { let a = Infinity, b = -Infinity, c = Infinity, d = -Infinity; for (const [x, z] of P) { a = Math.min(a, x); b = Math.max(b, x); c = Math.min(c, z); d = Math.max(d, z); } return { minx: a, maxx: b, minz: c, maxz: d, w: b - a, h: d - c }; };
+
+// Maße (gleich wie setInBody)
+const DIM = { bw: 0.13, len: 0.30, ua: 0.10, shX: 0.105, neckW: 0.05, neckF: 0.045, neckB: 0.015, stitch: 0.0025 };
+
+// Vorder- bzw. Rückenteil (Schulterlinie bei z = 0; Vorderteil z > 0, Rückenteil z < 0)
+function panel(sign, neckDepth) {
+  const { bw, len, ua, shX, neckW } = DIM;
+  const s = sign;
+  const rightArm = bez([bw, s * ua], [shX, s * 0.05], [shX, 0], 10);
+  const neck = [...bez([neckW, 0], [neckW, s * neckDepth], [0, s * neckDepth], 8), ...bez([0, s * neckDepth], [-neckW, s * neckDepth], [-neckW, 0], 8)];
+  const leftArm = mirrorX(rightArm).reverse(); // von (−shX,0) nach (−bw, s·ua)
+  return {
+    outline: [[bw, s * len], [bw, s * ua], ...rightArm, [neckW, 0], ...neck, [-shX, 0], ...leftArm.slice(1), [-bw, s * len]],
+    neck: [[neckW, 0], ...neck],
+    armRight: [[bw, s * ua], ...rightArm],
+    armLeft: [[-shX, 0], ...leftArm.slice(1)],
+  };
+}
+
+function buildGarment() {
+  const front = panel(1, DIM.neckF), back = panel(-1, DIM.neckB);
+  const body = setInBody();
+  const armholeSeam = seamPath(body.outline, body.chains.armloch_links, 0.01);
+  const sleeve = fitSleeve(armholeSeam.length, 0.02);
+  const sleeveL = { outline: sleeve.outline }, sleeveR = { outline: mirrorX(sleeve.outline).reverse() };
+  const neckLen = polyLen(front.neck) + polyLen(back.neck);
+  // Halsbündchen: Rippstrick, 85 % der Halslänge (wird beim Annähen gedehnt), doppelt gelegt
+  const ribL = neckLen * 0.85, ribW = 0.036;
+  const rib = { outline: [[-ribL / 2, -ribW / 2], [ribL / 2, -ribW / 2], [ribL / 2, ribW / 2], [-ribL / 2, ribW / 2]] };
+  const capH = -Math.min(...sleeve.outline.map((p) => p[1]));
+  const sl = sleeve.outline, hemW = Math.abs(sl[sl.length - 1][0]) * 2;
+  const sleeveUnder = Math.hypot(0.11 - hemW / 2, 0.09);
+  const seams = {
+    schulter: DIM.shX - DIM.neckW,
+    hals: neckLen,
+    armloch: armholeSeam.length,
+    seite: (DIM.len - DIM.ua) + 0.03 + sleeveUnder, // Seite + Achselrundung + Ärmelunterkante
+    aermelsaum: hemW,
+    saum: 2 * DIM.bw,
+  };
+  return { front, back, sleeveL, sleeveR, sleeveCap: sleeve.chains.aermelkugel, rib, capH, seams, ribL, ribW, neckLen, armholeSeam };
+}
+
+// Schnittbild: Regal-Packung der Hüllrechtecke, Fadenlauf längs (z) bleibt erhalten.
+// width: Stoffbreite [m], shirts: Shirts je Schnittbild. Rückgabe: Teile mit Lage im Schnittbild.
+function nestMarker(G, width = 1.5, shirts = 6, gap = 0.008) {
+  const parts = [];
+  for (let k = 0; k < shirts; k++) {
+    parts.push({ name: 'Vorderteil', shirt: k, outline: G.front.outline });
+    parts.push({ name: 'Rückenteil', shirt: k, outline: G.back.outline });
+    parts.push({ name: 'Ärmel links', shirt: k, outline: G.sleeveL.outline });
+    parts.push({ name: 'Ärmel rechts', shirt: k, outline: G.sleeveR.outline });
+    parts.push({ name: 'Bündchen', shirt: k, outline: G.rib.outline, rot: true });
+  }
+  for (const p of parts) {
+    // Bündchen quer legen (Rippen laufen beim Bündchen quer)
+    if (p.rot) p.outline = p.outline.map(([x, z]) => [z, x]);
+    p.bb = bbox(p.outline);
+  }
+  parts.sort((a, b) => b.bb.h - a.bb.h);
+  let x = gap, z = gap, rowH = 0;
+  for (const p of parts) {
+    if (x + p.bb.w + gap > width) { x = gap; z += rowH + gap; rowH = 0; }
+    p.x = x - p.bb.minx; p.z = z - p.bb.minz;      // Verschiebung des Teils in das Schnittbild
+    x += p.bb.w + gap; rowH = Math.max(rowH, p.bb.h);
+  }
+  const length = z + rowH + gap;
+  const area = parts.reduce((a, p) => a + polyArea(p.outline), 0);
+  const contour = parts.reduce((a, p) => a + polyLen([...p.outline, p.outline[0]]), 0);
+  return { parts, width, length, utilization: area / (width * length), contour };
+}
+
+function polyArea(P) {
+  let a = 0;
+  for (let i = 0, j = P.length - 1; i < P.length; j = i++) a += (P[j][0] + P[i][0]) * (P[j][1] - P[i][1]);
+  return Math.abs(a / 2);
+}
+
+return { DIM, buildGarment, nestMarker, polyArea };
+})();
+
+// ---- src/line/des.js ----
+const __M_line_des = (() => {
+// Produktionsstraße T-Shirt: ereignisdiskrete Simulation (zeitgesteuert) des Materialflusses.
+//
+// Vorstufe (Batch): Stoffrolle → Legemaschine (L Lagen) → CNC-Cutter → Abnahmetisch.
+// Kommissionierung: Roboter mit Nadelgreifer vereinzelt die Teile eines Shirts vom Stapel
+// auf einen Werkstückträger. Hauptstrecke: Transfersystem; jede Station holt den Träger über
+// einen Querumsetzer in den Nebenschluss (die Strecke bleibt frei), bearbeitet ihn und
+// gibt ihn zurück. Leere Träger laufen über Hubstationen und die untere Rücklaufstrecke zurück.
+//
+// Zykluszeiten: Handhabung (Roboterbewegungen) + Nähzeit aus den Nahtlängen der Schnittteile,
+// Stichlänge und Drehzahl. Bei Kurvennähten begrenzt die Drehgeschwindigkeit der Führung
+// (C-Achse) die Drehzahl: n ≤ 60·ω_max / (κ_max · Stichlänge).
+
+const { buildGarment, nestMarker, DIM } = __M_line_garment;
+const STAGES = [
+  'Zuschnitt-Kit', 'Schulter rechts', 'Halsbündchen', 'Schulter links', 'Ärmel links', 'Ärmel rechts',
+  'Säume', 'gefaltet', 'Seite links', 'Seite rechts', 'gewendet', 'geprüft', 'gebügelt & gefaltet', 'verpackt',
+];
+
+// Stationsdefinitionen: Nähte (Länge in m, Kurve ja/nein, max. Krümmung 1/m), Handhabung [s]
+function stationDefs(G) {
+  const S = G.seams;
+  return [
+    { id: 'schulter1', name: 'Schulternaht rechts', machine: 'overlock', seams: [{ len: S.schulter, kmax: 0 }], handling: 6.5, stage: 1, cap: 1 },
+    { id: 'hals', name: 'Halsbündchen annähen', machine: 'overlock', seams: [{ len: S.hals, kmax: 22 }], handling: 9.0, stage: 2, cap: 1, note: 'Bündchen 15 % kürzer: Obertransport dehnt es (negative Mehrweite)' },
+    { id: 'schulter2', name: 'Schulternaht links', machine: 'overlock', seams: [{ len: S.schulter + 0.036, kmax: 0 }], handling: 6.5, stage: 3, cap: 1 },
+    { id: 'aermelL', name: 'Ärmel einsetzen links', machine: 'steppstich', seams: [{ len: S.armloch, kmax: 14 }], handling: 11.0, stage: 4, cap: 1, physics: 'aermel', note: 'Werkstückträger + Ärmelzuführung + Mehrweite (in der Physik-Zelle validiert)' },
+    { id: 'aermelR', name: 'Ärmel einsetzen rechts', machine: 'steppstich', seams: [{ len: S.armloch, kmax: 14 }], handling: 11.0, stage: 5, cap: 1, physics: 'aermel' },
+    { id: 'saum', name: 'Ärmel- und Saumnaht (Cover)', machine: 'cover', seams: [{ len: S.aermelsaum, kmax: 0 }, { len: S.aermelsaum, kmax: 0 }, { len: DIM.bw * 2, kmax: 0 }, { len: DIM.bw * 2, kmax: 0 }], handling: 12.0, stage: 6, cap: 1 },
+    { id: 'falten', name: 'Falten an der Schulter', machine: 'falttisch', seams: [], handling: 7.0, stage: 7, cap: 1 },
+    { id: 'seiteL', name: 'Seitennaht links', machine: 'overlock', seams: [{ len: S.seite, kmax: 25 }], handling: 9.0, stage: 8, cap: 1, physics: 'tshirt', note: 'Seite + Achselrundung + Ärmelunterkante in einem Zug (Physik-Zelle: Kurvennaht)' },
+    { id: 'seiteR', name: 'Seitennaht rechts', machine: 'overlock', seams: [{ len: S.seite, kmax: 25 }], handling: 9.0, stage: 9, cap: 1, physics: 'tshirt' },
+    { id: 'wenden', name: 'Wenden', machine: 'wender', seams: [], handling: 7.5, stage: 10, cap: 1 },
+    { id: 'qs', name: 'Fäden kappen & Kameraprüfung', machine: 'pruefung', seams: [], handling: 6.0, stage: 11, cap: 1 },
+    { id: 'buegeln', name: 'Bügeln & Falten', machine: 'presse', seams: [], handling: 15.0, stage: 12, cap: 2 },
+    { id: 'pack', name: 'Verpacken', machine: 'verpackung', seams: [], handling: 7.0, stage: 13, cap: 1 },
+  ];
+}
+
+function defaultLineConfig() {
+  return {
+    width: 1.5, shirtsPerMarker: 6, layers: 20,
+    spreadSpeed: 0.6, spreadTurn: 3.0,          // m/s, s je Lage
+    cutSpeed: 0.18, cutOverhead: 25,            // m/s im Stapel, s
+    pickTime: 2.6, kitRobots: 2,                // s je Teil (Vereinzeln mit Nadelgreifer)
+    carriers: 22, conveyorSpeed: 0.25, pitch: 2.8, carrierLen: 0.7,
+    rpmStraight: 4000, rpmCurveMax: 3000, omegaMax: 2.0, // 1/min, rad/s (C-Achse)
+    seamOverhead: 0.7,                          // Anlauf, Verriegeln, Fadenabschneiden [s]
+    threadBreak: 0.004,                         // Fadenbruch je Naht
+    repairTime: 45,
+    jitter: 0.05,
+    caps: {},                                   // Maschinen je Station (Überschreibung)
+  };
+}
+
+class LineSim {
+  constructor(cfg = defaultLineConfig()) {
+    this.cfg = cfg;
+    this.G = buildGarment();
+    this.marker = nestMarker(this.G, cfg.width, cfg.shirtsPerMarker);
+    this.defs = stationDefs(this.G);
+    this.reset();
+  }
+
+  rng() { this._s = (this._s * 1664525 + 1013904223) >>> 0; return this._s / 4294967296; }
+
+  // Nähzeit einer Naht und die dafür zulässige Drehzahl
+  seamTime(seam) {
+    const c = this.cfg, st = DIM.stitch;
+    const rpm = seam.kmax > 0 ? Math.min(c.rpmCurveMax, (60 * c.omegaMax) / (seam.kmax * st)) : c.rpmStraight;
+    return { t: seam.len / ((rpm / 60) * st) + c.seamOverhead, rpm };
+  }
+
+  cycleTime(def) {
+    let t = def.handling;
+    for (const s of def.seams) t += this.seamTime(s).t;
+    return t;
+  }
+
+  reset() {
+    const c = this.cfg;
+    this._s = 12345;
+    this.t = 0;
+    this.done = 0;
+    this.events = [];
+    this.flowTimes = [];
+    this.outputLog = [];
+    // Layout: Hauptstrecke ab s = 0 (Beladeplatz), Stationen im Abstand pitch × Maschinenzahl
+    let s = 2.2;
+    this.stations = this.defs.map((d) => {
+      const cap = c.caps[d.id] ?? d.cap;
+      const st = { ...d, cap, s, ct: this.cycleTime(d), slots: Array.from({ length: cap }, () => ({ carrier: null, t: 0, T: 0, phase: 'frei', repair: 0 })), busy: 0, blocked: 0, starved: 0, repair: 0, count: 0 };
+      s += c.pitch * Math.max(1, cap * 0.75);
+      return st;
+    });
+    this.mainLen = s + 1.0;
+    // Werkstückträger: zu Beginn alle leer in der Rücklaufstrecke bzw. am Beladeplatz
+    this.carriers = [];
+    for (let k = 0; k < c.carriers; k++) this.carriers.push({ id: k + 1, track: 'ret', s: this.mainLen - k * (c.carrierLen + 0.05), stage: -1, next: 0, shirt: null, wait: 0 });
+    this.loadSlot = { carrier: null, t: 0, T: 0 };
+    this.lifts = { end: { carrier: null, t: 0 }, start: { carrier: null, t: 0 } };
+    // Vorstufe
+    this.spreader = { state: 'legen', layer: 0, t: 0, x: 0, dir: 1 };
+    this.cutter = { state: 'leer', t: 0, T: 0, progress: 0 };
+    this.cutStacks = 0;            // fertige Schnittpakete auf dem Abnahmetisch (Shirts)
+    this.stackOnCutter = false;
+    this.shirtCounter = 0;
+    this.layerTime = this.marker.length / c.spreadSpeed + c.spreadTurn;
+    this.cutTime = this.marker.contour / c.cutSpeed + c.cutOverhead;
+    this.kitTime = (5 * c.pickTime) / c.kitRobots;
+  }
+
+  log(msg, level = 'info') { this.events.push({ t: this.t, msg, level }); if (this.events.length > 200) this.events.shift(); }
+
+  step(dt) {
+    const c = this.cfg;
+    this.t += dt;
+    this._upstream(dt);
+    this._kitting(dt);
+    this._stations(dt);
+    this._conveyor(dt);
+    this._returnLine(dt);
+  }
+
+  _upstream(dt) {
+    const c = this.cfg, sp = this.spreader, cu = this.cutter;
+    // Legemaschine: L Lagen hin und her
+    if (sp.state === 'legen') {
+      sp.t += dt;
+      const tl = this.layerTime;
+      sp.x = Math.min(1, (sp.t % tl) / (tl - c.spreadTurn));
+      if (sp.t >= tl) { sp.t -= tl; sp.layer++; sp.dir *= -1; }
+      if (sp.layer >= c.layers) { sp.state = 'fertig'; sp.t = 0; this.log(`Legemaschine: ${c.layers} Lagen gelegt (${(this.marker.length * c.layers).toFixed(1)} m Stoff)`); }
+    } else if (sp.state === 'fertig' && cu.state === 'leer') {
+      cu.state = 'einziehen'; cu.t = 0; sp.state = 'uebergabe';
+    } else if (sp.state === 'uebergabe' && cu.state !== 'einziehen') {
+      sp.state = 'legen'; sp.layer = 0; sp.t = 0;
+    }
+    // Cutter
+    if (cu.state === 'einziehen') { cu.t += dt; if (cu.t > 15) { cu.state = 'schneiden'; cu.t = 0; cu.T = this.cutTime; this.log(`Cutter: Zuschnitt von ${c.layers} Lagen × ${c.shirtsPerMarker} Shirts gestartet`); } }
+    else if (cu.state === 'schneiden') { cu.t += dt; cu.progress = Math.min(1, cu.t / cu.T); if (cu.t >= cu.T) { cu.state = 'abgabe'; cu.t = 0; } }
+    else if (cu.state === 'abgabe') {
+      // Abnahmetisch muss leer sein (ein Paket Puffer)
+      if (this.cutStacks === 0) { cu.t += dt; if (cu.t > 12) { this.cutStacks = c.layers * c.shirtsPerMarker; this.stackLayers = c.layers; cu.state = 'leer'; cu.progress = 0; this.log(`Schnittpaket mit ${this.cutStacks} Shirts auf dem Abnahmetisch`); } }
+    }
+  }
+
+  _kitting(dt) {
+    const L = this.loadSlot;
+    if (L.carrier) {
+      if (L.T === 0) {
+        if (this.cutStacks > 0) { L.T = this.kitTime * (1 + (this.rng() - 0.5) * this.cfg.jitter); L.t = 0; this.cutStacks--; L.carrier.shirt = ++this.shirtCounter; L.carrier.tStart = this.t; }
+        else { this.kitStarved = (this.kitStarved || 0) + dt; return; }
+      }
+      L.t += dt;
+      if (L.t >= L.T) {
+        const car = L.carrier;
+        car.stage = 0; car.next = 0;
+        // auf die Hauptstrecke, wenn der Anfang frei ist
+        if (!this.carriers.some((o) => o.track === 'main' && o.s < this.cfg.carrierLen + 0.05)) {
+          car.track = 'main'; car.s = 0; L.carrier = null; L.T = 0;
+        }
+      }
+    }
+  }
+
+  _stations(dt) {
+    const c = this.cfg;
+    for (const st of this.stations) {
+      let anyBusy = false;
+      for (const sl of st.slots) {
+        if (!sl.carrier) continue;
+        if (sl.repair > 0) { sl.repair -= dt; st.repair += dt / st.cap; sl.phase = 'Fadenbruch'; continue; }
+        if (sl.t < sl.T) {
+          sl.t += dt; anyBusy = true;
+          const f = sl.t / sl.T;
+          sl.phase = f < 0.22 ? 'laden' : f < 0.85 ? 'bearbeiten' : 'entladen';
+          // Fadenbruch während der Naht
+          if (st.seams.length && sl.phase === 'bearbeiten' && !sl.broke && this.rng() < (c.threadBreak * st.seams.length * dt) / (0.63 * sl.T)) {
+            sl.broke = true; sl.repair = c.repairTime;
+            this.log(`${st.name}: Fadenbruch, automatisches Einfädeln/Störung (${c.repairTime} s)`, 'warn');
+          }
+          st.busy += dt / st.cap;
+        } else {
+          // fertig: zurück auf die Strecke, wenn dort Platz ist
+          sl.phase = 'wartet auf Abgabe';
+          const sx = st.s + this.cfg.carrierLen + 0.25; // Einschleusstelle hinter der Ausschleusstelle
+          if (this._gapFree(sx)) {
+            const car = sl.carrier;
+            car.stage = st.stage; car.next++; car.track = 'main'; car.s = sx; car.wait = 0;
+            sl.carrier = null; sl.phase = 'frei'; st.count++;
+          } else st.blocked += dt / st.cap;
+        }
+      }
+      if (st.slots.every((sl) => !sl.carrier)) st.starved += dt;
+    }
+  }
+
+  _gapFree(s) {
+    const gap = this.cfg.carrierLen + 0.05;
+    return !this.carriers.some((o) => o.track === 'main' && Math.abs(o.s - s) < gap);
+  }
+
+  _conveyor(dt) {
+    const c = this.cfg, gap = c.carrierLen + 0.05;
+    const main = this.carriers.filter((o) => o.track === 'main').sort((a, b) => b.s - a.s);
+    let front = Infinity;
+    for (const car of main) {
+      let target = car.s + c.conveyorSpeed * dt;
+      target = Math.min(target, front - gap);
+      const st = this.stations[car.next];
+      if (st && car.s <= st.s + 1e-6 && target >= st.s) {
+        // an der Station: Querumsetzer nimmt den Träger, wenn ein Platz frei ist
+        const slot = st.slots.find((sl) => !sl.carrier);
+        if (slot) {
+          slot.carrier = car; slot.t = 0; slot.broke = false;
+          slot.T = st.ct * (1 + (this.rng() - 0.5) * c.jitter);
+          car.track = 'station'; car.station = st; car.slot = st.slots.indexOf(slot);
+          continue;
+        }
+        target = st.s; car.wait += dt;
+      }
+      if (!st && target >= this.mainLen) {
+        // Ende: Hubstation nach unten
+        if (!this.lifts.end.carrier) { this.lifts.end.carrier = car; this.lifts.end.t = 0; car.track = 'lift'; this._finish(car); continue; }
+        target = this.mainLen;
+      }
+      car.s = Math.max(car.s, target);
+      front = car.s;
+    }
+  }
+
+  _finish(car) {
+    this.done++;
+    const ft = this.t - (car.tStart ?? this.t);
+    this.flowTimes.push(ft); if (this.flowTimes.length > 200) this.flowTimes.shift();
+    this.outputLog.push(this.t);
+    car.stage = -1; car.next = 0; car.shirt = null;
+  }
+
+  _returnLine(dt) {
+    const c = this.cfg, gap = c.carrierLen + 0.05;
+    const E = this.lifts.end, S = this.lifts.start;
+    if (E.carrier) { E.t += dt; if (E.t > 4 && !this.carriers.some((o) => o.track === 'ret' && o.s > this.mainLen - gap)) { E.carrier.track = 'ret'; E.carrier.s = this.mainLen; E.carrier = null; } }
+    // Rücklauf läuft von mainLen nach 0
+    const ret = this.carriers.filter((o) => o.track === 'ret').sort((a, b) => a.s - b.s);
+    let front = -Infinity;
+    for (const car of ret) {
+      let target = car.s - c.conveyorSpeed * 1.6 * dt;
+      target = Math.max(target, front + gap, 0);
+      if (target <= 0 && !S.carrier && car === ret[0]) { S.carrier = car; S.t = 0; car.track = 'liftS'; continue; }
+      car.s = Math.min(car.s, target);
+      front = car.s;
+    }
+    if (S.carrier) { S.t += dt; if (S.t > 4 && !this.loadSlot.carrier) { this.loadSlot.carrier = S.carrier; S.carrier.track = 'load'; S.carrier.s = -0.9; S.carrier = null; } }
+  }
+
+  // Kennzahlen
+  kpis() {
+    const tw = 600, recent = this.outputLog.filter((t) => t > this.t - tw).length;
+    const rate = this.t > 60 ? (recent / Math.min(tw, this.t)) * 3600 : 0;
+    const bottleneck = this.stations.reduce((a, s) => (s.ct / s.cap > a.ct / a.cap ? s : a), this.stations[0]);
+    const takt = Math.max(bottleneck.ct / bottleneck.cap, this.kitTime, (this.layerTime * this.cfg.layers + 15) / (this.cfg.layers * this.cfg.shirtsPerMarker), this.cutTime / (this.cfg.layers * this.cfg.shirtsPerMarker));
+    const ft = this.flowTimes.length ? this.flowTimes.reduce((a, b) => a + b, 0) / this.flowTimes.length : 0;
+    const wip = this.carriers.filter((c) => c.shirt !== null).length;
+    return { rate, theo: 3600 / takt, takt, bottleneck, done: this.done, flow: ft, wip };
+  }
+}
+
+return { STAGES, stationDefs, defaultLineConfig, LineSim };
+})();
+
+// ---- src/line/garmentmesh.js ----
+const __M_line_garmentmesh = (() => {
+// 3D-Darstellung des T-Shirts in jedem Fertigungszustand und Nahtbahnen je Station.
+// Koordinaten wie im Schnitt: x quer, z längs (Schulterlinie z = 0, Vorderteil z > 0).
+
+const { fabricTexture } = __M_render_textures;
+const { setInBody, seamPath, makePath } = __M_physics_garments;
+const { DIM } = __M_line_garment;
+const Y = 0.0006;  // Lagenabstand für die Darstellung
+
+function clipX(P, keepPositive) {
+  // Sutherland–Hodgman an der Geraden x = 0
+  const out = [], inside = (p) => (keepPositive ? p[0] >= 0 : p[0] <= 0);
+  for (let i = 0; i < P.length; i++) {
+    const a = P[i], b = P[(i + 1) % P.length];
+    const ia = inside(a), ib = inside(b);
+    if (ia) out.push(a);
+    if (ia !== ib) { const t = a[0] / (a[0] - b[0]); out.push([0, a[1] + t * (b[1] - a[1])]); }
+  }
+  return out;
+}
+
+function shapeFrom(P, holes = []) {
+  const s = new THREE.Shape(P.map(([x, z]) => new THREE.Vector2(x, -z)));
+  for (const h of holes) s.holes.push(new THREE.Path(h.map(([x, z]) => new THREE.Vector2(x, -z))));
+  return s;
+}
+
+// flaches Teil (Stoffdicke sichtbar), UV im Schnittmaßstab
+function flatPiece(P, mat, holes = [], depth = 0.0012) {
+  const geo = new THREE.ExtrudeGeometry(shapeFrom(P, holes), { depth, bevelEnabled: false, curveSegments: 4 });
+  geo.rotateX(-Math.PI / 2);
+  const m = new THREE.Mesh(geo, mat); m.castShadow = m.receiveShadow = true;
+  return m;
+}
+// gewendetes, aufgebauschtes Teil (Volumen durch Fase)
+function puffyPiece(P, mat, holes = [], t = 0.012) {
+  const geo = new THREE.ExtrudeGeometry(shapeFrom(P, holes), { depth: t * 0.3, bevelEnabled: true, bevelThickness: t * 0.45, bevelSize: Math.min(0.01, t * 0.7), bevelSegments: 3, curveSegments: 6 });
+  geo.rotateX(-Math.PI / 2);
+  const m = new THREE.Mesh(geo, mat); m.castShadow = m.receiveShadow = true;
+  return m;
+}
+
+function seamLine(points, color, y, width = 0.0012) {
+  if (points.length < 2) return new THREE.Group();
+  const curve = new THREE.CatmullRomCurve3(points.map(([x, z]) => new THREE.Vector3(x, y, z)), false, 'catmullrom', 0.1);
+  const m = new THREE.Mesh(new THREE.TubeGeometry(curve, Math.max(8, points.length * 2), width, 4, false), new THREE.MeshStandardMaterial({ color, roughness: 0.7 }));
+  m.castShadow = true;
+  return m;
+}
+// Steppstich als Strichlinie (sichtbare Einzelstiche)
+function stitchLine(points, color, y, stitch = 0.003) {
+  const path = makePath(points), g = new THREE.Group();
+  if (path.length < stitch) return g;
+  const geo = new THREE.BoxGeometry(stitch * 0.7, 0.0008, 0.0009), mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
+  const inst = new THREE.InstancedMesh(geo, mat, Math.floor(path.length / stitch));
+  const dummy = new THREE.Object3D();
+  let k = 0;
+  for (let s = stitch / 2; s < path.length && k < inst.count; s += stitch, k++) {
+    const P = path.points, cum = path.cum;
+    let i = 1; while (i < cum.length - 1 && cum[i] < s) i++;
+    const f = (s - cum[i - 1]) / Math.max(1e-9, cum[i] - cum[i - 1]);
+    const x = P[i - 1][0] + f * (P[i][0] - P[i - 1][0]), z = P[i - 1][1] + f * (P[i][1] - P[i - 1][1]);
+    dummy.position.set(x, y, z);
+    dummy.rotation.set(0, -Math.atan2(P[i][1] - P[i - 1][1], P[i][0] - P[i - 1][0]), 0);
+    dummy.updateMatrix(); inst.setMatrixAt(k, dummy.matrix);
+  }
+  inst.count = k;
+  const g2 = new THREE.Group(); g2.add(inst);
+  return g2;
+}
+
+function offsetPolyline(P, d) {
+  return P.map((p, i) => {
+    const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)];
+    const tx = b[0] - a[0], tz = b[1] - a[1], L = Math.hypot(tx, tz) || 1;
+    return [p[0] - (tz / L) * d, p[1] + (tx / L) * d];
+  });
+}
+
+class GarmentKit {
+  constructor(G, color = '#e9c46a') {
+    this.G = G;
+    const base = new THREE.Color(color);
+    const tex = fabricTexture('knit', color, 256); tex.repeat.set(6, 6);
+    const back = '#' + base.clone().offsetHSL(0, -0.05, -0.08).getHexString();
+    const texB = fabricTexture('knit', back, 256); texB.repeat.set(6, 6);
+    this.matFace = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, side: THREE.DoubleSide });   // rechte Seite
+    this.matBack = new THREE.MeshStandardMaterial({ map: texB, roughness: 0.95, side: THREE.DoubleSide }); // linke Seite
+    const ribTex = fabricTexture('twill', color, 128); ribTex.repeat.set(20, 2);
+    this.matRib = new THREE.MeshStandardMaterial({ map: ribTex, roughness: 0.85, side: THREE.DoubleSide });
+    this.thread = new THREE.Color(color).offsetHSL(0, 0, -0.18).getHex();
+    this.cover = 0xf4f1ea;
+    this._paths();
+  }
+
+  _paths() {
+    const G = this.G, { shX, neckW, bw, len, ua } = DIM;
+    const body = setInBody();
+    this.bodyOutline = body.outline; this.neckHole = body.holes[0];
+    const P = {};
+    P.schulter1 = makePath([[shX - 0.004, 0], [neckW + 0.004, 0]]);
+    P.schulter2 = makePath([[-neckW + 0.004, 0], [-shX - 0.004, 0]]);
+    // Hals: entlang der Halskante, 6 mm in den Ausschnitt, Start an der offenen linken Schulter
+    const neck = [...G.front.neck.slice().reverse(), ...G.back.neck.slice(1).map(([x, z]) => [x, z])];
+    const nk = neck.slice().sort(() => 0);
+    P.hals = makePath(offsetPolyline(nk, -0.006));
+    P.aermelL = seamPath(body.outline, body.chains.armloch_links, 0.01);
+    P.aermelR = makePath(P.aermelL.points.map(([x, z]) => [-x, z]));
+    // Säume: Ärmel links, Ärmel rechts, Vorderteil, Rückenteil (hintereinander)
+    P.saumParts = [
+      [[-0.128 - 0.078, -0.095], [-0.128 - 0.078, 0.095]].map(([x, z]) => [x, z]),
+      [[0.128 + 0.078, 0.095], [0.128 + 0.078, -0.095]],
+      [[bw - 0.005, len - 0.012], [-bw + 0.005, len - 0.012]],
+      [[-bw + 0.005, -len + 0.012], [bw - 0.005, -len + 0.012]],
+    ];
+    P.saum = makePath(P.saumParts.flat());
+    // Seitennaht im gefalteten Zustand: Saum → Seite → Achsel → Ärmelunterkante → Ärmelsaum
+    const side = [];
+    for (let z = -len + 0.004; z <= -ua - 0.02; z += 0.01) side.push([-bw + 0.01, z]);
+    const c = [-bw + 0.01 - 0.02, -ua - 0.02];
+    for (let a = 0; a <= Math.PI / 2; a += Math.PI / 16) side.push([c[0] + 0.02 * Math.cos(a), c[1] + 0.02 * Math.sin(a) - 0.0]);
+    const sl0 = [-0.128, -0.11 + 0.01], sl1 = [-0.128 - 0.09 + 0.004, -0.095 + 0.01];
+    for (let k = 1; k <= 10; k++) side.push([sl0[0] + (sl1[0] - sl0[0]) * (k / 10), sl0[1] + (sl1[1] - sl0[1]) * (k / 10)]);
+    P.seiteL = makePath(side);
+    P.seiteR = makePath(side.map(([x, z]) => [-x, z]));
+    this.paths = P;
+  }
+
+  // Ärmelgruppe: rechter (+x) oder linker Ärmel, aufgeklappt neben dem Armloch
+  _sleeve(right, mat, half = null) {
+    const G = this.G, g = new THREE.Group();
+    const out = right ? G.sleeveL.outline : G.sleeveR.outline;
+    const P = half === null ? out : clipX(out, half === 'pos');
+    if (P.length < 3) return g;
+    g.add(flatPiece(P, mat));
+    g.rotation.y = right ? Math.PI / 2 : -Math.PI / 2;
+    g.position.set(right ? 0.128 : -0.128, Y * 2, 0);
+    return g;
+  }
+
+  // Zustand → Gruppe; liefert { root, front (klappbar), grip }
+  build(stage) {
+    const root = new THREE.Group(), G = this.G;
+    const face = this.matFace, backM = this.matBack;
+    if (stage < 0) return { root };
+    if (stage === 0) {
+      // Kit: links Rücken- und Vorderteil gestapelt, rechts Ärmel und Bündchen
+      const pile = new THREE.Group();
+      const b = flatPiece(G.back.outline, backM); b.position.z = 0.15; pile.add(b);
+      const f = flatPiece(G.front.outline, face); f.position.set(0.004, 0.0013, -0.15 + 0.002); pile.add(f);
+      pile.position.set(-0.17, 0, 0); root.add(pile);
+      const s1 = flatPiece(G.sleeveL.outline, face); s1.position.set(0.18, 0, 0.03); root.add(s1);
+      const s2 = flatPiece(G.sleeveR.outline, face); s2.position.set(0.18, 0.0013, 0.035); root.add(s2);
+      const r = flatPiece(G.rib.outline, this.matRib); r.rotation.y = Math.PI / 2; r.position.set(0.25, 0.0026, -0.15); root.add(r);
+      return { root, grip: new THREE.Vector3(0, 0, 0) };
+    }
+    if (stage <= 6) {
+      // aufgeklappter Körper (Vorderteil vorn, Rückenteil hinten), linke Seite oben
+      const bodyG = new THREE.Group();
+      bodyG.add(flatPiece(G.front.outline, backM));
+      const bk = flatPiece(G.back.outline, backM); bk.position.y = 0.0001; bodyG.add(bk);
+      root.add(bodyG);
+      const y = 0.0016;
+      root.add(stitchLine(this.paths.schulter1.points, this.thread, y));
+      if (stage >= 3) root.add(stitchLine(this.paths.schulter2.points, this.thread, y));
+      if (stage >= 2) {
+        // Bündchen als Band entlang der Halskante (6 mm Naht, 18 mm breit)
+        const inner = offsetPolyline(this.paths.hals.points, -0.012);
+        const band = [...this.paths.hals.points, ...inner.reverse()];
+        const rm = flatPiece(offsetPolyline(band, 0), this.matRib, [], 0.002); rm.position.y = 0.0006; root.add(rm);
+        root.add(stitchLine(this.paths.hals.points, this.thread, y + 0.002));
+      }
+      if (stage < 4) {
+        // Ärmel und (vor Stufe 2) Bündchen liegen noch neben dem Körper
+        const s1 = flatPiece(G.sleeveL.outline, face); s1.rotation.y = Math.PI / 2; s1.position.set(0.26, 0, 0.16); root.add(s1);
+        const s2 = flatPiece(G.sleeveR.outline, face); s2.rotation.y = Math.PI / 2; s2.position.set(0.26, 0.0013, -0.12); root.add(s2);
+        if (stage < 2) { const r = flatPiece(G.rib.outline, this.matRib); r.rotation.y = Math.PI / 2; r.position.set(-0.24, 0.0, 0); root.add(r); }
+      }
+      if (stage >= 4) { root.add(this._sleeve(false, backM)); root.add(stitchLine(this.paths.aermelL.points, this.thread, y + 0.001)); }
+      if (stage >= 5) { root.add(this._sleeve(true, backM)); root.add(stitchLine(this.paths.aermelR.points, this.thread, y + 0.001)); }
+      if (stage === 4) { const s2 = flatPiece(G.sleeveR.outline, face); s2.rotation.y = Math.PI / 2; s2.position.set(0.26, 0.0013, -0.12); root.add(s2); }
+      if (stage >= 6) for (const seg of this.paths.saumParts) for (const d of [-0.003, 0.003]) root.add(stitchLine(offsetPolyline(seg, d), this.cover, y + 0.0015));
+      return { root, grip: new THREE.Vector3(0, 0, 0) };
+    }
+    if (stage <= 9) {
+      // gefaltet: Vorderseite (Vorderteil, vordere Ärmelhälften, vorderes Bündchen) liegt auf dem Rücken.
+      // Rechter Ärmel (um +90° gedreht): lokale x > 0 → Welt z < 0 (hinten); linker Ärmel umgekehrt.
+      const backSide = new THREE.Group(), frontSide = new THREE.Group();
+      backSide.add(flatPiece(G.back.outline, backM));
+      backSide.add(this._sleeve(false, backM, 'neg'));
+      backSide.add(this._sleeve(true, backM, 'pos'));
+      frontSide.add(flatPiece(G.front.outline, backM));
+      frontSide.add(this._sleeve(false, backM, 'pos'));
+      frontSide.add(this._sleeve(true, backM, 'neg'));
+      const y = 0.0016;
+      const [hl, hr, hf, hb] = this.paths.saumParts;
+      for (const d of [-0.003, 0.003]) {
+        for (const seg of [hl, hr]) {
+          const pts = offsetPolyline(seg, d);
+          backSide.add(stitchLine(pts.filter(([, z]) => z <= 0.0005), this.cover, y));
+          frontSide.add(stitchLine(pts.filter(([, z]) => z >= -0.0005), this.cover, y));
+        }
+        frontSide.add(stitchLine(offsetPolyline(hf, d), this.cover, y));
+        backSide.add(stitchLine(offsetPolyline(hb, d), this.cover, y));
+      }
+      // Bündchen: hinterer und vorderer Teil des Bandes
+      const inner = offsetPolyline(this.paths.hals.points, -0.012);
+      const band = [...this.paths.hals.points, ...inner.slice().reverse()];
+      const backBand = band.filter(([, z]) => z <= 0.0005), frontBand = band.filter(([, z]) => z >= -0.0005);
+      if (backBand.length > 3) { const r = flatPiece(backBand, this.matRib, [], 0.002); r.position.y = 0.0006; backSide.add(r); }
+      if (frontBand.length > 3) { const r = flatPiece(frontBand, this.matRib, [], 0.002); r.position.y = 0.0006; frontSide.add(r); }
+      const pivot = new THREE.Group(); pivot.add(frontSide); root.add(backSide, pivot);
+      pivot.rotation.x = stage >= 7 ? Math.PI : 0; pivot.position.y = stage >= 7 ? 0.004 : 0;
+      if (stage >= 8) root.add(stitchLine(this.paths.seiteL.points, this.thread, 0.006));
+      if (stage >= 9) root.add(stitchLine(this.paths.seiteR.points, this.thread, 0.006));
+      return { root, front: pivot, grip: new THREE.Vector3(0, 0, -0.12) };
+    }
+    if (stage <= 11) {
+      // gewendet: rechte Seite außen, leicht aufgebauscht; Bündchen als Wulst
+      const g = new THREE.Group();
+      g.add(puffyPiece(G.back.outline, face, [], 0.014));
+      for (const right of [false, true]) {
+        const s2 = new THREE.Group();
+        s2.add(puffyPiece(clipX(right ? G.sleeveL.outline : G.sleeveR.outline, right), face, [], 0.01));
+        s2.rotation.y = right ? Math.PI / 2 : -Math.PI / 2; s2.position.set(right ? 0.128 : -0.128, 0.002, 0); g.add(s2);
+      }
+      const neck = [...G.back.neck].map(([x, z]) => new THREE.Vector3(x, 0.02, z));
+      g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(neck), 24, 0.006, 8, false), this.matRib));
+      const fneck = G.front.neck.map(([x, z]) => new THREE.Vector3(x, 0.021, -z));
+      g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(fneck), 24, 0.006, 8, false), this.matRib));
+      const [hl, hr, , hb] = this.paths.saumParts;
+      for (const d of [-0.003, 0.003]) {
+        for (const seg of [hl, hr]) g.add(stitchLine(offsetPolyline(seg, d).filter(([, z]) => z <= 0.0005), this.cover, 0.021));
+        g.add(stitchLine(offsetPolyline(hb, d), this.cover, 0.021));
+      }
+      if (stage === 11) {
+        const ok = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.002, 16), new THREE.MeshStandardMaterial({ color: 0x22c55e, emissive: 0x22c55e, emissiveIntensity: 0.4 }));
+        ok.position.set(0.09, 0.024, -0.25); g.add(ok);
+      }
+      root.add(g);
+      return { root, grip: new THREE.Vector3(0, 0, -0.12) };
+    }
+    if (stage === 12) {
+      // gebügelt und gefaltet (Ärmel und Seiten eingeschlagen, einmal gelegt)
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.022, 0.2), face); p.position.set(0, 0.011, -0.1); p.castShadow = true; root.add(p);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.005, 8, 24, Math.PI), this.matRib); ring.rotation.x = -Math.PI / 2; ring.position.set(0, 0.023, -0.19); root.add(ring);
+      return { root, grip: new THREE.Vector3(0, 0, -0.1) };
+    }
+    // verpackt: Polybeutel mit Etikett
+    const p = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.022, 0.2), face); p.position.set(0, 0.011, -0.1); root.add(p);
+    const bag = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.028, 0.25), new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.32, roughness: 0.15, depthWrite: false })); bag.position.set(0, 0.014, -0.1); root.add(bag);
+    const lab = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.001, 0.035), new THREE.MeshStandardMaterial({ color: 0xffffff })); lab.position.set(0.04, 0.029, -0.16); root.add(lab);
+    return { root, grip: new THREE.Vector3(0, 0, -0.1) };
+  }
+}
+
+return { GarmentKit };
+})();
+
+// ---- src/line/lineview.js ----
+const __M_line_lineview = (() => {
+// 3D-Ansicht der Produktionsstraße (digitaler Zwilling der ereignisdiskreten Simulation).
+
+
+
+const { gridTexture } = __M_render_textures;
+const { mats, profile, label, signalTower, fence, cabinet, sewingMachine, sewingTable, robot6, conveyor, carrier, spreader, cutter, foldTable, turner, visionTunnel, pressFolder, bagger, pallet, fabricRollRack } = __M_render_models;
+const { GarmentKit } = __M_line_garmentmesh;
+const { pathAt } = __M_physics_garments;
+const { STAGES } = __M_line_des;
+const place = (o, x, y, z) => { o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; return o; };
+const H = 0.85;                 // Arbeitshöhe Transfersystem
+const SPUR_Z = -0.82, ROBOT_Z = -1.55, MACH_Z = -2.45;
+
+class LineView {
+  constructor(container) {
+    this.container = container;
+    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.domElement.style.display = 'none';
+    container.appendChild(this.renderer.domElement);
+    this.scene = new THREE.Scene();
+    const pm = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environmentIntensity = 0.5;
+    this.camera = new THREE.PerspectiveCamera(42, 1, 0.03, 200);
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableDamping = true; this.controls.maxPolarAngle = Math.PI * 0.49;
+    this.follow = null;
+    this.showLabels = true;
+    this.visible = false;
+    window.addEventListener('resize', () => this.resize());
+  }
+
+  setVisible(v) { this.visible = v; this.renderer.domElement.style.display = v ? 'block' : 'none'; if (v) this.resize(); }
+  setTheme(dark) { const bg = dark ? 0x161a19 : 0xdfe3e1; this.scene.background = new THREE.Color(bg); this.scene.fog = new THREE.Fog(bg, 30, 90); }
+  resize() {
+    const w = this.container.clientWidth || 800, h = this.container.clientHeight || 600;
+    this.renderer.setSize(w, h, false); this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
+  }
+
+  build(sim) {
+    this.sim = sim;
+    const sc = this.scene;
+    while (sc.children.length) sc.remove(sc.children[0]);
+    const m = mats();
+    // Licht
+    sc.add(new THREE.HemisphereLight(0xf2f5ff, 0x404442, 0.7));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.8);
+    sun.position.set(10, 18, 8); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096);
+    const L = sim.mainLen;
+    Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 10, bottom: -10, near: 1, far: 60 });
+    sun.target.position.set((L - 14) / 2, 0, -1); sc.add(sun, sun.target);
+    sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.02;
+    // Halle: Boden, Gangmarkierung, Stützen, Hallenleuchten
+    const ft = gridTexture('#9ea4a1', '#8c928f'); ft.repeat.set(40, 12);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(80, 24), new THREE.MeshStandardMaterial({ map: ft, roughness: 0.9 }));
+    floor.rotation.x = -Math.PI / 2; floor.position.set((L - 14) / 2, 0, -1); floor.receiveShadow = true; sc.add(floor);
+    const mark = new THREE.MeshBasicMaterial({ color: 0xd9a400 });
+    for (const z of [1.15, 1.25]) { const s = new THREE.Mesh(new THREE.PlaneGeometry(L + 16, 0.05), mark); s.rotation.x = -Math.PI / 2; s.position.set((L - 14) / 2, 0.002, z); sc.add(s); }
+    for (let x = -14; x < L + 4; x += 6) {
+      sc.add(place(new THREE.Mesh(new THREE.BoxGeometry(0.3, 6, 0.3), m.paintGrey), x, 3, -4.2));
+      const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.06, 0.25), m.lamp); lamp.position.set(x + 3, 4.6, -1); sc.add(lamp);
+    }
+
+    // ---------------- Vorstufe: Stofflager, Legen, Schneiden, Abnehmen, Kommissionieren
+    const rack = fabricRollRack(); rack.position.set(-13.2, 0, 0); rack.rotation.y = Math.PI / 2; sc.add(rack);
+    this.spreader = spreader(3.2, 1.8, H); this.spreader.position.set(-11.6, 0, 0); sc.add(this.spreader);
+    this.cutterM = cutter(3.0, 1.8, H); this.cutterM.position.set(-7.9, 0, 0); sc.add(this.cutterM);
+    // Abnahmetisch
+    const take = new THREE.Group();
+    take.add(place(new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.04, 1.7), m.paintGrey), 0.9, H - 0.02, 0));
+    for (const sx of [0.1, 1.7]) for (const sz of [-0.75, 0.75]) take.add(profile(H - 0.04, 'y', sx, (H - 0.04) / 2, sz, m.aluDark));
+    take.position.set(-4.4, 0, 0); sc.add(take);
+    // Stoffstapel (wachsen beim Legen, wandern zum Cutter und Abnahmetisch)
+    const fabricMat = new THREE.MeshStandardMaterial({ color: 0xe9c46a, roughness: 0.9 });
+    const mk = sim.marker;
+    this.spreadStack = new THREE.Mesh(new THREE.BoxGeometry(mk.length, 1, mk.width), fabricMat); this.spreadStack.castShadow = true; sc.add(this.spreadStack);
+    this.cutStack = new THREE.Group(); sc.add(this.cutStack);
+    const cs = new THREE.Mesh(new THREE.BoxGeometry(mk.length, 1, mk.width), fabricMat); cs.castShadow = true; this.cutStack.add(cs); this.cutStackBox = cs;
+    this.takeStack = new THREE.Group(); sc.add(this.takeStack);
+    const ts = new THREE.Mesh(new THREE.BoxGeometry(mk.length, 1, mk.width), fabricMat); ts.castShadow = true; this.takeStack.add(ts); this.takeStackBox = ts;
+    // Schnittbild-Konturen (auf Cutter und Abnahmetisch)
+    const contour = [];
+    for (const p of mk.parts) { const pts = [...p.outline, p.outline[0]].map(([x, z]) => [x + p.x, z + p.z]); contour.push(pts); }
+    this.cutPath = contour.flat();
+    const lineGeo = (pts) => new THREE.BufferGeometry().setFromPoints(pts.map(([x, z]) => new THREE.Vector3(z - mk.length / 2, 0, x - mk.width / 2)));
+    const outlineMat = new THREE.LineBasicMaterial({ color: 0x5a4a20 });
+    for (const pts of contour) { this.cutStack.add(new THREE.Line(lineGeo(pts), outlineMat)); this.takeStack.add(new THREE.Line(lineGeo(pts), new THREE.LineBasicMaterial({ color: 0x2b2f31 }))); }
+    this.cutDone = new THREE.Line(new THREE.BufferGeometry().setFromPoints(this.cutPath.map(([x, z]) => new THREE.Vector3(z - mk.length / 2, 0.0005, x - mk.width / 2))), new THREE.LineBasicMaterial({ color: 0x111111 }));
+    this.cutStack.add(this.cutDone);
+    const cum = [0]; for (let k = 1; k < this.cutPath.length; k++) cum.push(cum[k - 1] + Math.hypot(this.cutPath[k][0] - this.cutPath[k - 1][0], this.cutPath[k][1] - this.cutPath[k - 1][1]));
+    this.cutCum = cum;
+    // Kommissionier-Roboter
+    this.kitRobots = [];
+    for (let k = 0; k < sim.cfg.kitRobots; k++) {
+      const r = robot6(1); r.position.set(-1.75, 0, k % 2 ? -0.95 : 0.95); r.rotation.y = 0; sc.add(r);
+      const grip = new THREE.Group(); grip.add(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.02, 0.16), m.aluDark));
+      for (let i = 0; i < 6; i++) grip.add(place(new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.03, 10), m.blackSteel), -0.08 + (i % 3) * 0.08, -0.02, i < 3 ? -0.05 : 0.05));
+      r.userData.tool.add(grip);
+      const piece = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.002, 0.25), fabricMat); piece.position.y = -0.04; piece.visible = false; r.userData.tool.add(piece);
+      r.userData.piece = piece;
+      this.kitRobots.push(r);
+    }
+    sc.add(this._labelAt('Zuschnitt', 'Legen · Schneiden', -10, 2.3, 0.9));
+    this.labelKit = this._labelAt('Kommissionierung', '', -2.6, 2.2, 0.9); sc.add(this.labelKit);
+    this.labelSpread = this._labelAt('Legemaschine', '', -11.6 + 1.6, 1.9, -1.3); sc.add(this.labelSpread);
+    this.labelCut = this._labelAt('CNC-Cutter', '', -7.9 + 1.5, 1.9, -1.3); sc.add(this.labelCut);
+    sc.add(fence(13.5, 1.4, 'x').translateX(-7.5).translateZ(-1.5));
+
+    // ---------------- Transfersystem mit Hubstationen
+    const conv = conveyor(L + 1.2, H); conv.position.x = -1.2; sc.add(conv);
+    for (const x of [-1.25, L + 0.05]) {
+      const lift = new THREE.Group();
+      lift.add(place(new THREE.Mesh(new THREE.BoxGeometry(0.1, H + 0.2, 0.75), m.paintGrey), x < 0 ? -0.06 : 0.06, (H + 0.2) / 2, 0));
+      lift.position.x = x; sc.add(lift);
+    }
+
+    // ---------------- Stationen
+    this.stationViews = sim.stations.map((st, i) => this._buildStation(st, i));
+
+    // ---------------- Werkstückträger und Kleidungsstücke
+    this.kit = new GarmentKit(sim.G, '#e9c46a');
+    this.carrierViews = sim.carriers.map(() => {
+      const g = carrier(); sc.add(g);
+      return { g, stage: null, garment: null };
+    });
+    // Lager fertiger Ware
+    const pal = pallet(); pal.position.set(L + 1.6, 0, 0); sc.add(pal);
+    this.boxes = new THREE.Group(); this.boxes.position.set(L + 1.6, 0.15, 0); sc.add(this.boxes);
+    this.lastBoxes = 0;
+    this.setPreset('gesamt');
+  }
+
+  _labelAt(t, s, x, y, z) { const l = label(t, s); l.position.set(x, y, z); return l; }
+
+  _buildStation(st, i) {
+    const sc = this.scene, m = mats();
+    const g = new THREE.Group(); g.position.x = st.s; sc.add(g);
+    const view = { st, g, slots: [] };
+    const sewing = ['overlock', 'steppstich', 'cover'].includes(st.machine);
+    for (let k = 0; k < st.cap; k++) {
+      const dx = k * 1.45;
+      const slot = new THREE.Group(); slot.position.x = dx; g.add(slot);
+      // Querumsetzer (Nebenschluss) mit Gurt
+      slot.add(place(new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.04, 0.95), m.aluDark), 0.35, H - 0.04, SPUR_Z / 2 - 0.05));
+      for (const sx of [0.05, 0.65]) slot.add(place(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.006, 0.95), m.belt), sx, H - 0.017, SPUR_Z / 2 - 0.05));
+      for (const sx of [0.08, 0.62]) for (const sz of [-0.15, -0.95]) slot.add(profile(H - 0.06, 'y', sx, (H - 0.06) / 2, sz, m.aluDark));
+      // Roboter auf Sockel
+      const ped = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.25, 0.42), m.paintDark); ped.position.set(0.35, 0.125, ROBOT_Z); ped.castShadow = true; slot.add(ped);
+      const rob = robot6(1); rob.position.set(0.35, 0.25, ROBOT_Z); slot.add(rob);
+      const tool = new THREE.Group();
+      tool.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.018, 0.24), m.aluDark));
+      for (let a = 0; a < 3; a++) for (let b = 0; b < 2; b++) tool.add(place(new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.025, 10), m.rubber), -0.1 + a * 0.1, -0.02, -0.07 + b * 0.14));
+      rob.userData.tool.add(tool);
+      // Maschine / Ausrüstung
+      let mach = null, table = null;
+      if (sewing) {
+        table = sewingTable(1.2, 0.6, 0.76, st.machine === 'cover' ? 3 : st.machine === 'overlock' ? 4 : 2, 0xd9c79a);
+        table.position.set(0.35, 0, MACH_Z); slot.add(table);
+        mach = sewingMachine(st.machine, 0xd9c79a);
+        mach.position.set(0.35 + 0.05, 0.76, MACH_Z + 0.05); mach.rotation.y = 0; slot.add(mach);
+        if (st.id.startsWith('aermel')) {
+          // Ärmelzuführung: Dreh-Schiebeeinheit mit Vakuumplatte, Trennblech, Kantensensor
+          const feeder = new THREE.Group();
+          feeder.add(place(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.08), m.alu), 0, 0.2, 0));
+          feeder.add(place(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.08, 20), m.paintDark), 0, 0.14, 0));
+          const plate = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.012, 0.14), m.kapton); plate.position.y = 0.09; feeder.add(plate);
+          feeder.position.set(0.1, 0.76, MACH_Z + 0.18); slot.add(feeder);
+          view.feeder = { g: feeder, plate };
+        }
+      } else {
+        const ctor = { falttisch: () => foldTable(1.0, 0.8, 0.85), wender: () => turner(0.85), pruefung: () => visionTunnel(0.9, 0.9, 0.85), presse: () => pressFolder(0.85), verpackung: () => bagger(0.85) }[st.machine];
+        mach = ctor(); mach.position.set(0.35, 0, MACH_Z + 0.05); slot.add(mach);
+        if (st.machine === 'pruefung') { const t2 = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.05, 0.9), m.belt); t2.position.set(0.35, 0.85, MACH_Z + 0.05); slot.add(t2); }
+      }
+      // Schutzzaun, Lichtvorhang, Schaltschrank, Signalsäule
+      slot.add(fence(1.35, 1.4, 'x').translateX(0.35).translateZ(MACH_Z - 0.55));
+      const cab = cabinet(0.5, 1.6, 0.35); cab.position.set(-0.32, 0, MACH_Z - 0.2); cab.rotation.y = Math.PI / 2; slot.add(cab);
+      const tower = signalTower(); tower.position.set(0.9, 1.6, MACH_Z - 0.4); slot.add(tower);
+      slot.add(place(new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.6, 0.03), m.safetyYellow), 0.95, 0.8, MACH_Z - 0.4));
+      view.slots.push({ slot, rob, mach, table, tower, tool });
+    }
+    const lab = label(st.name, `${st.ct.toFixed(1)} s · ${st.cap}×`);
+    lab.position.set(0.35 + (st.cap - 1) * 0.7, 2.25, MACH_Z + 0.2); g.add(lab);
+    view.label = lab;
+    return view;
+  }
+
+  setPreset(name) {
+    this.follow = null;
+    const L = this.sim.mainLen;
+    const st = this.sim.stations.find((s) => s.id === name);
+    const k = Math.max(1, 1.5 / Math.max(0.4, this.camera.aspect || 1.6)); // schmale Ansicht: weiter zurück
+    let pos, tgt;
+    if (name === 'gesamt') {
+      const a = this.camera.aspect || 1.6;
+      if (a >= 1.5) { // breite Ansicht: ganze Linie von vorne oben einpassen
+        const W = L + 16, hf = Math.atan(Math.tan((21 * Math.PI) / 180) * a), d = (W / 2 / Math.tan(hf)) * 1.02;
+        pos = [L / 2 - 7, d * 0.72, d * 0.69]; tgt = [L / 2 - 7, 0, -1.2];
+      } else { pos = [-19, 15, 13]; tgt = [L * 0.33, 0, -1.6]; } // schmal: schräg entlang der Linie
+    }
+    else if (name === 'zuschnitt') { pos = [-8.4, 4.2 * k, 7 * k]; tgt = [-8.4, 0.5, -0.5]; }
+    else if (name === 'kommission') { pos = [-0.6, 2.3 * k, 2.6 * k]; tgt = [-2.4, 0.85, -0.1]; }
+    else if (name === 'follow') { this.follow = this.sim.carriers.find((c) => c.shirt !== null && c.track === 'main') || this.sim.carriers.find((c) => c.shirt !== null) || null; return; }
+    else if (st) { const x = st.s + 0.35 + (st.cap - 1) * 0.72; pos = [x + 1.7 * k, 2.1 * k, 0.3 * k]; tgt = [x - 0.1, 0.85, -1.85]; }
+    else return;
+    this.camera.position.set(...pos); this.controls.target.set(...tgt); this.controls.update();
+  }
+
+  // Lage des Trägers in der Welt
+  _carrierPose(c) {
+    if (c.track === 'main') return { x: c.s, y: H + 0.004, z: 0 };
+    if (c.track === 'station') { const sv = this.stationViews[this.sim.stations.indexOf(c.station)]; return { x: c.station.s + c.slot * 1.45 + 0.35, y: H + 0.004, z: SPUR_Z, sv }; }
+    if (c.track === 'ret') return { x: c.s, y: 0.39, z: 0 };
+    if (c.track === 'lift') return { x: this.sim.mainLen + 0.4, y: 0.39 + (H - 0.39) * Math.max(0, 1 - this.sim.lifts.end.t / 4), z: 0 };
+    if (c.track === 'liftS') return { x: -1.0, y: 0.39 + (H - 0.39) * Math.min(1, this.sim.lifts.start.t / 4), z: 0 };
+    if (c.track === 'load') return { x: -0.9, y: H + 0.004, z: 0 };
+    return { x: 0, y: H, z: 0 };
+  }
+
+  _garment(cv, stage) {
+    if (cv.stage === stage) return cv.garment;
+    if (cv.garment) cv.g.remove(cv.garment.root), this.scene.remove(cv.garment.root);
+    cv.garment = stage >= 0 ? this.kit.build(stage) : null;
+    cv.stage = stage;
+    return cv.garment;
+  }
+
+  update(sim, t) {
+    if (!this.visible) return;
+    const m = mats();
+    // Vorstufe
+    const sp = sim.spreader, cu = sim.cutter, mk = sim.marker, th = 0.00055;
+    const spX0 = -11.6 + 0.4;
+    const layers = sp.state === 'legen' ? sp.layer + sp.x : sp.state === 'fertig' || (sp.state === 'uebergabe' && cu.state === 'einziehen') ? sim.cfg.layers : 0;
+    this.spreadStack.visible = layers > 0;
+    this.spreadStack.scale.y = Math.max(1e-4, layers * th);
+    this.spreadStack.position.set(spX0 + mk.length / 2, H + (layers * th) / 2, 0);
+    const car = this.spreader.userData.carriage;
+    const prog = sp.state === 'legen' ? ((sp.layer % 2 ? 1 - sp.x : sp.x)) : 0;
+    car.position.x = 0.4 + prog * mk.length;
+    this.spreader.userData.roll.scale.set(1, 1, 1);
+    // Cutter-Stapel
+    const onCut = cu.state === 'einziehen' || cu.state === 'schneiden' || cu.state === 'abgabe';
+    this.cutStack.visible = onCut;
+    const cutX = -7.9 + 0.3 + mk.length / 2;
+    const ch = sim.cfg.layers * th;
+    this.cutStackBox.scale.y = ch; this.cutStackBox.position.y = ch / 2;
+    this.cutStack.position.set(cu.state === 'einziehen' ? cutX - 3.4 * (1 - Math.min(1, cu.t / 15)) : cu.state === 'abgabe' ? cutX + 3.6 * Math.min(1, cu.t / 12) : cutX, H, 0);
+    this.cutStack.children.forEach((o) => { if (o.isLine) o.position.y = ch + 0.0005; });
+    const cp = cu.state === 'schneiden' ? cu.progress : cu.state === 'abgabe' ? 1 : 0;
+    const sCut = cp * this.cutCum[this.cutCum.length - 1];
+    let k = 1; while (k < this.cutCum.length - 1 && this.cutCum[k] < sCut) k++;
+    this.cutDone.geometry.setDrawRange(0, cp > 0 ? k + 1 : 0);
+    const P = this.cutPath[Math.min(k, this.cutPath.length - 1)];
+    const gan = this.cutterM.userData.gantry, head = this.cutterM.userData.head;
+    gan.position.x = 0.3 + P[1] + (cu.state === 'schneiden' ? 0 : 0);
+    head.position.z = P[0] - mk.width / 2;
+    this.cutterM.userData.knife.position.y = 0.03 + (cu.state === 'schneiden' ? 0.004 * Math.sin(t * 120) : 0.03);
+    // Abnahmetisch: Reststapel
+    const perLayer = sim.cfg.shirtsPerMarker;
+    const remLayers = Math.ceil(sim.cutStacks / perLayer);
+    this.takeStack.visible = sim.cutStacks > 0;
+    const th2 = Math.max(1e-4, remLayers * th);
+    this.takeStackBox.scale.y = th2; this.takeStackBox.position.y = th2 / 2;
+    this.takeStack.children.forEach((o) => { if (o.isLine) o.position.y = th2 + 0.0005; });
+    this.takeStack.position.set(-4.4 + 0.9, H, 0);
+    // Kommissionier-Roboter: zwischen Stapel und Beladeplatz
+    const L = sim.loadSlot;
+    this.kitRobots.forEach((r, i) => {
+      const busy = L.carrier && L.T > 0;
+      const f = busy ? ((L.t / L.T) * 5 + i * 0.5) % 1 : 0.5;
+      const from = new THREE.Vector3(-3.5 - 0.15 * Math.sin(i + Math.floor(L.t)), H + th2 + 0.02, (i % 2 ? -0.3 : 0.3));
+      const to = new THREE.Vector3(-0.9 + (i % 2 ? 0.12 : -0.12), H + 0.05, (i % 2 ? -0.1 : 0.1));
+      const a = f < 0.5 ? f * 2 : 2 - f * 2;
+      const p = from.clone().lerp(to, 0.5 - 0.5 * Math.cos(Math.PI * a)); p.y += Math.sin(Math.PI * a) * 0.25;
+      r.userData.reach(r.worldToLocal(p.clone()), 0);
+      r.userData.piece.visible = busy && f < 0.5;
+    });
+    this.labelKit.userData.update('Kommissionierung', `${sim.cutStacks} Shirts im Stapel`);
+    this.labelSpread.userData.update('Legemaschine', sp.state === 'legen' ? `Lage ${sp.layer + 1}/${sim.cfg.layers}` : 'wartet auf Cutter');
+    this.labelCut.userData.update('CNC-Cutter', cu.state === 'schneiden' ? `${Math.round(cu.progress * 100)} % geschnitten` : cu.state === 'leer' ? 'bereit' : cu.state);
+
+    // Träger und Kleidungsstücke
+    sim.carriers.forEach((c, i) => {
+      const cv = this.carrierViews[i], pose = this._carrierPose(c);
+      cv.g.position.set(pose.x, pose.y, pose.z);
+      let stage = c.shirt !== null ? c.stage : -1;
+      if (c.track === 'load' && sim.loadSlot.T > 0 && sim.loadSlot.t >= sim.loadSlot.T * 0.5) stage = 0;
+      if (c.track === 'load' && sim.loadSlot.T === 0) stage = -1;
+      let slotPhase = null, slotF = 0, st = null, slot = null;
+      if (c.track === 'station') {
+        st = c.station; slot = st.slots[c.slot];
+        slotF = slot.T > 0 ? Math.min(1, slot.t / slot.T) : 1;
+        slotPhase = slot.phase;
+        if (slotF >= 0.85) stage = st.stage;
+      }
+      const gm = this._garment(cv, stage);
+      if (!gm) return;
+      if (!gm.root.parent) this.scene.add(gm.root);
+      const rotOnCarrier = stage >= 1 && stage <= 6 ? Math.PI / 2 : 0;
+      const carrierWorld = new THREE.Vector3(pose.x, pose.y + 0.03, pose.z + (stage >= 7 && stage <= 11 ? 0.12 : stage >= 12 ? 0.1 : 0));
+      if (!st) { gm.root.position.copy(carrierWorld); gm.root.rotation.set(0, rotOnCarrier, 0); return; }
+      this._stationAnim(st, c.slot, slotF, gm, carrierWorld, rotOnCarrier, stage, t);
+    });
+    // Stationen: Maschinen, Roboter, Signalsäulen, Beschriftung
+    this.stationViews.forEach((sv) => {
+      const st = sv.st;
+      sv.slots.forEach((v, k) => {
+        const sl = st.slots[k];
+        const state = sl.repair > 0 ? 'fault' : sl.carrier ? (sl.t < sl.T ? 'busy' : 'wait') : 'idle';
+        v.tower.userData.set(state === 'idle' ? 'wait' : state);
+        const sewingNow = sl.carrier && sl.phase === 'bearbeiten' && sl.repair <= 0;
+        if (v.mach?.userData.update) v.mach.userData.update(t, sewingNow, 3000);
+        if (!sl.carrier) v.rob.userData.reach(new THREE.Vector3(0.0, 0.55, 0.5), 0);
+        // Sonderanimationen
+        const f = sl.T > 0 ? Math.min(1, sl.t / sl.T) : 0;
+        const mid = sl.carrier ? Math.max(0, Math.min(1, (f - 0.22) / 0.63)) : 0;
+        if (st.machine === 'falttisch' && v.mach.userData.flap) v.mach.userData.flap.rotation.x = -Math.PI * Math.sin(Math.PI * Math.min(1, mid * 1.2)) * (mid < 0.83 ? 1 : 0.0);
+        if (st.machine === 'presse') { const cl = sl.carrier ? Math.max(0, Math.min(1, mid / 0.12, (1 - mid) / 0.12)) : 0; v.mach.userData.lid.rotation.x = -0.9 * (1 - (0.5 - 0.5 * Math.cos(Math.PI * cl))); }
+        if (st.machine === 'verpackung') v.mach.userData.bar.position.y = 0.85 + 0.25 - 0.18 * Math.sin(Math.PI * mid);
+      });
+      const busy = st.slots.filter((s) => s.carrier).length;
+      sv.label.userData.update(st.name, `${st.ct.toFixed(1)} s · ${st.count} Stk · ${busy}/${st.cap}`);
+      sv.label.visible = this.showLabels;
+    });
+    // fertige Kartons auf der Palette
+    const boxesN = Math.floor(sim.done / 12);
+    if (boxesN !== this.lastBoxes) {
+      while (this.boxes.children.length) this.boxes.remove(this.boxes.children[0]);
+      for (let b = 0; b < Math.min(boxesN, 48); b++) {
+        const bx = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.26, 0.28), m.carton);
+        bx.position.set(-0.4 + (b % 3) * 0.4, 0.13 + Math.floor(b / 12) * 0.27, -0.29 + (Math.floor(b / 3) % 4) * 0.29);
+        bx.castShadow = true; this.boxes.add(bx);
+      }
+      this.lastBoxes = boxesN;
+    }
+    // Kamera folgt einem Träger
+    if (this.follow) {
+      const p = this._carrierPose(this.follow);
+      const tgt = new THREE.Vector3(p.x, p.y, p.z);
+      this.controls.target.lerp(tgt, 0.1);
+      this.camera.position.lerp(new THREE.Vector3(p.x + 0.8, p.y + 1.6, p.z + 2.2), 0.05);
+    }
+    this.controls.update();
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  // Bewegung des Kleidungsstücks und des Roboters in einer Station
+  _stationAnim(st, slotIdx, f, gm, carrierWorld, rotOnCarrier, stage, t) {
+    const sv = this.stationViews[this.sim.stations.indexOf(st)], v = sv.slots[slotIdx];
+    const sewing = v.mach?.userData.needle && v.table;
+    // Arbeitsposition an der Maschine
+    let work = { p: new THREE.Vector3(st.s + slotIdx * 1.45 + 0.35, 0.86, MACH_Z + 0.05), yaw: 0 };
+    let seamPose = null;
+    const path = this.kit.paths[st.id];
+    if (sewing && path) {
+      const needle = v.mach.localToWorld(v.mach.userData.needle.clone());
+      const sPhase = Math.max(0, Math.min(1, (f - 0.22) / 0.63));
+      const pa = pathAt(path, sPhase * path.length);
+      // Nahttangente (noch zu nähen) zeigt nach +z der Maschine → Teil wandert nach −z (Transportrichtung)
+      const yaw = -Math.atan2(pa.t[0], pa.t[1]);
+      const c = Math.cos(yaw), s = Math.sin(yaw);
+      const wx = pa.p[0] * c + pa.p[1] * s, wz = -pa.p[0] * s + pa.p[1] * c;
+      seamPose = { p: new THREE.Vector3(needle.x - wx, needle.y + 0.001, needle.z - wz), yaw };
+      const p0 = pathAt(path, 0), y0 = -Math.atan2(p0.t[0], p0.t[1]);
+      const c0 = Math.cos(y0), s0 = Math.sin(y0);
+      work = { p: new THREE.Vector3(needle.x - (p0.p[0] * c0 + p0.p[1] * s0), needle.y + 0.001, needle.z - (-p0.p[0] * s0 + p0.p[1] * c0)), yaw: y0 };
+    }
+    const ease = (u) => 0.5 - 0.5 * Math.cos(Math.PI * Math.max(0, Math.min(1, u)));
+    let pos, yaw;
+    const lerpYaw = (a, b, u) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * u; };
+    if (f < 0.22) {
+      const u = ease(f / 0.22);
+      pos = carrierWorld.clone().lerp(work.p, u); pos.y += Math.sin(Math.PI * u) * 0.35; yaw = lerpYaw(rotOnCarrier, work.yaw, u);
+    } else if (f < 0.85) {
+      if (seamPose) { pos = seamPose.p; yaw = seamPose.yaw; }
+      else { pos = work.p.clone(); yaw = work.yaw; if (st.machine === 'wender') { const u = (f - 0.22) / 0.63; pos.y += 0.9 * Math.sin(Math.PI * u); } }
+    } else {
+      const u = ease((f - 0.85) / 0.15);
+      const from = seamPose ? seamPose.p : work.p;
+      pos = from.clone().lerp(carrierWorld, u); pos.y += Math.sin(Math.PI * u) * 0.35; yaw = lerpYaw(seamPose ? seamPose.yaw : work.yaw, rotOnCarrier, u);
+    }
+    gm.root.position.copy(pos); gm.root.rotation.set(0, yaw, 0);
+    // Falten: Vorderseite klappt über die Schulterlinie
+    if (gm.front && st.machine === 'falttisch') {
+      const u = Math.max(0, Math.min(1, (f - 0.3) / 0.45));
+      gm.front.rotation.x = f >= 0.85 ? Math.PI : Math.PI * ease(u); gm.front.position.y = 0.004 * ease(u);
+    }
+    // Roboter greift das Teil (Werkzeug über dem Greifpunkt), außer während reiner Maschinenarbeit
+    const grip = (gm.grip || new THREE.Vector3()).clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw).add(pos);
+    grip.y += 0.06;
+    const rob = v.rob;
+    const local = rob.worldToLocal(grip.clone());
+    const holdDuringWork = sewing || st.machine === 'falttisch';
+    if (f < 0.22 || f >= 0.85 || holdDuringWork) rob.userData.reach(local, yaw);
+    else rob.userData.reach(new THREE.Vector3(0.1, 0.6, 0.45), 0);
+  }
+}
+
+return { LineView };
 })();
 
 // ---- src/ui/chart.js ----
@@ -4701,6 +6386,107 @@ const MODEL_INFO = `
 return { MODEL_INFO };
 })();
 
+// ---- src/ui/lineui.js ----
+const __M_ui_lineui = (() => {
+// Bedienung der Produktionsstraße (Konfiguration, Kennzahlen, Kamera).
+const { LineSim, defaultLineConfig, STAGES } = __M_line_des;
+const { LineView } = __M_line_lineview;
+const $ = (id) => document.getElementById(id);
+const fmt = (x, d = 1) => (Number.isFinite(x) ? x.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d }) : '–');
+const hms = (t) => { const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = Math.floor(t % 60); return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`; };
+
+class LineUI {
+  constructor({ onOpenPhysics }) {
+    this.cfg = defaultLineConfig();
+    this.view = new LineView($('viewport'));
+    this.onOpenPhysics = onOpenPhysics;
+    this.running = true;
+    this.speed = 4;
+    this.lastUi = 0; this.lastLog = 0;
+    this._bind();
+    this.rebuild();
+  }
+
+  _bind() {
+    const C = this.cfg;
+    const fields = [['lnWidth', 'width', 100], ['lnShirts', 'shirtsPerMarker', 1], ['lnLayers', 'layers', 1], ['lnCut', 'cutSpeed', 1], ['lnCarriers', 'carriers', 1], ['lnConv', 'conveyorSpeed', 1], ['lnKit', 'kitRobots', 1], ['lnRpmS', 'rpmStraight', 1], ['lnRpmC', 'rpmCurveMax', 1], ['lnOmega', 'omegaMax', 1]];
+    for (const [id, key, sc] of fields) {
+      $(id).value = +(C[key] * sc).toFixed(3);
+      $(id).onchange = () => { C[key] = +$(id).value / sc; this.rebuild(); };
+    }
+    $('lineRun').onclick = () => { this.running = !this.running; $('lineRun').textContent = this.running ? 'Pause' : 'Weiter'; };
+    $('lineReset').onclick = () => this.rebuild();
+    $('lineSpeed').onchange = (e) => { this.speed = +e.target.value; };
+    $('lnView').onchange = (e) => this.view.setPreset(e.target.value);
+    $('lnLabels').onclick = () => { this.view.showLabels = !this.view.showLabels; $('lnLabels').setAttribute('aria-pressed', String(this.view.showLabels)); };
+  }
+
+  rebuild() {
+    this.sim = new LineSim(this.cfg);
+    this.view.build(this.sim);
+    this.lastLog = 0; $('lkLog').innerHTML = '';
+    const M = this.sim.marker;
+    $('lnMarker').textContent = `Schnittbild ${fmt(M.length * 100, 0)} cm × ${fmt(M.width * 100, 0)} cm, Ausnutzung ${fmt(M.utilization * 100, 0)} %, Schnittkontur ${fmt(M.contour, 1)} m. Ein Stapel = ${this.cfg.layers * this.cfg.shirtsPerMarker} Shirts.`;
+    // Stationstabelle
+    const rows = this.sim.stations.map((st) => `<tr><td>${st.name}${st.note ? `<span class="note">${st.note}</span>` : ''}</td>
+      <td title="Zykluszeit einer Maschine">${fmt(st.ct, 1)} s</td>
+      <td><input type="number" min="1" max="3" step="1" value="${st.cap}" data-cap="${st.id}" style="width:48px" aria-label="Maschinen ${st.name}"></td>
+      <td>${st.physics ? `<button class="btn small" data-phys="${st.physics}" type="button">Physik</button>` : ''}</td></tr>`).join('');
+    $('lnStations').innerHTML = '<colgroup><col><col class="c2"><col class="c3"><col class="c4"></colgroup><tr><th>Station</th><th>Zyklus</th><th>Masch.</th><th></th></tr>' + rows;
+    $('lnStations').querySelectorAll('[data-cap]').forEach((inp) => { inp.onchange = () => { this.cfg.caps[inp.dataset.cap] = Math.max(1, Math.min(3, +inp.value)); this.rebuild(); }; });
+    $('lnStations').querySelectorAll('[data-phys]').forEach((b) => { b.onclick = () => this.onOpenPhysics(b.dataset.phys); });
+    // Kamera-Auswahl
+    const opts = [['gesamt', 'Gesamtansicht'], ['zuschnitt', 'Legen und Zuschnitt'], ['kommission', 'Kommissionierung'], ...this.sim.stations.map((s) => [s.id, s.name]), ['follow', 'Werkstückträger verfolgen']];
+    $('lnView').innerHTML = opts.map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
+  }
+
+  setVisible(v) { this.view.setVisible(v); }
+  setTheme(dark) { this.view.setTheme(dark); }
+
+  tick(real, now) {
+    if (this.running) {
+      const t0 = performance.now();
+      let simDt = real * this.speed;
+      while (simDt > 0 && performance.now() - t0 < 20) { const d = Math.min(0.05, simDt); this.sim.step(d); simDt -= d; }
+    }
+    this.view.update(this.sim, this.sim.t);
+    if (now - this.lastUi > 250) { this.lastUi = now; this.renderUi(); }
+  }
+
+  renderUi() {
+    const s = this.sim, k = s.kpis();
+    $('clock').textContent = `t = ${hms(s.t)}`;
+    $('lkRate').textContent = s.t > 120 ? fmt(k.rate, 0) : '–';
+    $('lkRateSub').textContent = `Stück/h (theoretisch ${fmt(k.theo, 0)})`;
+    $('lkDone').textContent = k.done;
+    $('lkTime').textContent = `Laufzeit ${hms(s.t)}`;
+    $('lkTakt').textContent = `${fmt(k.takt, 1)} s`;
+    $('lkBneck').textContent = `Engpass: ${k.bottleneck.name}`;
+    $('lkFlow').textContent = k.flow ? `${fmt(k.flow / 60, 1)} min` : '–';
+    $('lkWip').textContent = `Umlaufbestand ${k.wip} Shirts`;
+    const T = Math.max(1, s.t);
+    $('lkUtil').innerHTML = s.stations.map((st) => {
+      const b = (st.busy / T) * 100, bl = (st.blocked / T) * 100, r = (st.repair / T) * 100;
+      const isB = st === k.bottleneck;
+      return `<div class="ubar${isB ? ' bneck' : ''}"><span>${st.name}${st.cap > 1 ? ` (${st.cap}×)` : ''}</span><span class="mono">${fmt(b, 0)} %</span>
+        <div class="ub"><i style="width:${b}%;background:var(--good)"></i><i style="width:${bl}%;background:var(--warn)"></i><i style="width:${r}%;background:var(--crit)"></i></div></div>`;
+    }).join('');
+    const log = $('lkLog');
+    if (s.events.length < this.lastLog) this.lastLog = 0;
+    for (; this.lastLog < s.events.length; this.lastLog++) {
+      const e = s.events[this.lastLog];
+      const li = document.createElement('li'); li.className = e.level;
+      li.innerHTML = `<time>${hms(e.t)}</time><span></span>`; li.lastChild.textContent = e.msg;
+      log.prepend(li);
+      while (log.children.length > 60) log.lastChild.remove();
+    }
+    const rt = $('rtf'); rt.textContent = `${this.speed}× Tempo`; rt.className = 'chip accent';
+  }
+}
+
+return { LineUI };
+})();
+
 // ---- src/ui/app.js ----
 const __M_ui_app = (() => {
 // Bedienoberfläche: verbindet Simulation, 3D-Ansicht und Messwerte.
@@ -4713,6 +6499,7 @@ const { G, AIR } = __M_physics_constants;
 const { SceneView } = __M_render_scene;
 const { LoadChart } = __M_ui_chart;
 const { MODEL_INFO } = __M_ui_modelinfo;
+const { LineUI } = __M_ui_lineui;
 const $ = (id) => document.getElementById(id);
 const fmt = (x, d = 2) => (Number.isFinite(x) ? x.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d }) : '–');
 const QUALITY = { fast: { spacing: 0.02, substeps: 10 }, std: { spacing: 0.0125, substeps: 16 }, fine: { spacing: 0.01, substeps: 24 } };
@@ -4721,7 +6508,8 @@ const QUALITY_LARGE = { fast: { spacing: 0.022, substeps: 10 }, std: { spacing: 
 
 const cfg = defaultConfig();
 cfg.quality = 'std';
-let world, view, chart;
+let world, view, chart, lineUi = null;
+let mode = 'zelle';
 let running = true;           // Physik läuft (auch ohne Programm)
 let timeScale = 1;
 let acc = 0, last = performance.now(), rtf = 1, lastUi = 0;
@@ -5019,6 +6807,7 @@ let sampleAcc = 0;
 function loop(now) {
   const real = Math.min(0.1, (now - last) / 1000);
   last = now;
+  if (mode === 'linie') { lineUi.tick(real, now); requestAnimationFrame(loop); return; }
   if (running) {
     const t0 = performance.now();
     acc += timeScale >= 4 ? 1e9 : real * timeScale;
@@ -5054,6 +6843,19 @@ function showValidation() {
   }, 50);
 }
 
+// ---------------------------------------------------------------- Ansicht ---
+function setMode(m) {
+  mode = m;
+  const line = m === 'linie';
+  document.querySelectorAll('#modeSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
+  for (const [id, show] of [['cellLeft', !line], ['cellRight', !line], ['cellOverlay', !line], ['cellControls', !line], ['lineLeft', line], ['lineRight', line], ['lineOverlay', line]]) $(id).hidden = !show;
+  $('progNow').hidden = line;
+  view.renderer.domElement.style.display = line ? 'none' : 'block';
+  lineUi.setVisible(line);
+  if (!line) view.resize();
+  try { history.replaceState(null, '', line ? '#linie' : location.pathname + location.search); } catch { /* egal */ }
+}
+
 // ---------------------------------------------------------------- Start -----
 function init() {
   view = new SceneView($('viewport'));
@@ -5061,6 +6863,7 @@ function init() {
   const applyTheme = () => {
     const t = document.documentElement.dataset.theme;
     view.setTheme(t ? t === 'dark' : mq.matches);
+    lineUi?.setTheme(t ? t === 'dark' : mq.matches);
   };
   applyTheme();
   mq.addEventListener?.('change', applyTheme);
@@ -5120,11 +6923,17 @@ function init() {
   rebuild();
   // Beispiel sofort starten, damit die Zelle beim Öffnen arbeitet
   startProgram();
+
+  // Produktionsstraße
+  lineUi = new LineUI({ onOpenPhysics: (sc) => { setMode('zelle'); $('scenario').value = sc; $('scenario').onchange(); } });
+  applyTheme();
+  $('modeSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setMode(b.dataset.mode); });
+  try { if (location.hash === '#linie') setMode('linie'); } catch { /* ohne Hash */ }
   requestAnimationFrame(loop);
 }
 
 init();
-window.__sim = { get world() { return world; }, get view() { return view; }, rebuild, startProgram };
+window.__sim = { get world() { return world; }, get view() { return view; }, get line() { return lineUi; }, rebuild, startProgram, setMode };
 
 return {  };
 })();

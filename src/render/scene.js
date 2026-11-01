@@ -6,6 +6,8 @@ import { fabricTexture, gridTexture } from './textures.js';
 import { SOLIDS } from '../physics/materials.js';
 import { NEEDLE, TABLE_TOP } from '../physics/world.js';
 import { locateRest } from '../physics/cloth.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { mats, profile, fence, cabinet, signalTower } from './models.js';
 
 const VIEWS = {
   gesamt: { pos: [1.55, 2.0, 2.6], target: [0.05, 0.78, -0.05] },
@@ -41,8 +43,8 @@ export class SceneView {
     const sun = new THREE.DirectionalLight(0xffffff, 2.2);
     sun.position.set(1.6, 3.2, 1.4);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    const sc = sun.shadow.camera; sc.left = -1.4; sc.right = 1.4; sc.top = 1.2; sc.bottom = -1.2; sc.near = 0.5; sc.far = 7;
+    sun.shadow.mapSize.set(4096, 4096);
+    const sc = sun.shadow.camera; sc.left = -1.9; sc.right = 1.9; sc.top = 1.6; sc.bottom = -1.6; sc.near = 0.5; sc.far = 7;
     sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.002;
     this.scene.add(sun);
     const fill = new THREE.DirectionalLight(0xdfe8ff, 0.6);
@@ -111,6 +113,84 @@ export class SceneView {
   }
 
   // Szene für eine (neue) Welt aufbauen
+  // Detailgeometrie der Zelle (rein visuell, ohne Einfluss auf die Physik)
+  _cellDetails(world) {
+    const M = mats(), S = this.static, T = TABLE_TOP;
+    const [nx, ny, nz] = NEEDLE;
+    const add = (o) => { S.add(o); return o; };
+    const bx = (w, h, d, mat, x, y, z) => add(this._box(w, h, d, mat, x, y, z));
+    const cy = (r, h, mat, x, y, z, axis = 'y', seg = 24) => {
+      const o = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, seg), mat);
+      if (axis === 'x') o.rotation.z = Math.PI / 2; else if (axis === 'z') o.rotation.x = Math.PI / 2;
+      o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; return add(o);
+    };
+    // Tischgestelle aus Aluprofil 40×40 mit Stellfüßen, Zarge und Ablageboden
+    for (const [cx, cz, hx, hz] of [[-0.5, 0.05, 0.35, 0.3], [0.55, -0.05, 0.45, 0.4]]) {
+      const lh = T - 0.04 - 0.03;
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        const x = cx + sx * (hx - 0.05), z = cz + sz * (hz - 0.05);
+        add(profile(lh, 'y', x, 0.03 + lh / 2, z));
+        cy(0.025, 0.012, M.rubber, x, 0.006, z); cy(0.006, 0.03, M.steel, x, 0.022, z);
+      }
+      for (const sz of [-1, 1]) { add(profile(hx * 2 - 0.1, 'x', cx, T - 0.06, cz + sz * (hz - 0.05))); add(profile(hx * 2 - 0.1, 'x', cx, 0.16, cz + sz * (hz - 0.05))); }
+      for (const sx of [-1, 1]) { add(profile(hz * 2 - 0.14, 'z', cx + sx * (hx - 0.05), T - 0.06, cz)); add(profile(hz * 2 - 0.14, 'z', cx + sx * (hx - 0.05), 0.16, cz)); }
+      bx(hx * 2 - 0.12, 0.012, hz * 2 - 0.12, M.hpl, cx, 0.186, cz);
+    }
+    // Vakuumtisch: Saugbohrungen im Raster 25 mm (dunkle Punkte) um die Stichplatte
+    const holeGeo = new THREE.CircleGeometry(0.0016, 10), holeMat = new THREE.MeshBasicMaterial({ color: 0x1a1d1c });
+    const holes = new THREE.InstancedMesh(holeGeo, holeMat, 900); let hn = 0;
+    const dm = new THREE.Matrix4(), q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)), one = new THREE.Vector3(1, 1, 1);
+    for (let x = 0.15; x <= 0.96 && hn < 900; x += 0.025) for (let z = -0.42; z <= 0.32 && hn < 900; z += 0.025) {
+      if (Math.abs(z - nz) < 0.085 && x > nx - 0.06 && x < nx + 0.32) continue; // Stichplatte
+      if (x > nx + 0.25 && Math.abs(z - nz) < 0.08) continue;
+      dm.compose(new THREE.Vector3(x, T + 0.0002, z), q, one); holes.setMatrixAt(hn++, dm);
+    }
+    holes.count = hn; add(holes);
+    // Stichplatte: Transporteur-Schlitze, Greiferschieber, Stichplattenschrauben
+    const slot = new THREE.MeshBasicMaterial({ color: 0x0e0f10 });
+    for (const dx of [-0.007, -0.0025, 0.0025, 0.007]) { const o = new THREE.Mesh(new THREE.PlaneGeometry(0.0016, 0.024), slot); o.rotation.x = -Math.PI / 2; o.position.set(nx + dx, T + 0.0004, nz + (Math.abs(dx) < 0.003 ? 0.006 : 0)); add(o); }
+    bx(0.07, 0.0008, 0.07, M.alu, nx + 0.075, T + 0.0004, nz);
+    for (const [dx, dz] of [[-0.03, -0.04], [-0.03, 0.04], [0.03, 0.045]]) cy(0.003, 0.001, M.blackSteel, nx + dx, T + 0.0005, nz + dz);
+    // Nähkopf: Kopfdeckel, Fadenhebel, Spannung, Fadenführungen, Nählicht
+    const fz = nz + 0.05;
+    bx(0.085, 0.13, 0.004, M.steel, nx + 0.02, T + 0.2, fz + 0.002);
+    this.takeup = bx(0.008, 0.045, 0.006, M.chrome, nx + 0.045, T + 0.25, fz + 0.007);
+    cy(0.014, 0.008, M.chrome, nx + 0.11, T + 0.235, nz + 0.049, 'z'); cy(0.009, 0.012, M.chrome, nx + 0.11, T + 0.235, nz + 0.057, 'z'); cy(0.004, 0.03, M.blackSteel, nx + 0.11, T + 0.235, nz + 0.06, 'z');
+    for (const x of [nx + 0.075, nx + 0.15]) cy(0.003, 0.012, M.chrome, x, T + 0.258, nz + 0.05, 'z');
+    bx(0.035, 0.006, 0.022, M.lamp, nx + 0.035, T + 0.117, nz + 0.03);
+    // Bedienfeld am Arm, Rückwärtstaste, Stichsteller am Ständer
+    bx(0.07, 0.04, 0.004, M.plastic, nx + 0.24, T + 0.23, nz + 0.046); bx(0.05, 0.025, 0.002, M.screen, nx + 0.24, T + 0.232, nz + 0.049);
+    bx(0.03, 0.012, 0.012, M.paintDark, nx + 0.295, T + 0.175, nz + 0.06);
+    cy(0.018, 0.012, M.paintDark, nx + 0.33, T + 0.12, nz + 0.061, 'z'); bx(0.006, 0.03, 0.006, M.chrome, nx + 0.33, T + 0.13, nz + 0.068);
+    // Direktantrieb (Servomotor) hinter dem Handrad, Steuerung unter dem Tisch
+    cy(0.045, 0.055, M.blackSteel, nx + 0.44, T + 0.2, nz, 'x', 32); cy(0.02, 0.01, M.alu, nx + 0.472, T + 0.2, nz, 'x');
+    bx(0.26, 0.12, 0.2, M.paintDark, nx + 0.15, T - 0.14, nz - 0.12); bx(0.06, 0.03, 0.002, M.screen, nx + 0.1, T - 0.13, nz - 0.019);
+    // Garnständer mit zwei Konen und Fadenlauf zur Nadel
+    const gx = nx + 0.33, gz = -0.4;
+    add(profile(0.62, 'y', gx, T + 0.31, gz, M.steel));
+    bx(0.26, 0.006, 0.12, M.paintDark, gx, T + 0.003, gz);
+    bx(0.24, 0.01, 0.01, M.steel, gx, T + 0.6, gz);
+    const coneMat = this._mat(0xe8e2d6, 0.85);
+    for (const dx of [-0.08, 0.08]) {
+      const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.034, 0.15, 28), coneMat); cone.position.set(gx + dx, T + 0.084, gz); cone.castShadow = true; add(cone);
+      cy(0.004, 0.18, M.steel, gx + dx, T + 0.09, gz);
+      cy(0.006, 0.004, M.chrome, gx + dx, T + 0.6, gz + 0.006);
+    }
+    const thread = new THREE.BufferGeometry().setFromPoints([
+      [gx - 0.08, T + 0.16, gz], [gx - 0.08, T + 0.6, gz + 0.006], [nx + 0.15, T + 0.27, nz + 0.05], [nx + 0.11, T + 0.235, nz + 0.062],
+      [nx + 0.075, T + 0.258, nz + 0.056], [nx + 0.045, T + 0.27, fz + 0.01], [nx + 0.01, T + 0.16, fz + 0.004], [nx + 0.001, T + 0.06, nz + 0.004],
+    ].map((a) => new THREE.Vector3(...a)));
+    add(new THREE.Line(thread, new THREE.LineBasicMaterial({ color: 0xd8d0c0 })));
+    // Schutzzaun (Rückseite und Seiten), Schaltschrank, Signalsäule
+    const fb = fence(3.6, 1.6, 'x'); fb.position.set(0.1, 0, -1.25); add(fb);
+    const fl = fence(2.2, 1.6, 'z'); fl.position.set(-1.7, 0, -0.15); add(fl);
+    const fr = fence(2.2, 1.6, 'z'); fr.position.set(1.9, 0, -0.15); add(fr);
+    const cab = cabinet(0.6, 1.8, 0.4); cab.position.set(1.35, 0, -1.5); add(cab);
+    const tw = signalTower(); tw.position.set(1.15, 1.62, 0.6); add(tw); tw.userData.set?.('busy'); this.tower = tw;
+    // Kabelkette am Portal
+    for (let k = 0; k < 14; k++) bx(0.05, 0.03, 0.06, M.plastic, -0.95 + k * 0.07, 1.72, -0.58);
+  }
+
   build(world) {
     this.world = world;
     for (const g of [this.static, this.dynamic]) {
@@ -125,26 +205,20 @@ export class SceneView {
       const s = SOLIDS[col.material];
       const color = col.color || (col.material === 'hpl' ? '#474d4b' : col.material === 'guss' ? '#5f6f68' : s.color);
       const mat = this._mat(color, col.material === 'stahl' ? 0.3 : 0.65, col.material === 'stahl' ? 0.7 : 0.05);
-      const m = this._box(col.half[0] * 2, col.half[1] * 2, col.half[2] * 2, mat, ...col.c);
+      // gerundete Kanten (Guss r = 12 mm, Tischplatte 3 mm); Abmessungen bleiben exakt die des Kolliders
+      const r = col.material === 'guss' ? 0.012 : col.material === 'stahl' ? 0 : 0.003;
+      const m = r > 0 ? new THREE.Mesh(new RoundedBoxGeometry(col.half[0] * 2, col.half[1] * 2, col.half[2] * 2, 3, r), mat) : this._box(col.half[0] * 2, col.half[1] * 2, col.half[2] * 2, mat, 0, 0, 0);
+      m.position.set(...col.c); m.castShadow = m.receiveShadow = true;
       m.rotation.set(col.euler[1], col.euler[0], col.euler[2], 'YXZ');
       this.static.add(m);
     }
-    // Tischbeine und Zargen
-    for (const [cx, cz, hx, hz] of [[-0.5, 0.05, 0.35, 0.3], [0.55, -0.05, 0.45, 0.4]]) {
-      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-        this.static.add(this._box(0.04, TABLE_TOP - 0.04, 0.04, steel, cx + sx * (hx - 0.05), (TABLE_TOP - 0.04) / 2, cz + sz * (hz - 0.05)));
-      }
-      this.static.add(this._box(hx * 2 - 0.06, 0.06, 0.02, dark, cx, TABLE_TOP - 0.07, cz + hz - 0.04));
-    }
+    this._cellDetails(world);
     // Nähmaschine: Handrad, Fadenrolle, Nadelstange, Nähfuß
     const [nx, ny, nz] = NEEDLE;
     const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.03, 40), this._mat(0x3b4442, 0.4, 0.4));
     wheel.rotation.z = Math.PI / 2; wheel.position.set(nx + 0.395, ny + 0.2, nz); wheel.castShadow = true;
     this.static.add(wheel);
     this.wheel = wheel;
-    const spool = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.05, 24), this._mat(0xb3261e, 0.7));
-    spool.position.set(nx + 0.25, ny + 0.3, nz); spool.castShadow = true;
-    this.static.add(spool);
     this.needleBar = new THREE.Group();
     const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.09, 12), steel);
     bar.position.y = 0.06;
@@ -390,6 +464,8 @@ export class SceneView {
     const footY = m.footUp ? ny + m.footLift : m.footY;
     this.footMesh.position.set(nx, footY, nz);
     this.wheel.rotation.x = -m.phase * 2 * Math.PI;
+    if (this.takeup) this.takeup.position.y = TABLE_TOP + 0.25 + 0.012 * Math.sin(m.phase * 2 * Math.PI);
+    this.tower?.userData.set?.(world.machine.sewing ? 'busy' : 'wait');
 
     // Stofflagen
     const cmode = this.colorMode;

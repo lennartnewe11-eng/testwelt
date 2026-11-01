@@ -13,7 +13,7 @@ Lagenhaftung und mehr. Alle Werte lassen sich in der Oberfläche durch eigene Me
 
 ```bash
 npm start            # statischer Server ohne Abhängigkeiten → http://localhost:8080
-npm test             # Validierung des Physikmodells gegen analytische Lösungen
+npm test             # Validierung des Physikmodells + Plausibilitätstests der Produktionsstraße
 npm run scenario     # Beispielprogramm ohne Grafik durchrechnen (Protokoll im Terminal)
 npm run scenario -- scenario=tshirt   # T-Shirt-Kurvennaht mit Nahtabweichung
 npm run scenario -- scenario=aermel   # Ärmel einsetzen
@@ -32,6 +32,17 @@ Benötigt Node.js ≥ 18 und einen aktuellen Browser mit WebGL. Three.js wird vo
 
 Wie man darauf aufbauend ein komplettes T-Shirt automatisiert, beschreibt
 [docs/t-shirt-automatisierung.md](docs/t-shirt-automatisierung.md).
+
+## Produktionsstraße
+
+Umschalter oben rechts → **Produktionsstraße** (oder `index.html#linie`): eine komplette
+automatische Linie vom Stoffballen bis zum verpackten T-Shirt. Sie umfasst Legemaschine,
+CNC-Cutter, Kommissionierroboter mit Nadelgreifern, 13 Stationen auf einem Transfersystem mit
+Werkstückträgern sowie Wenden, Kameraprüfung, Bügeln und Verpacken. Die Linie ist eine
+ereignisdiskrete Simulation. Ihre Zykluszeiten werden aus den Nahtlängen der Schnittteile und
+den in der Nähzelle validierten Prozessgrenzen berechnet. Sie zeigt Kennzahlen (Ausbringung,
+Takt, Engpass, Auslastung, Störungen) und jede Station im Detail in 3D. Details:
+[docs/produktionsstrasse.md](docs/produktionsstrasse.md).
 
 ## Was die Zelle enthält
 
@@ -159,9 +170,10 @@ index.html                 Oberfläche
 src/physics/               Simulation (ohne Abhängigkeiten, läuft auch in Node)
   constants.js materials.js cloth.js collision.js colliders.js
   grippers.js sewing.js robot.js garments.js feeder.js world.js validation.js
-docs/                      Konzept T-Shirt-Automatisierung, Ärmel einsetzen
-src/render/                Three.js-Darstellung
-src/ui/                    Bedienung, Diagramm, Modellbeschreibung
-tests/                     Validierung und Szenario-Lauf
+docs/                      Konzept T-Shirt-Automatisierung, Ärmel einsetzen, Produktionsstraße
+src/render/                Three.js-Darstellung (models.js: detaillierte Maschinen- und Robotermodelle)
+src/line/                  Produktionsstraße: Schnittteile, Schnittbild, ereignisdiskrete Simulation, 3D-Ansicht
+src/ui/                    Bedienung, Diagramm, Modellbeschreibung, Linienbedienung
+tests/                     Validierung, Szenario-Lauf, Linientests
 scripts/build-single.mjs   Ein-Datei-Version
 ```

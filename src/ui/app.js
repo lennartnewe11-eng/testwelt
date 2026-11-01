@@ -8,6 +8,7 @@ import { G, AIR } from '../physics/constants.js';
 import { SceneView } from '../render/scene.js';
 import { LoadChart } from './chart.js';
 import { MODEL_INFO } from './modelinfo.js';
+import { LineUI } from './lineui.js';
 
 const $ = (id) => document.getElementById(id);
 const fmt = (x, d = 2) => (Number.isFinite(x) ? x.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d }) : '–');
@@ -17,7 +18,8 @@ const QUALITY_LARGE = { fast: { spacing: 0.022, substeps: 10 }, std: { spacing: 
 
 const cfg = defaultConfig();
 cfg.quality = 'std';
-let world, view, chart;
+let world, view, chart, lineUi = null;
+let mode = 'zelle';
 let running = true;           // Physik läuft (auch ohne Programm)
 let timeScale = 1;
 let acc = 0, last = performance.now(), rtf = 1, lastUi = 0;
@@ -315,6 +317,7 @@ let sampleAcc = 0;
 function loop(now) {
   const real = Math.min(0.1, (now - last) / 1000);
   last = now;
+  if (mode === 'linie') { lineUi.tick(real, now); requestAnimationFrame(loop); return; }
   if (running) {
     const t0 = performance.now();
     acc += timeScale >= 4 ? 1e9 : real * timeScale;
@@ -350,6 +353,19 @@ function showValidation() {
   }, 50);
 }
 
+// ---------------------------------------------------------------- Ansicht ---
+function setMode(m) {
+  mode = m;
+  const line = m === 'linie';
+  document.querySelectorAll('#modeSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
+  for (const [id, show] of [['cellLeft', !line], ['cellRight', !line], ['cellOverlay', !line], ['cellControls', !line], ['lineLeft', line], ['lineRight', line], ['lineOverlay', line]]) $(id).hidden = !show;
+  $('progNow').hidden = line;
+  view.renderer.domElement.style.display = line ? 'none' : 'block';
+  lineUi.setVisible(line);
+  if (!line) view.resize();
+  try { history.replaceState(null, '', line ? '#linie' : location.pathname + location.search); } catch { /* egal */ }
+}
+
 // ---------------------------------------------------------------- Start -----
 function init() {
   view = new SceneView($('viewport'));
@@ -357,6 +373,7 @@ function init() {
   const applyTheme = () => {
     const t = document.documentElement.dataset.theme;
     view.setTheme(t ? t === 'dark' : mq.matches);
+    lineUi?.setTheme(t ? t === 'dark' : mq.matches);
   };
   applyTheme();
   mq.addEventListener?.('change', applyTheme);
@@ -416,8 +433,14 @@ function init() {
   rebuild();
   // Beispiel sofort starten, damit die Zelle beim Öffnen arbeitet
   startProgram();
+
+  // Produktionsstraße
+  lineUi = new LineUI({ onOpenPhysics: (sc) => { setMode('zelle'); $('scenario').value = sc; $('scenario').onchange(); } });
+  applyTheme();
+  $('modeSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setMode(b.dataset.mode); });
+  try { if (location.hash === '#linie') setMode('linie'); } catch { /* ohne Hash */ }
   requestAnimationFrame(loop);
 }
 
 init();
-window.__sim = { get world() { return world; }, get view() { return view; }, rebuild, startProgram };
+window.__sim = { get world() { return world; }, get view() { return view; }, get line() { return lineUi; }, rebuild, startProgram, setMode };

@@ -13,8 +13,9 @@ const out = resolve(root, args.find((a) => !a.startsWith('--')) || 'dist/naehzel
 const ORDER = [
   'src/physics/constants.js', 'src/physics/materials.js', 'src/physics/cloth.js', 'src/physics/colliders.js',
   'src/physics/collision.js', 'src/physics/grippers.js', 'src/physics/sewing.js', 'src/physics/robot.js', 'src/physics/garments.js', 'src/physics/feeder.js',
-  'src/physics/world.js', 'src/physics/validation.js', 'src/render/textures.js', 'src/render/scene.js',
-  'src/ui/chart.js', 'src/ui/modelinfo.js', 'src/ui/app.js',
+  'src/physics/world.js', 'src/physics/validation.js', 'src/render/textures.js', 'src/render/models.js', 'src/render/scene.js',
+  'src/line/garment.js', 'src/line/des.js', 'src/line/garmentmesh.js', 'src/line/lineview.js',
+  'src/ui/chart.js', 'src/ui/modelinfo.js', 'src/ui/lineui.js', 'src/ui/app.js',
 ];
 const key = (p) => '__M_' + p.replace(/^src\//, '').replace(/\.js$/, '').replace(/[^a-zA-Z0-9]/g, '_');
 
