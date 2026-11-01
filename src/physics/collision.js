@@ -209,6 +209,7 @@ export class ClothContacts {
       q[b] -= w1 * b1 * dl * nX; q[b + 1] -= w1 * b1 * dl * nY; q[b + 2] -= w1 * b1 * dl * nZ;
       q[d] -= w2 * b2 * dl * nX; q[d + 1] -= w2 * b2 * dl * nY; q[d + 2] -= w2 * b2 * dl * nZ;
       if (Cval >= 0) continue;
+      if (this.frictionless && this.frictionless(p[x], p[x + 2])) continue;
       // Reibung
       const muS = 0.5 * (C.m.muSelfS + D.m.muSelfS), muK = 0.5 * (C.m.muSelfK + D.m.muSelfK);
       let rx = (p[x] - pp[x]) - (b0 * (q[a] - qp[a]) + b1 * (q[b] - qp[b]) + b2 * (q[d] - qp[d]));

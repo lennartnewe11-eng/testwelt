@@ -57,6 +57,16 @@ export const GRIPPER_TYPES = {
     tauOn: 0.3, tauOff: 0.25, gap: 2e-3, shape: 'template',
     note: 'Teilespezifische Schablone: klemmt alle Lagen flächig (Reibschluss μ·p·A) und lässt nur einen Schlitz entlang der Naht frei. Industriestandard für automatisches Konturnähen.',
   },
+  traeger: {
+    name: 'Werkstückträger mit Nadelleisten',
+    short: 'Träger',
+    params: [
+      ['hold', 'Haltekraft Nadelleisten', 'N', 30, 5, 120, 1],
+      ['slot', 'Nahtschlitz (halbe Breite)', 'mm', 16, 8, 30, 1],
+    ],
+    tauOn: 0.2, tauOff: 0.2, gap: 2e-3, shape: 'carrier',
+    note: 'Dünnes Trägerblech (0,5 mm) unter dem Körperteil; Nadelleisten halten den Stoff von unten, entlang der Naht bleibt ein Schlitz frei. Die Oberseite bleibt frei, darauf liegt der zuzuführende Ärmel lose auf.',
+  },
   kryo: {
     name: 'Kryogreifer (Gefrieren)',
     short: 'Kryo',
@@ -76,14 +86,14 @@ export function defaultParams(type) {
 }
 
 function footprintArea(type, p) {
-  if (type === 'schablone') return 0.1;
+  if (type === 'schablone' || type === 'traeger') return 0.1;
   if (type === 'vakuum') return Math.PI * (p.diameter * 0.5e-3) ** 2;
   if (type === 'kryo') return Math.PI * (p.diameter * 0.5e-3) ** 2;
   return (p.size * 1e-3) ** 2;
 }
 
 export function footprintHalf(type, p) {
-  if (type === 'schablone') return 0.3;
+  if (type === 'schablone' || type === 'traeger') return 0.3;
   if (type === 'vakuum' || type === 'kryo') return p.diameter * 0.5e-3;
   return p.size * 0.5e-3;
 }
@@ -218,7 +228,7 @@ export class GripperHead {
     this.compliance = 2e-5; // Nachgiebigkeit der Bindung Stoff–Greiferfläche [m/N]
     const half = footprintHalf(type, this.params);
     let n = 0;
-    if (type === 'schablone') { rows = 1; cols = 1; }
+    if (type === 'schablone' || type === 'traeger') { rows = 1; cols = 1; }
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
       const ox = (c - (cols - 1) / 2) * pitchX, oz = (r - (rows - 1) / 2) * pitchZ;
       const el = {
@@ -244,7 +254,7 @@ export class GripperHead {
     };
     this.plate = new BoxCollider({ name: 'Greiferplatte', center: [0, 0, 0], half: [this.extent.x, 0.008, this.extent.z], material: 'alu', kinematic: true, visual: false });
     this.colliders = [...this.elements.map((e) => e.collider), this.plate];
-    if (type === 'schablone') {
+    if (type === 'schablone' || type === 'traeger') {
       // Die Schablone liegt flach auf dem Stoff; Stoff außerhalb des Schlitzes ist geklemmt
       for (const k of this.colliders) { k.enabled = false; k.half[1] = 0.002; }
       this.extent = { x: 0.3, z: 0.25 };
@@ -254,6 +264,32 @@ export class GripperHead {
 
   // Schablonengeometrie: Kontur und Nahtbahn im Zuschnittkoordinatensystem
   setTemplate(tpl) { this.template = tpl; }
+
+  // Werkstückträger: Nadelleisten halten das zugeordnete Teil von unten (außerhalb des Schlitzes)
+  _carrierFrame(el, cloths, t) {
+    const tpl = this.template, P = this.params;
+    if (!tpl || !el.on || el.act < 0.5) return;
+    const c = tpl.cloth;
+    if (!c || el.since.has(c.id)) return;
+    const [cx, fy, cz] = this.elementCenter(el);
+    const yaw = this.pose.yaw, cs = Math.cos(yaw), sn = Math.sin(yaw);
+    const verts = [];
+    for (let v = 0; v < c.n; v++) {
+      const gap = c.pos[3 * v + 1] - c.radius - fy;
+      if (gap < -3e-3 || gap > 4e-3) continue;
+      if (tpl.dist(c.rest[2 * v], c.rest[2 * v + 1]) < P.slot * 1e-3) continue;
+      verts.push(v);
+    }
+    if (verts.length < 20) return;
+    for (const v of verts) {
+      if (c.attached[v] >= 0) continue;
+      const dx = c.pos[3 * v] - cx, dz = c.pos[3 * v + 2] - cz;
+      c.attached[v] = el.index;
+      el.att.push({ cloth: c, v, lx: dx * cs - dz * sn, ly: c.radius, lz: dx * sn + dz * cs });
+    }
+    el.since.set(c.id, t);
+    el.frozen.set(c.id, { cloth: c, ply: 0, Cn: P.hold, Ct: P.hold });
+  }
 
   // Nähschablone: alle Knoten außerhalb des Nahtschlitzes klemmen (einmal je Schließen)
   _templateFrame(el, cloths, t) {
@@ -342,8 +378,8 @@ export class GripperHead {
         el.column = []; el.cap.clear();
         continue;
       }
-      if (def.shape === 'template') {
-        this._templateFrame(el, cloths, t);
+      if (def.shape === 'template' || def.shape === 'carrier') {
+        if (def.shape === 'carrier') this._carrierFrame(el, cloths, t); else this._templateFrame(el, cloths, t);
         el.cap = new Map();
         for (const [id, f] of el.frozen) el.cap.set(id, { ...f, Cn: f.Cn * el.act, Ct: f.Ct * el.act });
         el.column = [...el.frozen.values()].map((f) => ({ cloth: f.cloth, ply: f.ply, Cn: f.Cn * el.act, Ct: f.Ct * el.act }));

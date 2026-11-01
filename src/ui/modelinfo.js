@@ -24,6 +24,8 @@ export const MODEL_INFO = `
 <p class="note">Untertransport mit Transporteur (Reibschluss bis μ·F<sub>Fuß</sub>), Nähfuß bremst die obere Lage, Nadel fixiert die Lagen während des Einstichs. Jeder Stich verbindet die Lagen über einen nur zugtragenden Faden. Daraus entstehen Lagenverschiebung und Verdrehen am Werkstück.</p></section>
 <section class="block"><h2>Kurvennähte und Schnittteile</h2>
 <p class="note">Zuschnitte haben beliebige Konturen (z. B. T-Shirt-Vorder- und Rückenteil); die Netzknoten am Rand liegen auf der Schnittkante. Nahtbahnen entstehen aus der Kontur, versetzt um die Nahtzugabe. Bei SEWPATH dreht der Roboter das Teil laufend um die Nadel, sodass die Nahttangente in Transportrichtung zeigt; der Transporteur folgt dabei der Starrkörperbewegung des Teils. Gemessen wird die Abweichung jedes Einstichs von der Sollbahn im Zuschnitt.</p></section>
+<section class="block"><h2>Ärmel einsetzen</h2>
+<p class="note">Armloch (konkav) und Ärmelkugel (konvex) sind gegensinnig gekrümmt, die Kugel ist um die Mehrweite länger. Beide Teile lassen sich daher nicht gemeinsam starr führen. Der Roboter führt den Körper auf einem Werkstückträger entlang des Armlochs. Die Ärmelzuführung (segmentierte Vakuumplatte auf einer Dreh-Schiebeeinheit) führt den Ärmel gegenläufig entlang der Kugelbahn und gibt Segmente 1,8 cm vor der Nadel frei. Der Obertransport schiebt den Ärmel um das Mehrweitenverhältnis schneller (Mehrweite im mittleren Kugelbereich). Ein Trennblech entkoppelt die Lagen vor dem Fuß, ein Kantensensor überwacht die Ärmelkante. Der genähte Teil ist frei und stellt sich nach den Regeln der Physik auf.</p></section>
 <section class="block"><h2>Weitere physikalische Effekte</h2>
 <table class="kv">
 <tr><td>Luftpolster</td><td>Quetschströmung nach Reynolds beim Annähern an Tisch oder Lage: p = 6μ·v·e(2a−e)/h³, parallel dazu Durchströmung des Stoffs. Dichte Stoffe schweben beim Ablegen, offene fallen sofort.</td></tr>
@@ -31,6 +33,7 @@ export const MODEL_INFO = `
 <tr><td>Achsregelung</td><td>P-Lageregler (K<sub>v</sub>) mit Geschwindigkeitsvorsteuerung; der Schleppfehler geht in die Nahtabweichung ein.</td></tr>
 <tr><td>Kollisionen</td><td>Greiferkopf gegen Nähkopf, Arm, Ständer, Nadel- und Fußstange (Warnung, der Roboter ist kinematisch).</td></tr>
 <tr><td>Saugtisch</td><td>Unterdruck erhöht die Normalkraft der aufliegenden Lage, Reibschluss nach Coulomb.</td></tr>
+<tr><td>Drucksteifigkeit</td><td>Fadenabschnitte unter Druck sind 20-mal weicher als auf Zug (Garne knicken, die Fläche beult aus). Erst dadurch kann sich Stoff in der Ebene biegen.</td></tr>
 </table></section>
 <section class="block"><h2>Grenzen</h2>
 <p class="note">Keine Strömungssimulation (CFD), keine Temperatur- und Feuchteabhängigkeit, Maschinenteile und Tische sind starr. Netzauflösung 1–2 cm: Effekte kleiner als die Maschenweite (Einzelfäden, Kanten-Ausfransen) werden nicht abgebildet.</p></section>`;

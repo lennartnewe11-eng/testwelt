@@ -136,3 +136,50 @@ export function templateOutline(outline, chain, inset) {
   else { for (let k = i0; k !== i1; k = (k + 1) % n) rest.push(outline[k]); }
   return forward ? [...rest, outline[i0], ...inner, outline[i1]] : [...rest, outline[i1], ...inner.slice().reverse(), outline[i0]];
 }
+
+// ---------------------------------------------------------------------------
+// T-Shirt mit eingesetztem Ärmel, Gr. 86 (Kleinkind)
+//
+// Körper: Vorder- und Rückenteil sind an der Schulter bereits verbunden (vorherige Station)
+// und liegen aufgeklappt flach (Schulterlinie z = 0, Vorderteil z > 0, Rückenteil z < 0).
+// Die Seitennähte sind noch offen, so bleibt das Teil beim Ärmeleinsetzen flach.
+export function setInBody() {
+  const bw = 0.13, len = 0.30, ua = 0.10, shX = 0.105, neckW = 0.05;
+  const half = [];
+  half.push([bw, len]);                                                   // Vordersaum rechts
+  half.push([bw, ua]);                                                    // vordere Seite
+  // Armloch: trifft rechtwinklig auf die Schulternaht, damit das zusammengesetzte Armloch
+  // am Schulterpunkt glatt durchläuft (Regel der Schnittkonstruktion)
+  half.push(...bezier([bw, ua], [shX, 0.05], [shX, 0], 10));              // vorderes Armloch
+  half.push(...bezier([shX, 0], [shX, -0.05], [bw, -ua], 10));            // hinteres Armloch
+  half.push([bw, -len]);                                                  // hintere Seite
+  const right = half;
+  const left = right.map(([x, z]) => [-x, z]).reverse();
+  const outline = [...right, ...left];
+  // Halsausschnitt (Loch): vorne 4,5 cm tief, hinten 1,5 cm
+  const neck = [[-neckW, 0], ...bezier([-neckW, 0], [-neckW, 0.045], [0, 0.045], 8), ...bezier([0, 0.045], [neckW, 0.045], [neckW, 0], 8),
+    ...bezier([neckW, 0], [neckW, -0.015], [0, -0.015], 6), ...bezier([0, -0.015], [-neckW, -0.015], [-neckW, 0], 6).slice(0, -1)];
+  // linkes Armloch vom vorderen Achselpunkt über die Schulter zum hinteren Achselpunkt
+  const iFront = outline.findIndex((p) => p[0] === -bw && p[1] === -ua);
+  const iBack = outline.findIndex((p) => p[0] === -bw && p[1] === ua);
+  const chainLeft = outline.slice(iFront, iBack + 1).reverse();
+  return { outline, holes: [neck], chains: { armloch_links: chainLeft } };
+}
+
+// Ärmel mit Kugelhöhe h; Kugel von (−w, 0) über (0, −h) nach (w, 0)
+export function setInSleeve(h, w = 0.11, len = 0.09, hemW = 0.095) {
+  const cap = [[-w, 0], ...bezier([-w, 0], [-w * 0.45, -h * 1.05], [0, -h], 10), ...bezier([0, -h], [w * 0.45, -h * 1.05], [w, 0], 10)];
+  const outline = [...cap, [hemW, len], [-hemW, len]];
+  return { outline, chains: { aermelkugel: cap } };
+}
+
+// Kugelhöhe so bestimmen, dass die Kugelnaht um die Mehrweite länger ist als die Armlochnaht
+export function fitSleeve(armholeLen, ease = 0.02, allowance = 0.01) {
+  let lo = 0.01, hi = 0.12;
+  for (let k = 0; k < 40; k++) {
+    const h = (lo + hi) / 2, sl = setInSleeve(h);
+    const L = seamPath(sl.outline, sl.chains.aermelkugel, allowance).length;
+    if (L < armholeLen * (1 + ease)) lo = h; else hi = h;
+  }
+  return setInSleeve((lo + hi) / 2);
+}

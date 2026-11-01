@@ -19,7 +19,7 @@ bleibt** und erst ganz am Ende geschlossen wird („Flachbauweise“):
 |---|---|---|---|
 | 1 | Schulternähte | gerade, flach | einfach: Kantenführung, gerade Naht |
 | 2 | Halsbündchen | Kurve, flach (eine Schulter bleibt offen oder Bündchen im Rund) | Schablone oder Kantenführung mit Differentialtransport |
-| 3 | Ärmel einsetzen | Kurve konvex gegen konkav, Mehrweite einhalten | schwierigster Schritt: Schablone mit Differentialtransport |
+| 3 | Ärmel einsetzen | Kurve konvex gegen konkav, Mehrweite einhalten | **in der Simulation umgesetzt**: Werkstückträger + Ärmelzuführung + Obertransport ([aermel-einsetzen.md](aermel-einsetzen.md)) |
 | 4 | Ärmel- und Saum flach vorversäubern | gerade | Covermaschine, flach vor dem Schließen |
 | 5 | Seitennaht + Ärmelunternaht in einem Zug | Kurve (Achselrundung), flach | **in der Simulation umgesetzt** |
 | 6 | Saum (falls nicht in Schritt 4) | Röhre | Röhrenführung oder Roboter mit Nähkopf |
@@ -76,7 +76,7 @@ rechts gleichzeitig) halbiert sich das.
 
 ## 5. Nächste Schritte in der Simulation
 
-1. Ärmel einsetzen: zwei Lagen unterschiedlicher Kantenlänge mit Differentialtransport (Einhalten).
+1. ~~Ärmel einsetzen~~ (umgesetzt, siehe aermel-einsetzen.md); als Nächstes: Ärmel und Körper anschließend falten und Seite + Ärmel schließen.
 2. Kamera-Kantenführung als Regler statt fester Bahn (Vergleich mit der Schablone).
 3. Stichtypen Overlock und Covernaht (Kantenumstechung, zwei Nadeln).
 4. Kantenrollen von Jersey (Ruhekrümmung am Rand).

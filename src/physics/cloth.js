@@ -50,7 +50,7 @@ export function pointInPolygon(poly, x, z) {
 export class Cloth {
   // outline: Zuschnittkontur in lokalen Koordinaten [m] (x = Schuss, z = Kette), Polygon.
   // Ohne outline entsteht ein Rechteck width × length.
-  constructor({ fabric, width = 0.3, length = 0.4, spacing, center, yaw = 0, name, tint, outline = null }) {
+  constructor({ fabric, width = 0.3, length = 0.4, spacing, center, yaw = 0, name, tint, outline = null, holes = [] }) {
     this.id = NEXT_ID++;
     this.fabric = fabric;
     this.m = toSI(fabric);
@@ -64,6 +64,10 @@ export class Cloth {
       outline = [[-W / 2, -L / 2], [W / 2, -L / 2], [W / 2, L / 2], [-W / 2, L / 2]];
     }
     this.outline = outline;
+    this.holes = holes;
+    const rings = [outline, ...holes];
+    const inside = (x, z) => pointInPolygon(outline, x, z) && !holes.some((hl) => pointInPolygon(hl, x, z));
+    const nearest = (x, z) => { let b = null; for (const r of rings) { const c = closestOnOutline(r, x, z); if (!b || c.d < b.d) b = c; } return b; };
     let minx = Infinity, maxx = -Infinity, minz = Infinity, maxz = -Infinity;
     for (const [x, z] of outline) { minx = Math.min(minx, x); maxx = Math.max(maxx, x); minz = Math.min(minz, z); maxz = Math.max(maxz, z); }
     const nx = Math.round((maxx - minx) / h + 0.499) + 1, nz = Math.round((maxz - minz) / h + 0.499) + 1;
@@ -76,14 +80,14 @@ export class Cloth {
     for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
       const g = j * nx + i, x = minx + i * h, z = minz + j * h;
       gx[g] = x; gz[g] = z;
-      if (pointInPolygon(outline, x, z) || closestOnOutline(outline, x, z).d < 1e-7) state[g] = 1;
+      if (inside(x, z) || nearest(x, z).d < 1e-7) state[g] = 1;
     }
     for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
       const g = j * nx + i;
       if (state[g]) continue;
       const nb = [[i - 1, j], [i + 1, j], [i, j - 1], [i, j + 1]].some(([a, b]) => a >= 0 && b >= 0 && a < nx && b < nz && state[b * nx + a] === 1);
       if (!nb) continue;
-      const { q, d } = closestOnOutline(outline, gx[g], gz[g]);
+      const { q, d } = nearest(gx[g], gz[g]);
       if (d > 0.95 * h) continue;
       gx[g] = q[0]; gz[g] = q[1]; state[g] = 2;
     }
@@ -129,6 +133,7 @@ export class Cloth {
     this.w = new Float64Array(n);
     this.attached = new Int16Array(n).fill(-1);
     this.radius = Math.max(this.m.t * 0.5, 5e-5);
+    this.compressionFactor = 0.05;
 
     // Masse: volle Zellen zu je einem Viertel auf ihre vier Ecken (gleichmäßig wie im
     // Rechteckgitter), Randdreiecke zu je einem Drittel auf ihre Ecken
@@ -158,7 +163,7 @@ export class Cloth {
 
     // Abstand jedes Knotens zum Zuschnittrand (für das Luftpolster beim Ablegen)
     this.edgeDist = new Float64Array(n);
-    for (let v = 0; v < n; v++) this.edgeDist[v] = closestOnOutline(outline, R[2 * v], R[2 * v + 1]).d;
+    for (let v = 0; v < n; v++) this.edgeDist[v] = nearest(R[2 * v], R[2 * v + 1]).d;
 
     // Knoten → Dreiecke (CSR)
     const cnt = new Int32Array(n + 1);
@@ -388,7 +393,9 @@ export class Cloth {
       const dx = p[i] - p[j], dy = p[i + 1] - p[j + 1], dz = p[i + 2] - p[j + 2];
       const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
       if (len < 1e-12) continue;
-      let at = sAlpha[c] * inv;
+      // Textilien haben kaum Drucksteifigkeit (Garne knicken, die Fläche beult aus):
+      // Fadenabschnitte unter Druck sind um den Faktor compressionFactor weicher als auf Zug.
+      let at = (len < sRest[c] && c < this.nStruct ? sAlpha[c] / this.compressionFactor : sAlpha[c]) * inv;
       if (compensate) at = Math.max(0, at - ws);
       const dl = (-(len - sRest[c]) - at * sLambda[c]) / (ws + at);
       sLambda[c] += dl;
@@ -538,9 +545,10 @@ export class Cloth {
     return Math.sqrt(Math.max(0, s2 / this.n - m * m));
   }
 
+  // Knoten, die der Greifer des Roboters hält (Index 99 = Ärmelzuführung, zählt hier nicht)
   attachedCount() {
     let c = 0;
-    for (let v = 0; v < this.n; v++) if (this.attached[v] >= 0) c++;
+    for (let v = 0; v < this.n; v++) if (this.attached[v] >= 0 && this.attached[v] < 99) c++;
     return c;
   }
 }

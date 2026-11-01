@@ -1,5 +1,5 @@
 // Bedienoberfläche: verbindet Simulation, 3D-Ansicht und Messwerte.
-import { World, defaultConfig, DEFAULT_PROGRAM, TSHIRT_PROGRAM, SCENARIOS, applyScenario } from '../physics/world.js';
+import { World, defaultConfig, DEFAULT_PROGRAM, TSHIRT_PROGRAM, SLEEVE_PROGRAM, SCENARIOS, applyScenario } from '../physics/world.js';
 import { FABRICS, FABRIC_FIELDS, SOLIDS, fabricById, toSI, bendingLength } from '../physics/materials.js';
 import { GRIPPER_TYPES, defaultParams, capacityModel } from '../physics/grippers.js';
 import { validateProgram, parseProgram } from '../physics/robot.js';
@@ -37,7 +37,9 @@ function buildSetupUI() {
   const sc = $('scenario');
   sc.innerHTML = Object.entries(SCENARIOS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
   sc.value = cfg.scenario;
-  $('scenarioNote').textContent = cfg.scenario === 'tshirt'
+  $('scenarioNote').textContent = cfg.scenario === 'aermel'
+    ? 'Separater Ärmel wird flach in das Armloch eingenäht. Der Körper (Schulternähte geschlossen, aufgeklappt) liegt auf einem Werkstückträger, den der Roboter entlang des Armlochs führt. Die Ärmelzuführung führt den Ärmel gegenläufig und mit 2 % Mehrweite; Obertransport, Trennblech und Kantensensor arbeiten mit.'
+    : cfg.scenario === 'tshirt'
     ? 'Vorder- und Rückenteil eines Kinder-T-Shirts (Kimonoschnitt). Eine Nähschablone klemmt beide Teile, der Roboter führt die Seitennaht mit Achselrundung und Ärmelunternaht in einem Zug.'
     : 'Stapel rechteckiger Zuschnitte: vereinzeln, ablegen, zwei Lagen gerade zusammennähen.';
   sc.onchange = () => {
@@ -126,6 +128,7 @@ function renderPredict() {
   let chip;
   const want = cfg.pickPlies || 1;
   if (cfg.gripper === 'schablone') chip = '<span class="chip accent">flächige Klemmung</span>';
+  else if (cfg.gripper === 'traeger') chip = '<span class="chip accent">Werkstückträger</span>';
   else if (caps[0].Cn < 1.5 * need) chip = '<span class="chip crit">Haltekraft zu gering</span>';
   else if (want >= 2 && caps[1].Cn > need && caps[2].Cn < need) chip = '<span class="chip good">zwei Lagen wie gewollt</span>';
   else if (caps[1].Cn > need) chip = '<span class="chip warn">Doppelgriff-Risiko</span>';
@@ -142,7 +145,7 @@ function readSetup() {
   cfg.tableMaterial = $('tableMat').value;
   cfg.footMaterial = $('footMat').value;
   cfg.quality = $('quality').value;
-  Object.assign(cfg, (cfg.scenario === 'tshirt' ? QUALITY_LARGE : QUALITY)[cfg.quality]);
+  Object.assign(cfg, (cfg.scenario === 'tshirt' || cfg.scenario === 'aermel' ? QUALITY_LARGE : QUALITY)[cfg.quality]);
   cfg.selfCollision = $('selfColl').checked;
   cfg.airCushion = $('airCushion').checked;
   cfg.program = $('program').value;
@@ -235,7 +238,7 @@ function renderUi(force = false) {
   const rep = w.plyReport();
   let lastPlaced = null;
   $('plyTable').innerHTML = '<tr><th>Lage</th><th>Zustand</th><th>Δx</th><th>Δz</th><th>Δθ</th><th>Dehnung</th><th>σ<sub>y</sub></th></tr>' + rep.map((p) => {
-    const cls = p.state === 'verloren' ? 'crit' : p.state === 'gegriffen' ? 'accent' : p.state === 'abgelegt' ? 'good' : '';
+    const cls = p.state === 'verloren' ? 'crit' : p.state === 'gegriffen' ? 'accent' : p.state === 'abgelegt' || p.state === 'angenäht' ? 'good' : '';
     const e = p.error;
     if (e && p.state === 'abgelegt') lastPlaced = p;
     const lim = w.cfg.limitLoad / Math.min(p.cloth.m.Tw, p.cloth.m.Tf);
@@ -255,6 +258,22 @@ function renderUi(force = false) {
     $('kDev').textContent = `${fmt(mean * 1000, 1)} mm`;
     $('kDevSub').innerHTML = `max. ${fmt(mx * 1000, 1)} mm ` + (mx < 0.003 ? '<span class="chip good">i. O.</span>' : mx < 0.006 ? '<span class="chip warn">grenzwertig</span>' : '<span class="chip crit">n. i. O.</span>');
   } else { $('kDev').textContent = '–'; $('kDevSub').textContent = w.machine.activePath ? 'erste Stiche …' : 'nur bei Bahnnaht (SEWPATH)'; }
+  const E = w.machine.edge;
+  $('kSleeveBox').hidden = $('kEaseBox').hidden = !E;
+  if (E) {
+    const ds = (w.machine.devSleeve || []).filter(Number.isFinite), miss = (w.machine.devSleeve || []).length - ds.length;
+    if (ds.length) {
+      const mean = ds.reduce((a, b) => a + b, 0) / ds.length, mx = Math.max(...ds);
+      $('kSleeve').textContent = `${fmt(mean * 1000, 1)} mm`;
+      $('kSleeveSub').innerHTML = `max. ${fmt(mx * 1000, 1)} mm` + (miss ? ` · <span class="chip crit">${miss} Stiche verfehlt</span>` : mx < 0.003 ? ' <span class="chip good">i. O.</span>' : ' <span class="chip warn">grenzwertig</span>');
+    } else { $('kSleeve').textContent = '–'; $('kSleeveSub').textContent = E.err !== null ? `Kantensensor ${fmt(E.err * 1000, 1)} mm` : 'Einstich ↔ Kugelnaht'; }
+    const et = w.machine.easeTrack || [];
+    if (et.length > 3) {
+      const a = et[0], b = et[et.length - 1], ez = (b.ps - a.ps) / Math.max(1e-6, b.pb - a.pb) - 1;
+      $('kEase').textContent = `${fmt(ez * 100, 1)} %`;
+      $('kEaseSub').textContent = `Soll ${fmt(E.ease * 100, 1)} % · ${fmt((b.ps - b.pb) * 1000, 1)} mm eingehalten`;
+    } else { $('kEase').textContent = '–'; $('kEaseSub').textContent = `Soll ${fmt(E.ease * 100, 1)} % (Kugel länger als Armloch)`; }
+  }
   const rp = w.robot.pose;
   $('kPose').textContent = `${fmt(((rp.yaw * 180) / Math.PI), 0)}°`;
   $('kPoseSub').textContent = `x ${fmt(rp.x, 3)} · z ${fmt(rp.z, 3)} m`;
@@ -372,7 +391,7 @@ function init() {
   $('btnPause').onclick = () => { running = !running; $('btnPause').textContent = running ? 'Pause' : 'Weiter'; };
   $('btnReset').onclick = rebuild;
   $('btnApply').onclick = () => { rebuild(); startProgram(); };
-  $('btnDefault').onclick = () => { $('program').value = cfg.scenario === 'tshirt' ? TSHIRT_PROGRAM : DEFAULT_PROGRAM; renderGutter(); };
+  $('btnDefault').onclick = () => { $('program').value = cfg.scenario === 'tshirt' ? TSHIRT_PROGRAM : cfg.scenario === 'aermel' ? SLEEVE_PROGRAM : DEFAULT_PROGRAM; renderGutter(); };
   $('timeScale').onchange = (e) => { timeScale = +e.target.value; };
   $('btnValidate').onclick = showValidation;
   $('dlgClose').onclick = () => $('dlg').close();

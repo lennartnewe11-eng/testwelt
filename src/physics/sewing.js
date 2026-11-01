@@ -12,6 +12,10 @@
 //    (Stauchung ε = F_Faden / (T · b_Naht)); bei dünnen Stoffen entsteht Nahtkräuseln.
 //  • Kurvennaht: Führt der Roboter das Teil (SEWPATH), folgt der Transporteur der
 //    Starrkörperbewegung des Teils (Drehung um die Nadel), statt nur geradeaus zu schieben.
+//  • Ärmel einsetzen: Die obere Lage wird separat geführt. Ein Kantensensor vor der Nadel
+//    misst die Lage der Ärmelkante, eine Führungsrolle verschiebt die Lage quer (P-Regler,
+//    begrenzt durch Reibung), ein Trennblech entkoppelt die Lagen vor dem Fuß. Der
+//    Obertransport schiebt die obere Lage um die Mehrweite schneller (Differentialtransport).
 
 import { BoxCollider } from './colliders.js';
 import { SOLIDS } from './materials.js';
@@ -55,6 +59,8 @@ export class SewingMachine {
     this.activePath = path;
     this.pathCloth = pathCloth;
     this.deviations = [];
+    this.devSleeve = [];
+    this.easeTrack = [];
     this.lastHits = null;
   }
 
@@ -111,6 +117,73 @@ export class SewingMachine {
     return groups;
   }
 
+  setEdgeGuide(cfg) {
+    const Lb = cfg.bodyPath.length, Ls = cfg.path.length;
+    this.edge = {
+      ...cfg, on: false, sensor: 0.045, allowance: 0.01, gain: 10, ki: 30, vmax: 0.1, roller: 0.02,
+      ease: Ls / Lb - 1, err: null, errLog: [],
+    };
+    // Seite der Schnittkante relativ zur Nahtrichtung (für die Krümmungsvorsteuerung)
+    const P = cfg.path.points, k = Math.min(10, P.length - 1);
+    const tx = P[k][0] - P[0][0], tz = P[k][1] - P[0][1], L = Math.hypot(tx, tz);
+    const rn = [tz / L, -tx / L];
+    this.edge.edgeSide = cfg.inside && cfg.inside(P[0][0] + rn[0] * 0.012, P[0][1] + rn[1] * 0.012) ? -1 : 1;
+    const N = this.needle;
+    // Trennblech: die noch nicht genähte obere Lage liegt vor und neben der Nadel auf einem
+    // glatten Blech über der unteren Lage (ca. 25 × 23 cm)
+    this.separatorZone = (x, z) => x > N[0] - 0.2 && x < N[0] + 0.05 && z > N[2] + this.half[1] && z < N[2] + 0.25;
+  }
+
+  // Obertransport: Verhältnis zum Untertransport, Mehrweite konzentriert im mittleren Kugelbereich
+  topFeedRatio() {
+    const E = this.edge;
+    if (!E || !(E.on || this.feeder?.on) || !this.activePath) return 1;
+    const u = Math.min(1, (this.stitches * this.stitchLength * 1e-3) / this.activePath.length);
+    const w = u < 0.1 || u > 0.9 ? 0 : Math.sin((Math.PI * (u - 0.1)) / 0.8) ** 2;
+    return 1 + (E.ease * w) / 0.4; // Mittelwert von w über die Naht = 0,4
+  }
+
+  // Kantenführer: Sensor misst die Ärmelkante, Rolle verschiebt die obere Lage quer
+  solveEdgeGuide(dt) {
+    const E = this.edge;
+    if (!E || !(E.on || this.feeder?.on) || this.footUp) { if (E) E.err = null; return; }
+    const c = E.cloth, p = c.pos, h = c.h, N = this.needle;
+    const zs = N[2] - this.feedDir[2] * E.sensor, xt = N[0] + E.allowance;
+    let sw = 0, sx = 0;
+    for (let v = 0; v < c.n; v++) {
+      if (!E.capEdge[v]) continue;
+      const dz = Math.abs(p[3 * v + 2] - zs);
+      if (dz >= h || Math.abs(p[3 * v] - xt) > 0.05) continue;
+      const wgt = 1 - dz / h;
+      sx += wgt * p[3 * v]; sw += wgt;
+    }
+    if (sw < 0.2) { E.err = null; return; }
+    // Vorsteuerung: bekannte Kugelkrümmung – wo liegt die Kante im Abstand des Sensors,
+    // wenn die Naht an der Nadel tangential in Transportrichtung läuft?
+    let ff = 0;
+    if (this.activePath && this.pathAt) {
+      const sb = this.stitches * this.stitchLength * 1e-3;
+      const ss = sb * (E.path.length / E.bodyPath.length);
+      const a = this.pathAt(E.path, ss), b = this.pathAt(E.path, ss + E.sensor);
+      const dx0 = b.p[0] - a.p[0], dz0 = b.p[1] - a.p[1];
+      ff = E.edgeSide * (dx0 * a.t[1] - dz0 * a.t[0]); // Querabstand zur Tangente, positiv zur Kante hin
+    }
+    E.ff = ff;
+    const xe = sx / sw, err = xe - (xt + ff);
+    E.err = err;
+    // PI-Regler mit Begrenzung (Anti-Windup)
+    E.integ = Math.max(-0.02, Math.min(0.02, (E.integ || 0) + err * dt));
+    if (this.feeder?.on) return; // Ärmelzuführung führt; der Sensor überwacht nur
+    const dx = Math.max(-E.vmax, Math.min(E.vmax, -E.gain * err - E.ki * E.integ)) * dt;
+    const rx = xe - E.roller, r2 = E.roller * E.roller;
+    for (let v = 0; v < c.n; v++) {
+      if (!c.w[v]) continue;
+      const ddx = p[3 * v] - rx, ddz = p[3 * v + 2] - zs;
+      if (ddx * ddx + ddz * ddz > r2) continue;
+      p[3 * v] += dx;
+    }
+  }
+
   // Nach dem Teilschritt aufrufen: kinematisch geführte Knoten wieder freigeben
   unpin() {
     const P = this.pinned;
@@ -160,14 +233,18 @@ export class SewingMachine {
           if (this.follow && vf > 0) { const d = this.follow(pp[i], pp[i + 2]); tx = d[0]; tz = d[1]; }
           else { tx = fx; tz = fz; }
         }
-        else { tx = below[0]; tz = below[1]; mu = 0.5 * (c.m.muSelfS + groups[k - 1].c.m.muSelfS); }
+        else if ((this.edge?.on || this.feeder?.on) && k === groups.length - 1) {
+          // Obertransport (Laufzahn) treibt die obere Lage mit Mehrweitenverhältnis
+          const r = this.topFeedRatio();
+          tx = below[0] * r; tz = below[1] * r; mu = this.dogMu;
+        } else { tx = below[0]; tz = below[1]; mu = 0.5 * (c.m.muSelfS + groups[k - 1].c.m.muSelfS); }
         let cx = tx - dx, cz = tz - dz;
         let cl = Math.hypot(cx, cz), L = lim(mu);
         if (cl > L) { cx *= L / cl; cz *= L / cl; }
         p[i] += cx; p[i + 2] += cz; dx += cx; dz += cz;
         // oberste Lage: Der Nähfuß bremst mit μ_Fuß·F_N, die Lage darunter treibt mit μ_SS·F_N.
         // Ist die Bremsreibung größer, bleibt die obere Lage am Fuß hängen (Lagenverschiebung).
-        if (k > 0 && k === groups.length - 1 && c.m.muSteelK * muFoot > mu) {
+        if (k > 0 && k === groups.length - 1 && !this.edge?.on && !this.feeder?.on && c.m.muSteelK * muFoot > mu) {
           p[i] -= dx; p[i + 2] -= dz; dx = 0; dz = 0;
         }
         if (needleIn) { p[i] -= dx; p[i + 2] -= dz; dx = 0; dz = 0; }
@@ -180,6 +257,7 @@ export class SewingMachine {
       below = [mdx / idx.length, mdz / idx.length];
     }
 
+    this.solveEdgeGuide(dt);
     if (this._pendingStitch) {
       this._pendingStitch = false;
       this._makeStitch(groups);
@@ -199,6 +277,16 @@ export class SewingMachine {
       const h = hits.find((x) => x.c === this.pathCloth) || top;
       const [u, v] = h.c.restPoint(h.hit.tri, h.hit.b0, h.hit.b1, h.hit.b2);
       this.deviations.push(this.distToPath(this.activePath, u, v));
+      // zweites Teil (Ärmel): Abweichung von der Kugelnaht und eingenähte Länge
+      const E = this.edge;
+      if (E && (E.on || this.feeder?.on)) {
+        const hs = hits.find((x) => x.c === E.cloth);
+        if (hs) {
+          const q = hs.c.restPoint(hs.hit.tri, hs.hit.b0, hs.hit.b1, hs.hit.b2);
+          (this.devSleeve ||= []).push(this.distToPath(E.path, q[0], q[1]));
+          this.easeTrack.push({ b: [u, v], s: q, pb: projParam(this.activePath, u, v), ps: projParam(E.path, q[0], q[1]) });
+        } else (this.devSleeve ||= []).push(NaN);
+      }
     }
     // Fadenzug zum vorigen Einstich in jeder Lage (nur Zug, verkürzte Ruhelänge)
     if (this.lastHits) {
@@ -290,4 +378,17 @@ export function locateTriangle(c, x, z) {
 function triPoint(c, hit) {
   const T = c.tri, p = c.pos, a = 3 * T[3 * hit.tri], b = 3 * T[3 * hit.tri + 1], d = 3 * T[3 * hit.tri + 2];
   return [0, 1, 2].map((k) => hit.b0 * p[a + k] + hit.b1 * p[b + k] + hit.b2 * p[d + k]);
+}
+
+// Bogenlänge des nächsten Bahnpunkts
+export function projParam(path, x, z) {
+  const P = path.points, cum = path.cum;
+  let bd = Infinity, bs = 0;
+  for (let k = 0; k < P.length - 1; k++) {
+    const dx = P[k + 1][0] - P[k][0], dz = P[k + 1][1] - P[k][1], L2 = dx * dx + dz * dz;
+    const t = L2 > 0 ? Math.max(0, Math.min(1, ((x - P[k][0]) * dx + (z - P[k][1]) * dz) / L2)) : 0;
+    const d = Math.hypot(x - P[k][0] - t * dx, z - P[k][1] - t * dz);
+    if (d < bd) { bd = d; bs = cum[k] + t * (cum[k + 1] - cum[k]); }
+  }
+  return bs;
 }

@@ -11,6 +11,8 @@
 //   WAIT t             warten [s]
 //   FOOT UP|DOWN       Nähfuß heben/senken
 //   TABLEVAC ON|OFF    Saugtisch im Nähbereich
+//   EDGEGUIDE ON|OFF   Kantenführer (Sensor + Führungsrolle) und Trennblech für die obere Lage
+//   SLEEVEFEED ON|OFF  Ärmelzuführung (Vakuumplatte auf Dreh-Schiebeeinheit) für die obere Lage
 //   SEW L [rpm] [mm] [SYNC]  Naht starten (läuft parallel weiter); SYNC koppelt den
 //                      Greifer an die Transporteurbewegung (synchrones Mitführen)
 //   WAITSEW            warten, bis die Naht fertig ist
@@ -39,7 +41,7 @@ export function parseProgram(text) {
   return out;
 }
 
-const KNOWN = new Set(['SPEED', 'ACCEL', 'MOVE', 'MOVEREL', 'TOUCH', 'GRIP', 'WAIT', 'FOOT', 'SEW', 'WAITSEW', 'HOME', 'TABLEVAC', 'ALIGNPATH', 'SEWPATH']);
+const KNOWN = new Set(['SPEED', 'ACCEL', 'MOVE', 'MOVEREL', 'TOUCH', 'GRIP', 'WAIT', 'FOOT', 'SEW', 'WAITSEW', 'HOME', 'TABLEVAC', 'ALIGNPATH', 'SEWPATH', 'EDGEGUIDE', 'SLEEVEFEED']);
 
 export function validateProgram(prog) {
   const errs = [];
@@ -193,6 +195,18 @@ export class GantryRobot {
           break;
         }
         case 'FOOT': ctx.machine.footUp = (ins.args[0] || '').toUpperCase() === 'UP'; break;
+        case 'SLEEVEFEED': {
+          const F = ctx.machine.feeder;
+          if (!F) { ctx.log?.('SLEEVEFEED: keine Ärmelzuführung eingerichtet', 'warn'); break; }
+          const on = (ins.args[0] || '').toUpperCase() === 'ON';
+          if (on && !F.on) { F.on = F.engage(); ctx.log?.(F.on ? `Ärmelzuführung EIN (${F.att.length} Haltepunkte)` : 'Ärmelzuführung: Ärmel nicht gefunden', F.on ? 'info' : 'error'); }
+          if (!on && F.on) { F.on = false; F.disengage(); ctx.log?.('Ärmelzuführung AUS'); }
+          break;
+        }
+        case 'EDGEGUIDE':
+          if (ctx.machine.edge) ctx.machine.edge.on = (ins.args[0] || '').toUpperCase() === 'ON';
+          ctx.log?.(ctx.machine.edge ? `Kantenführer ${ctx.machine.edge.on ? 'EIN' : 'AUS'}` : 'EDGEGUIDE: kein Kantenführer eingerichtet', ctx.machine.edge ? 'info' : 'warn');
+          break;
         case 'TABLEVAC':
           if (ctx.machine.tableVac) ctx.machine.tableVac.on = (ins.args[0] || '').toUpperCase() === 'ON';
           ctx.log?.(`Saugtisch ${ctx.machine.tableVac?.on ? 'EIN' : 'AUS'}`);

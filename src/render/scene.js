@@ -179,6 +179,46 @@ export class SceneView {
     this.headGroup = new THREE.Group();
     const head = world.head;
     this.templateMesh = null;
+    this.carrier = null; this.feederMesh = null; this.separator = null; this.sensor = null;
+    const shapeMesh = (pts, mat, depth = 0.003) => {
+      const shape = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, -z)));
+      const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
+      geo.rotateX(-Math.PI / 2);
+      return new THREE.Mesh(geo, mat);
+    };
+    if (head.type === 'traeger' && head.template) {
+      // Werkstückträger: dünnes Blech in Körperkontur mit Nahtschlitz, liegt unter dem Körper
+      const m = shapeMesh(head.template.shape, new THREE.MeshStandardMaterial({ color: 0x8c969c, metalness: 0.7, roughness: 0.35, transparent: true, opacity: 0.85 }), 0.0005);
+      m.receiveShadow = true;
+      const g = new THREE.Group(); g.add(m);
+      // Anfangslage: unter dem Körper auf dem Stapeltisch
+      const bc = head.template.cloth, pz = bc.pose2D();
+      let ru = 0, rv = 0, M = 0;
+      for (let v = 0; v < bc.n; v++) { ru += bc.mass[v] * bc.rest[2 * v]; rv += bc.mass[v] * bc.rest[2 * v + 1]; M += bc.mass[v]; }
+      const c = Math.cos(pz.theta), sn = Math.sin(pz.theta);
+      const ox = pz.x - (ru / M * c + rv / M * sn), oz = pz.z - (-ru / M * sn + rv / M * c);
+      g.position.set(ox, TABLE_TOP - 0.0003, oz); g.rotation.y = pz.theta;
+      this.dynamic.add(g);
+      this.carrier = g;
+    }
+    if (world.feeder) {
+      const F = world.feeder, sl = world.garment.sleeve;
+      this.feederMesh = shapeMesh(sl.outline, new THREE.MeshPhysicalMaterial({ color: 0xe0a33a, transparent: true, opacity: 0.3, roughness: 0.3, depthWrite: false }), 0.002);
+      this.feederMesh.renderOrder = 6;
+      this.feederMesh.visible = false;
+      this.dynamic.add(this.feederMesh);
+      const N = world.machine.needle;
+      // Trennblech zwischen den Lagen vor dem Nähfuß
+      const sep = this._box(0.25, 0.0004, 0.234, new THREE.MeshStandardMaterial({ color: 0xc9d1d6, metalness: 0.8, roughness: 0.25, transparent: true, opacity: 0.55 }), N[0] - 0.075, N[1] + 0.0012, N[2] + 0.133, false);
+      sep.visible = false; this.dynamic.add(sep); this.separator = sep;
+      // Kantensensor (Lichttaster) über der Ärmelkante
+      const sen = new THREE.Group();
+      sen.add(this._box(0.012, 0.02, 0.012, this._mat(0x2b2f31, 0.5, 0.2), 0, 0.04, 0));
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.0006, 0.0006, 0.03, 6), new THREE.MeshBasicMaterial({ color: 0xff3030 }));
+      beam.position.y = 0.015; sen.add(beam);
+      sen.position.set(N[0] + 0.01, N[1], N[2] + world.machine.edge.sensor);
+      sen.visible = false; this.dynamic.add(sen); this.sensor = sen;
+    }
     if (head.type === 'schablone' && head.template) {
       // Nähschablone: Acrylplatte in Teilekontur mit Nahtschlitz, Aufnahme in der Mitte
       const shape = new THREE.Shape(head.template.shape.map(([x, z]) => new THREE.Vector2(x, -z)));
@@ -196,12 +236,14 @@ export class SceneView {
     // Rahmen aus Aluprofilen statt geschlossener Platte (Lage bleibt sichtbar)
     const rowsZ = [...new Set(head.elements.map((e) => +e.oz.toFixed(4)))];
     const colsX = [...new Set(head.elements.map((e) => +e.ox.toFixed(4)))];
-    if (head.type !== 'schablone') for (const z of rowsZ) this.headGroup.add(this._box(head.extent.x * 2, 0.012, 0.014, alu, 0, 0.036, z));
-    if (head.type !== 'schablone') for (const x of colsX) this.headGroup.add(this._box(0.014, 0.012, head.extent.z * 2, alu, x, 0.048, 0));
-    if (head.type !== 'schablone') this.headGroup.add(this._box(0.09, 0.02, 0.09, dark, 0, 0.062, 0));
+    const flatTool = head.type === 'schablone' || head.type === 'traeger';
+    if (head.type === 'traeger') this.headGroup.add(this._box(0.04, 0.03, 0.04, alu, 0, 0.015, 0), this._box(0.09, 0.02, 0.09, dark, 0, 0.04, 0));
+    if (!flatTool) for (const z of rowsZ) this.headGroup.add(this._box(head.extent.x * 2, 0.012, 0.014, alu, 0, 0.036, z));
+    if (!flatTool) for (const x of colsX) this.headGroup.add(this._box(0.014, 0.012, head.extent.z * 2, alu, x, 0.048, 0));
+    if (!flatTool) this.headGroup.add(this._box(0.09, 0.02, 0.09, dark, 0, 0.062, 0));
     this.elementMeshes = [];
     const accent = new THREE.Color(0x0b8f88);
-    for (const el of head.type === 'schablone' ? [] : head.elements) {
+    for (const el of flatTool ? [] : head.elements) {
       const g = new THREE.Group();
       let body, face;
       const r = el.half;
@@ -305,6 +347,22 @@ export class SceneView {
     this.zAxis.scale.y = Math.max(0.01, zTop - zBot);
     this.headGroup.position.set(rp.x, rp.y, rp.z);
     this.headGroup.rotation.y = rp.yaw;
+    if (this.carrier) {
+      // Träger folgt dem Kopf, solange angekoppelt; sonst bleibt er liegen
+      const m = head.elements[0].att.length ? head.partMap?.() : null;
+      if (m) {
+        const [rx, rz] = [m.tx * Math.cos(rp.yaw) + m.tz * Math.sin(rp.yaw), -m.tx * Math.sin(rp.yaw) + m.tz * Math.cos(rp.yaw)];
+        this.carrier.position.set(rp.x + rx, rp.y - 0.0006, rp.z + rz);
+        this.carrier.rotation.y = rp.yaw + m.theta;
+      }
+    }
+    if (this.feederMesh) {
+      const F = world.feeder, on = F.on && F.frame;
+      this.feederMesh.visible = !!on;
+      if (on) { this.feederMesh.position.set(F.frame.tx, TABLE_TOP + 0.004, F.frame.tz); this.feederMesh.rotation.y = F.frame.theta; }
+      const active = (world.machine.edge?.on || F.on) && !world.machine.footUp;
+      this.separator.visible = active; this.sensor.visible = active;
+    }
     if (this.templateMesh) {
       const m = head.partMap?.();
       if (m) { this.templateMesh.position.set(m.tx, 0.0004, m.tz); this.templateMesh.rotation.y = m.theta; }

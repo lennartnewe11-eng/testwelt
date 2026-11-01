@@ -26,6 +26,8 @@ while (w.t < until && (w.robot.running || w.machine.busy || w.t < 1)) {
 }
 const ms = performance.now() - t0;
 const dev = w.machine.deviations || [];
+const ds = (w.machine.devSleeve || []).filter(Number.isFinite);
+if (ds.length) console.log(`Ärmelnaht: Mittel ${(ds.reduce((a, b) => a + b, 0) / ds.length * 1000).toFixed(2)} mm, max ${(Math.max(...ds) * 1000).toFixed(2)} mm, ${ds.length}/${(w.machine.devSleeve || []).length} Stiche im Ärmel`);
 if (dev.length) console.log(`Nahtabweichung: Mittel ${(dev.reduce((a, b) => a + b, 0) / dev.length * 1000).toFixed(2)} mm, max ${(Math.max(...dev) * 1000).toFixed(2)} mm über ${dev.length} Stiche`);
 console.log(`\nSimzeit ${w.t.toFixed(2)} s in ${(ms / 1000).toFixed(1)} s Rechenzeit (${(ms / frames).toFixed(1)} ms/Bild), Stiche ${w.machine.stitchPoints.length}`);
 for (const r of w.plyReport()) {

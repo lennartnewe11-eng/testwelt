@@ -304,6 +304,8 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
               <tr><td class="mono">WAITSEW</td><td>auf Nahtende warten</td></tr>
               <tr><td class="mono">ALIGNPATH bahn [y] [vorlauf]</td><td>Nahtanfang vor die Nadel, Nahtrichtung = Transportrichtung</td></tr>
               <tr><td class="mono">SEWPATH bahn [rpm] [mm]</td><td>Kurvennaht: Roboter dreht das Teil um die Nadel</td></tr>
+              <tr><td class="mono">SLEEVEFEED ON|OFF</td><td>Ärmelzuführung (Vakuumplatte, Dreh-Schiebeeinheit)</td></tr>
+              <tr><td class="mono">EDGEGUIDE ON|OFF</td><td>Kantenführer mit Sensor und Führungsrolle</td></tr>
               <tr><td class="mono">HOME</td><td>Grundstellung</td></tr>
             </table>
           </details>
@@ -355,6 +357,8 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
           <div class="kpi"><div class="lbl">Stiche</div><div class="val" id="kStitch">0</div><div class="sub" id="kStitchSub">Naht –</div></div>
           <div class="kpi"><div class="lbl">Nahtabweichung</div><div class="val" id="kDev">–</div><div class="sub" id="kDevSub">Einstich ↔ Sollbahn</div></div>
           <div class="kpi"><div class="lbl">Greiferkopf</div><div class="val" id="kPose">–</div><div class="sub" id="kPoseSub">Drehung C-Achse</div></div>
+          <div class="kpi" id="kSleeveBox" hidden><div class="lbl">Ärmelnaht</div><div class="val" id="kSleeve">–</div><div class="sub" id="kSleeveSub">Einstich ↔ Kugelnaht</div></div>
+          <div class="kpi" id="kEaseBox" hidden><div class="lbl">Mehrweite</div><div class="val" id="kEase">–</div><div class="sub" id="kEaseSub">eingehalten / Soll</div></div>
         </div>
       </section>
       <section class="block">

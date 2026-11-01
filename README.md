@@ -16,6 +16,7 @@ npm start            # statischer Server ohne Abhängigkeiten → http://localho
 npm test             # Validierung des Physikmodells gegen analytische Lösungen
 npm run scenario     # Beispielprogramm ohne Grafik durchrechnen (Protokoll im Terminal)
 npm run scenario -- scenario=tshirt   # T-Shirt-Kurvennaht mit Nahtabweichung
+npm run scenario -- scenario=aermel   # Ärmel einsetzen
 npm run build        # dist/naehzelle.html: eine eigenständige Datei zum Weitergeben
 ```
 
@@ -27,6 +28,7 @@ Benötigt Node.js ≥ 18 und einen aktuellen Browser mit WebGL. Three.js wird vo
 |---|---|
 | Rechteckzuschnitte, gerade Naht | Popeline-Stapel, Vakuumgreifer, zwei Lagen vereinzeln, mit Saugtisch ablegen, robotergeführt gerade nähen |
 | T-Shirt, Kurvennaht | Vorder- und Rückenteil eines Kinder-T-Shirts (Jersey) in einer Nähschablone; der Roboter näht die linke Seitennaht mit Achselrundung und Ärmelunternaht in einem Zug und dreht das Teil dabei um die Nadel |
+| T-Shirt, Ärmel einsetzen | Separater Ärmel wird flach in das Armloch genäht: Roboter führt den Körper auf einem Werkstückträger, eine Ärmelzuführung führt den Ärmel gegenläufig mit 2,9 % Mehrweite, Obertransport, Trennblech und Kantensensor ([docs/aermel-einsetzen.md](docs/aermel-einsetzen.md)) |
 
 Wie man darauf aufbauend ein komplettes T-Shirt automatisiert, beschreibt
 [docs/t-shirt-automatisierung.md](docs/t-shirt-automatisierung.md).
@@ -85,6 +87,13 @@ nach innen versetzt. Der Roboter misst die Lage des Teils im Greifer ein (2D-Pro
 Bindungspunkte) und dreht es laufend um die Nadel, sodass die Nahttangente in Transportrichtung
 zeigt. Gemessen wird die Abweichung jedes Einstichs von der Sollbahn.
 
+**Ärmel einsetzen** (`src/physics/feeder.js`, `sewing.js`): Werkstückträger mit Nadelleisten,
+Ärmelzuführung mit segmentierter Vakuumplatte, Obertransport mit Mehrweitenprofil, Trennblech,
+Kantensensor mit Krümmungsvorsteuerung.
+
+**Drucksteifigkeit**: Fadenabschnitte unter Druck sind 20-mal weicher als auf Zug; Textilien
+beulen unter Druck aus. Erst dadurch kann sich Stoff in der Ebene biegen.
+
 **Weitere Effekte**: Luftpolster beim Ablegen (Quetschströmung nach Reynolds, parallel zur
 Durchströmung des Stoffs), Lageregelung der Portalachsen mit K_v und Geschwindigkeitsvorsteuerung
 (Schleppfehler), Kollisionsüberwachung Greiferkopf ↔ Nähmaschine.
@@ -122,6 +131,8 @@ SEW L [rpm] [mm] [SYNC]  Naht der Länge L starten; SYNC koppelt den Greifer an 
 WAITSEW                  auf das Nahtende warten
 ALIGNPATH bahn [y] [v]   Teil so legen, dass der Nahtanfang v Meter vor der Nadel liegt
 SEWPATH bahn [rpm] [mm]  Kurvennaht entlang der Bahn, Roboter dreht das Teil um die Nadel
+SLEEVEFEED ON|OFF        Ärmelzuführung für die obere Lage (Vakuumplatte, Dreh-Schiebeeinheit)
+EDGEGUIDE ON|OFF         Kantenführer (Sensor + Führungsrolle, PI-Regler) für die obere Lage
 HOME                     Grundstellung
 ```
 
@@ -147,8 +158,8 @@ typische Literaturwerte; für belastbare Aussagen eigene KES-/FAST-Messungen ein
 index.html                 Oberfläche
 src/physics/               Simulation (ohne Abhängigkeiten, läuft auch in Node)
   constants.js materials.js cloth.js collision.js colliders.js
-  grippers.js sewing.js robot.js garments.js world.js validation.js
-docs/                      Konzept T-Shirt-Automatisierung
+  grippers.js sewing.js robot.js garments.js feeder.js world.js validation.js
+docs/                      Konzept T-Shirt-Automatisierung, Ärmel einsetzen
 src/render/                Three.js-Darstellung
 src/ui/                    Bedienung, Diagramm, Modellbeschreibung
 tests/                     Validierung und Szenario-Lauf

@@ -12,7 +12,7 @@ const out = resolve(root, args.find((a) => !a.startsWith('--')) || 'dist/naehzel
 
 const ORDER = [
   'src/physics/constants.js', 'src/physics/materials.js', 'src/physics/cloth.js', 'src/physics/colliders.js',
-  'src/physics/collision.js', 'src/physics/grippers.js', 'src/physics/sewing.js', 'src/physics/robot.js', 'src/physics/garments.js',
+  'src/physics/collision.js', 'src/physics/grippers.js', 'src/physics/sewing.js', 'src/physics/robot.js', 'src/physics/garments.js', 'src/physics/feeder.js',
   'src/physics/world.js', 'src/physics/validation.js', 'src/render/textures.js', 'src/render/scene.js',
   'src/ui/chart.js', 'src/ui/modelinfo.js', 'src/ui/app.js',
 ];
