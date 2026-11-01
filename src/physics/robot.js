@@ -14,9 +14,16 @@
 //   SEW L [rpm] [mm] [SYNC]  Naht starten (läuft parallel weiter); SYNC koppelt den
 //                      Greifer an die Transporteurbewegung (synchrones Mitführen)
 //   WAITSEW            warten, bis die Naht fertig ist
+//   ALIGNPATH name [y] [vorlauf]  Teil so positionieren, dass der Nahtanfang [vorlauf m]
+//                      vor der Nadel liegt und die Nahtrichtung in Transportrichtung zeigt
+//   SEWPATH name [rpm] [mm]  Naht entlang der Bahn; der Roboter führt und dreht das Teil
+//                      um die Nadel, sodass die Nahttangente stets in Transportrichtung liegt
 //   HOME               Grundstellung
 
 export const ROT_WEIGHT = 0.2; // m je rad für die Bahnlänge
+
+// Drehung um y in der Konvention der Simulation (wie rotY in cloth.js)
+function rot(x, z, yaw) { const c = Math.cos(yaw), s = Math.sin(yaw); return [x * c + z * s, -x * s + z * c]; }
 
 export function parseProgram(text) {
   const lines = text.split(/\r?\n/);
@@ -32,7 +39,7 @@ export function parseProgram(text) {
   return out;
 }
 
-const KNOWN = new Set(['SPEED', 'ACCEL', 'MOVE', 'MOVEREL', 'TOUCH', 'GRIP', 'WAIT', 'FOOT', 'SEW', 'WAITSEW', 'HOME', 'TABLEVAC']);
+const KNOWN = new Set(['SPEED', 'ACCEL', 'MOVE', 'MOVEREL', 'TOUCH', 'GRIP', 'WAIT', 'FOOT', 'SEW', 'WAITSEW', 'HOME', 'TABLEVAC', 'ALIGNPATH', 'SEWPATH']);
 
 export function validateProgram(prog) {
   const errs = [];
@@ -49,7 +56,7 @@ export class GantryRobot {
     this.home = { ...home };
     this.pose = { ...home };
     this.vmax = 0.5; this.amax = 2.0;
-    this.limits = limits || { x: [-0.95, 1.05], y: [0.78, 1.5], z: [-0.4, 0.45] };
+    this.limits = limits || { x: [-0.95, 1.05], y: [0.78, 1.5], z: [-0.42, 0.52] };
     this.reset();
   }
 
@@ -64,6 +71,7 @@ export class GantryRobot {
     this.current = null;
     this.speed = 0;
     this.follow = false;
+    this.pathFollow = null;
   }
 
   load(text) {
@@ -108,7 +116,36 @@ export class GantryRobot {
   }
 
   // ctx: { head, machine, contact(): bool, log(msg) }
+  // Lage des Roboters, bei der der Bahnpunkt s unter der Nadel liegt (plus Vorlauf in +z)
+  posePath(f, s, ctx, lead = 0) {
+    const { p, t } = ctx.pathAt(f.path, s);
+    const M = f.map;
+    const [qx0, qz0] = rot(p[0], p[1], M.theta);
+    const qx = qx0 + M.tx, qz = qz0 + M.tz;
+    const [tx, tz] = rot(t[0], t[1], M.theta);
+    // Tangente (Richtung noch nicht genähter Naht) muss in Weltkoordinaten nach +z zeigen
+    let yaw = -Math.atan2(tx, tz);
+    const ref = f.yaw ?? this.pose.yaw;
+    while (yaw - ref > Math.PI) yaw -= 2 * Math.PI;
+    while (yaw - ref < -Math.PI) yaw += 2 * Math.PI;
+    const [wx, wz] = rot(qx, qz, yaw);
+    const N = ctx.machine.needle;
+    return { x: N[0] - wx, y: this.pose.y, z: N[2] + lead - wz, yaw };
+  }
+
   update(t, dt, ctx) {
+    // Bahnführung beim Nähen (Kurvennaht)
+    if (this.pathFollow) {
+      const f = this.pathFollow;
+      if (ctx.machine.sewing) {
+        f.s = Math.min(f.path.length, f.s + ctx.machine.feedVelocity() * dt);
+        const np = this.posePath(f, f.s, ctx);
+        np.y = this.pose.y;
+        f.yaw = np.yaw;
+        this.speed = Math.hypot(np.x - this.pose.x, np.z - this.pose.z) / dt;
+        this.pose = this._clamp(np);
+      } else this.pathFollow = null;
+    }
     // synchrones Mitführen mit dem Transporteur
     if (this.follow) {
       if (ctx.machine.sewing) {
@@ -133,7 +170,7 @@ export class GantryRobot {
     }
     if (!this.running) return;
     if (t < this.waitUntil) return;
-    if (this.current && this.current.cmd === 'WAITSEW' && ctx.machine.busy) return;
+    if (this.current && (this.current.cmd === 'WAITSEW' || this.current.cmd === 'SEWPATH') && ctx.machine.busy) return;
     // nächste Anweisung
     while (this.running && !this.seg && t >= this.waitUntil) {
       if (this.pc >= this.prog.length) { this.running = false; this.current = null; ctx.log?.('Programm beendet'); return; }
@@ -166,6 +203,24 @@ export class GantryRobot {
           ctx.log?.(`Nähen ${((n[0] || 0.1) * 100).toFixed(1)} cm`);
           break;
         case 'WAITSEW': if (ctx.machine.busy) return; break;
+        case 'ALIGNPATH': {
+          const path = ctx.paths?.[ins.args[0]];
+          const map = path && ctx.partMap();
+          if (!path || !map) { ctx.log?.(`ALIGNPATH: ${!path ? 'Bahn „' + ins.args[0] + '“ unbekannt' : 'kein Teil gegriffen'}`, 'error'); break; }
+          const tgt = this.posePath({ path, map }, 0, ctx, Number.isFinite(n[2]) ? n[2] : 0.04);
+          tgt.y = Number.isFinite(n[1]) ? n[1] : this.pose.y;
+          this.moveTo(tgt, t);
+          break;
+        }
+        case 'SEWPATH': {
+          const path = ctx.paths?.[ins.args[0]];
+          const map = path && ctx.partMap();
+          if (!path || !map) { ctx.log?.(`SEWPATH: ${!path ? 'Bahn „' + ins.args[0] + '“ unbekannt' : 'kein Teil gegriffen'}`, 'error'); break; }
+          ctx.machine.startSew(path.length, Number.isFinite(n[1]) ? n[1] : undefined, Number.isFinite(n[2]) ? n[2] : undefined, path, map.cloth);
+          this.pathFollow = { path, map, s: 0, yaw: this.pose.yaw };
+          ctx.log?.(`Kurvennaht „${ins.args[0]}“, ${(path.length * 100).toFixed(1)} cm`);
+          return; // wartet wie WAITSEW
+        }
         default: break;
       }
     }

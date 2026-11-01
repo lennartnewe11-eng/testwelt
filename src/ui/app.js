@@ -1,5 +1,5 @@
 // Bedienoberfläche: verbindet Simulation, 3D-Ansicht und Messwerte.
-import { World, defaultConfig, DEFAULT_PROGRAM } from '../physics/world.js';
+import { World, defaultConfig, DEFAULT_PROGRAM, TSHIRT_PROGRAM, SCENARIOS, applyScenario } from '../physics/world.js';
 import { FABRICS, FABRIC_FIELDS, SOLIDS, fabricById, toSI, bendingLength } from '../physics/materials.js';
 import { GRIPPER_TYPES, defaultParams, capacityModel } from '../physics/grippers.js';
 import { validateProgram, parseProgram } from '../physics/robot.js';
@@ -12,6 +12,8 @@ import { MODEL_INFO } from './modelinfo.js';
 const $ = (id) => document.getElementById(id);
 const fmt = (x, d = 2) => (Number.isFinite(x) ? x.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d }) : '–');
 const QUALITY = { fast: { spacing: 0.02, substeps: 10 }, std: { spacing: 0.0125, substeps: 16 }, fine: { spacing: 0.01, substeps: 24 } };
+// große Teile (T-Shirt): gröberes Netz bei gleicher Stufe, damit die Rechenzeit vergleichbar bleibt
+const QUALITY_LARGE = { fast: { spacing: 0.022, substeps: 10 }, std: { spacing: 0.015, substeps: 14 }, fine: { spacing: 0.011, substeps: 20 } };
 
 const cfg = defaultConfig();
 cfg.quality = 'std';
@@ -24,24 +26,46 @@ const csvRows = [];
 // ---------------------------------------------------------------- Aufbau ----
 function currentFabric() { return cfg.customFabric || fabricById(cfg.fabricId); }
 
+let rebuildTimer = 0;
+// Aufbau geändert: Welt neu aufbauen und das Programm wieder starten
+function setupChanged() {
+  clearTimeout(rebuildTimer);
+  rebuildTimer = setTimeout(() => { rebuild(); startProgram(); }, 350);
+}
+
 function buildSetupUI() {
+  const sc = $('scenario');
+  sc.innerHTML = Object.entries(SCENARIOS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
+  sc.value = cfg.scenario;
+  $('scenarioNote').textContent = cfg.scenario === 'tshirt'
+    ? 'Vorder- und Rückenteil eines Kinder-T-Shirts (Kimonoschnitt). Eine Nähschablone klemmt beide Teile, der Roboter führt die Seitennaht mit Achselrundung und Ärmelunternaht in einem Zug.'
+    : 'Stapel rechteckiger Zuschnitte: vereinzeln, ablegen, zwei Lagen gerade zusammennähen.';
+  sc.onchange = () => {
+    applyScenario(cfg, sc.value);
+    cfg.customFabric = null;
+    $('program').value = cfg.program; renderGutter();
+    buildSetupUI();
+    setupChanged();
+  };
   const sel = $('fabric');
   sel.innerHTML = FABRICS.map((f) => `<option value="${f.id}">${f.name}</option>`).join('');
   sel.value = cfg.fabricId;
-  sel.onchange = () => { cfg.fabricId = sel.value; cfg.customFabric = null; renderMaterial(); renderPredict(); };
+  sel.onchange = () => { cfg.fabricId = sel.value; cfg.customFabric = null; renderMaterial(); renderPredict(); setupChanged(); };
   $('tableMat').innerHTML = ['hpl', 'stahl', 'ptfe', 'buche', 'gummi'].map((k) => `<option value="${k}">${SOLIDS[k].name}</option>`).join('');
   $('tableMat').value = cfg.tableMaterial;
   const g = $('gripper');
   g.innerHTML = Object.entries(GRIPPER_TYPES).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
   g.value = cfg.gripper;
-  g.onchange = () => { cfg.gripper = g.value; cfg.gripperParams = defaultParams(g.value); renderGripper(); renderPredict(); };
-  for (const [id, key, scale] of [['plies', 'plies', 1], ['plyW', 'plyW', 100], ['plyL', 'plyL', 100], ['rows', 'rows', 1], ['cols', 'cols', 1], ['rpm', 'rpm', 1], ['stitch', 'stitch', 1], ['footForce', 'footForce', 1]]) {
+  g.onchange = () => { cfg.gripper = g.value; cfg.gripperParams = defaultParams(g.value); renderGripper(); renderPredict(); setupChanged(); };
+  for (const [id, key, scale] of [['plies', 'plies', 1], ['plyW', 'plyW', 100], ['plyL', 'plyL', 100], ['rows', 'rows', 1], ['cols', 'cols', 1], ['rpm', 'rpm', 1], ['stitch', 'stitch', 1], ['footForce', 'footForce', 1], ['threadTension', 'threadTension', 1], ['servoKv', 'servoKv', 1], ['servoFF', 'servoFF', 100]]) {
     $(id).value = +(cfg[key] * scale).toFixed(3);
-    $(id).onchange = () => { cfg[key] = +$(id).value / scale; renderPredict(); };
+    $(id).onchange = () => { cfg[key] = +$(id).value / scale; renderPredict(); setupChanged(); };
   }
   $('footMat').value = cfg.footMaterial;
   $('quality').value = cfg.quality;
   $('selfColl').checked = cfg.selfCollision;
+  $('airCushion').checked = cfg.airCushion !== false;
+  $('selfColl').onchange = $('airCushion').onchange = $('quality').onchange = $('tableMat').onchange = $('footMat').onchange = () => setupChanged();
   renderMaterial();
   renderGripper();
   renderPredict();
@@ -55,7 +79,7 @@ function renderMaterial() {
     inp.onchange = () => {
       const base = currentFabric();
       cfg.customFabric = { ...base, [inp.dataset.key]: +inp.value, name: base.name.replace(/ \(angepasst\)$/, '') + ' (angepasst)' };
-      renderDerived(); renderPredict();
+      renderDerived(); renderPredict(); setupChanged();
     };
   });
   renderDerived();
@@ -64,7 +88,7 @@ function renderMaterial() {
 function renderDerived() {
   const f = currentFabric(), m = toSI(f);
   const vt = Math.sqrt((2 * m.rho * G) / (AIR.density * 1.17));
-  const mass = m.rho * cfg.plyW * cfg.plyL * 1000;
+  const mass = m.rho * (cfg.scenario === 'tshirt' ? 0.155 : cfg.plyW * cfg.plyL) * 1000;
   $('derived').innerHTML = [
     ['Biegelänge Kette / Schuss', `${fmt(bendingLength(f, 'warp') * 100, 1)} / ${fmt(bendingLength(f, 'weft') * 100, 1)}`, 'cm'],
     ['Masse je Zuschnitt', fmt(mass, 1), 'g'],
@@ -83,8 +107,9 @@ function renderGripper() {
     <input type="number" id="gpn-${k}" min="${min}" max="${max}" step="${step}" value="${cfg.gripperParams[k]}" aria-label="${label}"></div>`).join('');
   for (const [k] of def.params) {
     const set = (v) => { cfg.gripperParams[k] = +v; $(`gp-${k}`).value = v; $(`gpn-${k}`).value = v; $(`gpv-${k}`).textContent = v; renderPredict(); };
+    $(`gp-${k}`).onchange = () => setupChanged();
     $(`gp-${k}`).oninput = (e) => set(e.target.value);
-    $(`gpn-${k}`).onchange = (e) => set(e.target.value);
+    $(`gpn-${k}`).onchange = (e) => { set(e.target.value); setupChanged(); };
   }
 }
 
@@ -99,7 +124,10 @@ function renderPredict() {
   const cling = (m.cohesion * cfg.plyW * cfg.plyL) / nEl;            // Lagenhaftung je Element
   const need = weight + cling;
   let chip;
-  if (caps[0].Cn < 1.5 * need) chip = '<span class="chip crit">Haltekraft zu gering</span>';
+  const want = cfg.pickPlies || 1;
+  if (cfg.gripper === 'schablone') chip = '<span class="chip accent">flächige Klemmung</span>';
+  else if (caps[0].Cn < 1.5 * need) chip = '<span class="chip crit">Haltekraft zu gering</span>';
+  else if (want >= 2 && caps[1].Cn > need && caps[2].Cn < need) chip = '<span class="chip good">zwei Lagen wie gewollt</span>';
   else if (caps[1].Cn > need) chip = '<span class="chip warn">Doppelgriff-Risiko</span>';
   else chip = '<span class="chip good">Einzelgriff erwartet</span>';
   $('predict').innerHTML = `<div class="head"><strong>Statische Abschätzung je Element</strong>${chip}</div>
@@ -114,8 +142,9 @@ function readSetup() {
   cfg.tableMaterial = $('tableMat').value;
   cfg.footMaterial = $('footMat').value;
   cfg.quality = $('quality').value;
-  Object.assign(cfg, QUALITY[cfg.quality]);
+  Object.assign(cfg, (cfg.scenario === 'tshirt' ? QUALITY_LARGE : QUALITY)[cfg.quality]);
   cfg.selfCollision = $('selfColl').checked;
+  cfg.airCushion = $('airCushion').checked;
   cfg.program = $('program').value;
 }
 
@@ -198,7 +227,8 @@ function renderUi(force = false) {
     $(`elf-${s.index}`).textContent = top ? `${fmt(top.Fn, 3)} / ${fmt(top.Cn, 3)} N` : (w.head.type === 'vakuum' && s.on ? `${fmt(s.chamber / 1000, 1)} kPa` : '–');
   }
   $('kHeld').textContent = heldIds.size;
-  $('kHeldSub').innerHTML = heldIds.size > 1 ? '<span class="chip crit">Doppelgriff</span>' : heldIds.size === 1 ? '<span class="chip good">Einzelgriff</span>' : 'keine';
+  const want = w.cfg.pickPlies || 1;
+  $('kHeldSub').innerHTML = heldIds.size > want ? '<span class="chip crit">Doppelgriff</span>' : heldIds.size === want ? `<span class="chip good">${want > 1 ? want + ' Lagen, gewollt' : 'Einzelgriff'}</span>` : heldIds.size ? `<span class="chip warn">${heldIds.size} von ${want}</span>` : 'keine';
   $('kUtil').textContent = heldIds.size ? `${fmt(maxU * 100, 0)} %` : '–';
 
   // Lagen
@@ -219,6 +249,16 @@ function renderUi(force = false) {
   $('kStitch').textContent = w.machine.stitchPoints.length;
   $('kStitchSub').textContent = w.machine.busy ? `läuft, ${w.machine.stitches}/${w.machine.sewTarget}` : w.machine.stitchPoints.length ? `${fmt((w.machine.stitchPoints.length * w.machine.stitchLength) / 10, 1)} cm genäht` : 'Naht –';
 
+  const dev = w.machine.deviations || [];
+  if (dev.length) {
+    const mean = dev.reduce((a, b) => a + b, 0) / dev.length, mx = Math.max(...dev);
+    $('kDev').textContent = `${fmt(mean * 1000, 1)} mm`;
+    $('kDevSub').innerHTML = `max. ${fmt(mx * 1000, 1)} mm ` + (mx < 0.003 ? '<span class="chip good">i. O.</span>' : mx < 0.006 ? '<span class="chip warn">grenzwertig</span>' : '<span class="chip crit">n. i. O.</span>');
+  } else { $('kDev').textContent = '–'; $('kDevSub').textContent = w.machine.activePath ? 'erste Stiche …' : 'nur bei Bahnnaht (SEWPATH)'; }
+  const rp = w.robot.pose;
+  $('kPose').textContent = `${fmt(((rp.yaw * 180) / Math.PI), 0)}°`;
+  $('kPoseSub').textContent = `x ${fmt(rp.x, 3)} · z ${fmt(rp.z, 3)} m`;
+
   // Ereignisse
   if (w.events.length < lastLog) lastLog = 0;
   const log = $('log');
@@ -235,13 +275,14 @@ function renderUi(force = false) {
 
 function sample() {
   const w = world;
-  // Summen über alle Elemente für die oberste gehaltene Lage
-  let Fn = 0, Cn = 0;
+  // Summen über alle Elemente für die oberste gehaltene Lage; Auslastung = max. je Element
+  let Fn = 0, Cn = 0, util = 0;
   for (const s of w.head.status()) {
     const top = s.plies.find((p) => p.held > 0);
     if (top) { Fn += top.Fn; Cn += top.Cn; }
+    for (const p of s.plies) if (p.held > 0 && p.Cn > 0) util = Math.max(util, Math.hypot(p.Fn / p.Cn, p.Ft / Math.max(p.Ct, 1e-9)));
   }
-  chart.push(w.t, Fn, Cn);
+  chart.push(w.t, util * 100, 100);
   if (csvRows.length < 200000) {
     const rp = w.robot.pose;
     const plies = w.plyReport().map((p) => `${p.state};${p.pose.x.toFixed(5)};${p.pose.z.toFixed(5)};${(p.pose.theta * 180 / Math.PI).toFixed(3)};${(p.strain * 100).toFixed(4)}`).join(';');
@@ -330,8 +371,8 @@ function init() {
   $('btnStop').onclick = () => world.robot.stop();
   $('btnPause').onclick = () => { running = !running; $('btnPause').textContent = running ? 'Pause' : 'Weiter'; };
   $('btnReset').onclick = rebuild;
-  $('btnApply').onclick = rebuild;
-  $('btnDefault').onclick = () => { $('program').value = DEFAULT_PROGRAM; renderGutter(); };
+  $('btnApply').onclick = () => { rebuild(); startProgram(); };
+  $('btnDefault').onclick = () => { $('program').value = cfg.scenario === 'tshirt' ? TSHIRT_PROGRAM : DEFAULT_PROGRAM; renderGutter(); };
   $('timeScale').onchange = (e) => { timeScale = +e.target.value; };
   $('btnValidate').onclick = showValidation;
   $('dlgClose').onclick = () => $('dlg').close();

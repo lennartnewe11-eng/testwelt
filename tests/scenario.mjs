@@ -1,8 +1,9 @@
 // Führt das Standardprogramm headless aus und protokolliert Ereignisse.
-import { World, defaultConfig } from '../src/physics/world.js';
+import { World, defaultConfig, applyScenario } from '../src/physics/world.js';
 
 const cfg = defaultConfig();
 const args = Object.fromEntries(process.argv.slice(2).map((a) => a.split('=')));
+if (args.scenario) applyScenario(cfg, args.scenario);
 if (args.fabric) cfg.fabricId = args.fabric;
 if (args.gripper) cfg.gripper = args.gripper, cfg.gripperParams = {};
 if (args.plies) cfg.plies = +args.plies;
@@ -24,6 +25,8 @@ while (w.t < until && (w.robot.running || w.machine.busy || w.t < 1)) {
   }
 }
 const ms = performance.now() - t0;
+const dev = w.machine.deviations || [];
+if (dev.length) console.log(`Nahtabweichung: Mittel ${(dev.reduce((a, b) => a + b, 0) / dev.length * 1000).toFixed(2)} mm, max ${(Math.max(...dev) * 1000).toFixed(2)} mm über ${dev.length} Stiche`);
 console.log(`\nSimzeit ${w.t.toFixed(2)} s in ${(ms / 1000).toFixed(1)} s Rechenzeit (${(ms / frames).toFixed(1)} ms/Bild), Stiche ${w.machine.stitchPoints.length}`);
 for (const r of w.plyReport()) {
   const e = r.error;

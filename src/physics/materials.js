@@ -34,7 +34,7 @@ export const FABRICS = [
   },
   {
     id: 'denim', name: 'Denim 12 oz', composition: '98 % CO / 2 % EL', construction: 'Köper 3/1',
-    pattern: 'twill', color: '#3d5a80',
+    pattern: 'twill', color: '#4d6fa0',
     mass: 400, thickness: 0.75, tensWarp: 14000, tensWeft: 7000, shear: 2.6,
     bendWarp: 1.2, bendWeft: 0.6, muSteelS: 0.31, muSteelK: 0.25, muSelfS: 0.56, muSelfK: 0.46,
     airPerm: 25, epsR: 2.1, needleHold: 0.25, cohesion: 1.0, wetting: 0.8, breakStrain: 18,
@@ -62,7 +62,7 @@ export const FABRICS = [
   },
   {
     id: 'wolle', name: 'Wollanzugstoff', composition: '100 % WO', construction: 'Köper 2/2',
-    pattern: 'twill', color: '#5c5f66',
+    pattern: 'twill', color: '#8a8f99',
     mass: 250, thickness: 0.45, tensWarp: 4500, tensWeft: 3500, shear: 0.6,
     bendWarp: 0.12, bendWeft: 0.10, muSteelS: 0.28, muSteelK: 0.23, muSelfS: 0.55, muSelfK: 0.46,
     airPerm: 150, epsR: 2.2, needleHold: 0.12, cohesion: 3.0, wetting: 0.5, breakStrain: 30,
@@ -103,7 +103,7 @@ export const FABRICS = [
 export const SOLIDS = {
   stahl:    { name: 'Stahl, poliert',         density: 7850, E: 210e9, poisson: 0.30, frictionFactor: 1.0, color: '#b8bec6' },
   alu:      { name: 'Aluminium, eloxiert',    density: 2700, E: 70e9,  poisson: 0.33, frictionFactor: 1.05, color: '#a9b1ba' },
-  hpl:      { name: 'HPL-Schichtstoff',       density: 1400, E: 10e9,  poisson: 0.30, frictionFactor: 1.15, color: '#d9d4c7' },
+  hpl:      { name: 'HPL-Schichtstoff',       density: 1400, E: 10e9,  poisson: 0.30, frictionFactor: 1.15, color: '#474d4b' },
   ptfe:     { name: 'PTFE-beschichtet',       density: 2200, E: 0.5e9, poisson: 0.46, frictionFactor: 0.45, color: '#ece9e2' },
   gummi:    { name: 'Gummi (NBR)',            density: 1300, E: 5e6,   poisson: 0.49, frictionFactor: 2.2, color: '#222326' },
   buche:    { name: 'Buche, lackiert',        density: 720,  E: 14e9,  poisson: 0.35, frictionFactor: 1.25, color: '#c49a6c' },

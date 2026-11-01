@@ -12,18 +12,19 @@ const out = resolve(root, args.find((a) => !a.startsWith('--')) || 'dist/naehzel
 
 const ORDER = [
   'src/physics/constants.js', 'src/physics/materials.js', 'src/physics/cloth.js', 'src/physics/colliders.js',
-  'src/physics/collision.js', 'src/physics/grippers.js', 'src/physics/sewing.js', 'src/physics/robot.js',
+  'src/physics/collision.js', 'src/physics/grippers.js', 'src/physics/sewing.js', 'src/physics/robot.js', 'src/physics/garments.js',
   'src/physics/world.js', 'src/physics/validation.js', 'src/render/textures.js', 'src/render/scene.js',
   'src/ui/chart.js', 'src/ui/modelinfo.js', 'src/ui/app.js',
 ];
 const key = (p) => '__M_' + p.replace(/^src\//, '').replace(/\.js$/, '').replace(/[^a-zA-Z0-9]/g, '_');
 
-let bundle = "import * as THREE from 'three';\nimport { OrbitControls } from 'three/addons/controls/OrbitControls.js';\n";
+let bundle = "import * as THREE from 'three';\n";
+const hoisted = new Set();
 for (const file of ORDER) {
   let code = await readFile(join(root, file), 'utf8');
   const exports = [];
   code = code.replace(/^import\s+\*\s+as\s+THREE\s+from\s+'three';\s*$/m, '');
-  code = code.replace(/^import\s+\{[^}]*\}\s+from\s+'three\/addons\/[^']+';\s*$/m, '');
+  code = code.replace(/^import\s+\{[^}]*\}\s+from\s+'three\/addons\/[^']+';\s*$/gm, (line) => { hoisted.add(line.trim()); return ''; });
   code = code.replace(/^import\s+\{([^}]*)\}\s+from\s+'([^']+)';\s*$/gm, (_, names, from) => {
     const target = join(dirname(file), from).replace(/\\/g, '/');
     if (!ORDER.includes(target)) throw new Error(`Unbekannter Import ${from} in ${file}`);
@@ -36,6 +37,7 @@ for (const file of ORDER) {
   bundle += `\n// ---- ${file} ----\nconst ${key(file)} = (() => {\n${code}\nreturn { ${exports.join(', ')} };\n})();\n`;
 }
 
+bundle = [...hoisted].join('\n') + '\n' + bundle;
 const html = await readFile(join(root, 'index.html'), 'utf8');
 const head = html.match(/<head>([\s\S]*?)<\/head>/)[1]
   .replace(/<meta charset[^>]*>\s*/, '')

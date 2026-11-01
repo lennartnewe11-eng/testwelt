@@ -46,6 +46,17 @@ export const GRIPPER_TYPES = {
     tauOn: 0.25, tauOff: 0.9, gap: 2e-3, shape: 'square',
     note: 'Maxwell-Spannung p = ½·ε₀·εr·E², Streufeld fällt mit exp(−2π·z/Teilung) ab. Restladung verzögert das Ablegen.',
   },
+  schablone: {
+    name: 'Nähschablone (Klemmrahmen)',
+    short: 'Schablone',
+    params: [
+      ['pressure', 'Klemmdruck', 'kPa', 3, 0.5, 20, 0.5],
+      ['slot', 'Nahtschlitz (halbe Breite)', 'mm', 16, 8, 30, 1],
+      ['clampGap', 'Klemmspalt', 'mm', 2.5, 0.5, 10, 0.1],
+    ],
+    tauOn: 0.3, tauOff: 0.25, gap: 2e-3, shape: 'template',
+    note: 'Teilespezifische Schablone: klemmt alle Lagen flächig (Reibschluss μ·p·A) und lässt nur einen Schlitz entlang der Naht frei. Industriestandard für automatisches Konturnähen.',
+  },
   kryo: {
     name: 'Kryogreifer (Gefrieren)',
     short: 'Kryo',
@@ -65,12 +76,14 @@ export function defaultParams(type) {
 }
 
 function footprintArea(type, p) {
+  if (type === 'schablone') return 0.1;
   if (type === 'vakuum') return Math.PI * (p.diameter * 0.5e-3) ** 2;
   if (type === 'kryo') return Math.PI * (p.diameter * 0.5e-3) ** 2;
   return (p.size * 1e-3) ** 2;
 }
 
 export function footprintHalf(type, p) {
+  if (type === 'schablone') return 0.3;
   if (type === 'vakuum' || type === 'kryo') return p.diameter * 0.5e-3;
   return p.size * 0.5e-3;
 }
@@ -164,6 +177,19 @@ export function capacityModel(type, p, column, covered = 1) {
     return out;
   }
 
+  if (type === 'schablone') {
+    // Klemmung: Reibschluss oben (Stahl) bzw. zur Nachbarlage, alle Lagen im Klemmspalt
+    const P = p.pressure * 1e3, A = column.areas || column.map(() => 0.05);
+    for (let i = 0; i < column.length; i++) {
+      const { m, depthTop } = column[i];
+      const inGap = depthTop + m.t <= p.clampGap * 1e-3 + 1e-4;
+      const mu = i === 0 ? m.muSteelS : m.muSelfS;
+      out[i].Cn = inGap ? P * A[i] : 0;        // Klemmkraft (formschlüssig zwischen den Platten)
+      out[i].Ct = inGap ? mu * P * A[i] : 0;
+    }
+    return out;
+  }
+
   if (type === 'kryo') {
     let phi = 1;
     const sigma = p.sigma * 1e3;
@@ -192,6 +218,7 @@ export class GripperHead {
     this.compliance = 2e-5; // Nachgiebigkeit der Bindung Stoff–Greiferfläche [m/N]
     const half = footprintHalf(type, this.params);
     let n = 0;
+    if (type === 'schablone') { rows = 1; cols = 1; }
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
       const ox = (c - (cols - 1) / 2) * pitchX, oz = (r - (rows - 1) / 2) * pitchZ;
       const el = {
@@ -217,7 +244,58 @@ export class GripperHead {
     };
     this.plate = new BoxCollider({ name: 'Greiferplatte', center: [0, 0, 0], half: [this.extent.x, 0.008, this.extent.z], material: 'alu', kinematic: true, visual: false });
     this.colliders = [...this.elements.map((e) => e.collider), this.plate];
+    if (type === 'schablone') {
+      // Die Schablone liegt flach auf dem Stoff; Stoff außerhalb des Schlitzes ist geklemmt
+      for (const k of this.colliders) { k.enabled = false; k.half[1] = 0.002; }
+      this.extent = { x: 0.3, z: 0.25 };
+    }
     this.events = [];
+  }
+
+  // Schablonengeometrie: Kontur und Nahtbahn im Zuschnittkoordinatensystem
+  setTemplate(tpl) { this.template = tpl; }
+
+  // Nähschablone: alle Knoten außerhalb des Nahtschlitzes klemmen (einmal je Schließen)
+  _templateFrame(el, cloths, t) {
+    const tpl = this.template, P = this.params;
+    if (!tpl || !el.on || el.act < 0.5) return;
+    const [cx, fy, cz] = this.elementCenter(el);
+    const yaw = this.pose.yaw, cs = Math.cos(yaw), sn = Math.sin(yaw);
+    const groups = [];
+    for (const c of cloths) {
+      if (el.since.has(c.id)) continue;
+      const verts = [];
+      let dsum = 0;
+      for (let v = 0; v < c.n; v++) {
+        const depthTop = fy - (c.pos[3 * v + 1] + c.radius);
+        if (depthTop < -3e-3 || depthTop > P.clampGap * 1e-3) continue;
+        const dx = c.pos[3 * v] - cx, dz = c.pos[3 * v + 2] - cz;
+        if (Math.abs(dx) > 0.4 || Math.abs(dz) > 0.4) continue;
+        if (tpl.dist(c.rest[2 * v], c.rest[2 * v + 1]) < P.slot * 1e-3) continue;
+        verts.push(v); dsum += depthTop;
+      }
+      if (verts.length > 20) groups.push({ c, verts, depth: dsum / verts.length });
+    }
+    if (!groups.length) return;
+    groups.sort((a, b) => a.depth - b.depth);
+    const col = groups.map((g) => ({ m: g.c.m, depthTop: Math.max(0, g.depth) }));
+    col.areas = groups.map((g) => g.verts.reduce((a, v) => a + g.c.mass[v] / g.c.m.rho, 0));
+    const caps = capacityModel('schablone', P, col, 1);
+    let above = 0;
+    groups.forEach((g, k) => {
+      if (caps[k].Cn <= 0) return;
+      const ly = -(above + g.c.radius);
+      for (const v of g.verts) {
+        if (g.c.attached[v] >= 0) continue;
+        const dx = g.c.pos[3 * v] - cx, dz = g.c.pos[3 * v + 2] - cz;
+        g.c.attached[v] = el.index;
+        el.att.push({ cloth: g.c, v, lx: dx * cs - dz * sn, ly, lz: dx * sn + dz * cs });
+      }
+      el.since.set(g.c.id, t);
+      el.frozen.set(g.c.id, { cloth: g.c, ply: k, Cn: caps[k].Cn, Ct: caps[k].Ct });
+      above += 2 * g.c.radius;
+    });
+    el.column = groups.map((g, k) => ({ cloth: g.c, ply: k, depth: g.depth, Cn: caps[k].Cn * el.act, Ct: caps[k].Ct * el.act }));
   }
 
   elementCenter(el) {
@@ -264,6 +342,13 @@ export class GripperHead {
         el.column = []; el.cap.clear();
         continue;
       }
+      if (def.shape === 'template') {
+        this._templateFrame(el, cloths, t);
+        el.cap = new Map();
+        for (const [id, f] of el.frozen) el.cap.set(id, { ...f, Cn: f.Cn * el.act, Ct: f.Ct * el.act });
+        el.column = [...el.frozen.values()].map((f) => ({ cloth: f.cloth, ply: f.ply, Cn: f.Cn * el.act, Ct: f.Ct * el.act }));
+        continue;
+      }
       const [cx, fy, cz] = this.elementCenter(el);
       const half = el.half, round = def.shape === 'round';
       const maxDepth = 8e-3;
@@ -280,9 +365,7 @@ export class GripperHead {
           const lx = dx * cs - dz * sn, lz = dx * sn + dz * cs;
           const inside = round ? lx * lx + lz * lz <= half * half : Math.abs(lx) <= half && Math.abs(lz) <= half;
           if (inside) cand.push(v);
-          const i = v % c.nx, j = (v / c.nx) | 0;
-          for (let a = i - 1; a <= i; a++) for (let b = j - 1; b <= j; b++)
-            if (a >= 0 && b >= 0 && a < c.nx - 1 && b < c.nz - 1) cells.add(b * (c.nx - 1) + a);
+          for (let e = c.nodeTriStart[v]; e < c.nodeTriStart[v + 1]; e++) cells.add(c.nodeTriList[e]);
         }
         if (!cells.size) continue;
         let hits = 0, dsum = 0;
@@ -290,8 +373,8 @@ export class GripperHead {
         for (const [sx, sz] of samples) {
           for (const cell of cells) {
             let found = false;
-            for (let q = 0; q < 2; q++) {
-              const tIdx = 2 * cell + q;
+            for (let q = 0; q < 1; q++) {
+              const tIdx = cell;
               const r = triHit(c, tIdx, sx, sz);
               if (!r) continue;
               const depthTop = fy - (r.y + c.radius);
@@ -437,6 +520,33 @@ export class GripperHead {
   releaseAll() { for (const el of this.elements) { el.on = false; el.act = 0; this._release(el, null); } }
 
   // Telemetrie je Element: gegriffene Lagen mit Last und Kapazität
+  // Lage des gegriffenen (obersten) Zuschnitts im Kopfkoordinatensystem:
+  // kopf = R(θ)·zuschnitt + t, bestimmt aus den Bindungspunkten (2D-Procrustes).
+  // Entspricht dem Einmessen der Teillage, z. B. mit einer Kamera am Greifer.
+  partMap() {
+    let cloth = null;
+    for (const el of this.elements) for (const [id, f] of el.frozen) if (f.ply === 0 && el.att.some((a) => a.cloth.id === id)) cloth = f.cloth;
+    if (!cloth) return null;
+    const P = [], Q = [];
+    for (const el of this.elements) for (const a of el.att) {
+      if (a.cloth !== cloth) continue;
+      P.push([cloth.rest[2 * a.v], cloth.rest[2 * a.v + 1]]);
+      Q.push([el.ox + a.lx, el.oz + a.lz]);
+    }
+    if (P.length < 3) return null;
+    const cp = [0, 0], cq = [0, 0];
+    for (let k = 0; k < P.length; k++) { cp[0] += P[k][0]; cp[1] += P[k][1]; cq[0] += Q[k][0]; cq[1] += Q[k][1]; }
+    cp[0] /= P.length; cp[1] /= P.length; cq[0] /= P.length; cq[1] /= P.length;
+    let A = 0, B = 0;
+    for (let k = 0; k < P.length; k++) {
+      const u = P[k][0] - cp[0], v = P[k][1] - cp[1], x = Q[k][0] - cq[0], z = Q[k][1] - cq[1];
+      A += x * u + z * v; B += x * v - z * u;
+    }
+    const theta = Math.atan2(B, A);
+    const [rx, rz] = rotY(cp[0], cp[1], theta);
+    return { cloth, theta, tx: cq[0] - rx, tz: cq[1] - rz };
+  }
+
   status() {
     return this.elements.map((el) => {
       const held = new Map();

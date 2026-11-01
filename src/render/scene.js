@@ -1,9 +1,11 @@
 // 3D-Darstellung der Nähzelle mit Three.js.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { fabricTexture, gridTexture } from './textures.js';
 import { SOLIDS } from '../physics/materials.js';
 import { NEEDLE, TABLE_TOP } from '../physics/world.js';
+import { locateRest } from '../physics/cloth.js';
 
 const VIEWS = {
   gesamt: { pos: [1.55, 2.0, 2.6], target: [0.05, 0.78, -0.05] },
@@ -25,7 +27,11 @@ export class SceneView {
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(38, 1, 0.01, 40);
+    // Umgebungslicht für realistische Reflexe auf Metall und Satin
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environmentIntensity = 0.45;
+    this.camera = new THREE.PerspectiveCamera(38, 1, 0.03, 30); // near nicht zu klein: Tiefenauflösung für dünne Lagen
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.maxPolarAngle = Math.PI * 0.495;
@@ -117,14 +123,14 @@ export class SceneView {
     for (const col of world.staticColliders) {
       if (!col.visual) continue;
       const s = SOLIDS[col.material];
-      const color = col.color || (col.material === 'hpl' ? '#d6d2c6' : col.material === 'guss' ? '#5f6f68' : s.color);
+      const color = col.color || (col.material === 'hpl' ? '#474d4b' : col.material === 'guss' ? '#5f6f68' : s.color);
       const mat = this._mat(color, col.material === 'stahl' ? 0.3 : 0.65, col.material === 'stahl' ? 0.7 : 0.05);
       const m = this._box(col.half[0] * 2, col.half[1] * 2, col.half[2] * 2, mat, ...col.c);
       m.rotation.set(col.euler[1], col.euler[0], col.euler[2], 'YXZ');
       this.static.add(m);
     }
     // Tischbeine und Zargen
-    for (const [cx, cz, hx, hz] of [[-0.5, 0.05, 0.35, 0.3], [0.55, 0.05, 0.45, 0.3]]) {
+    for (const [cx, cz, hx, hz] of [[-0.5, 0.05, 0.35, 0.3], [0.55, -0.05, 0.45, 0.4]]) {
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
         this.static.add(this._box(0.04, TABLE_TOP - 0.04, 0.04, steel, cx + sx * (hx - 0.05), (TABLE_TOP - 0.04) / 2, cz + sz * (hz - 0.05)));
       }
@@ -172,15 +178,30 @@ export class SceneView {
     // Greiferkopf
     this.headGroup = new THREE.Group();
     const head = world.head;
+    this.templateMesh = null;
+    if (head.type === 'schablone' && head.template) {
+      // Nähschablone: Acrylplatte in Teilekontur mit Nahtschlitz, Aufnahme in der Mitte
+      const shape = new THREE.Shape(head.template.shape.map(([x, z]) => new THREE.Vector2(x, -z)));
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.003, bevelEnabled: false });
+      geo.rotateX(-Math.PI / 2);
+      const mat = new THREE.MeshPhysicalMaterial({ color: 0x9fd3e6, transparent: true, opacity: 0.38, roughness: 0.15, metalness: 0, side: THREE.DoubleSide, depthWrite: false });
+      this.templateMesh = new THREE.Mesh(geo, mat);
+      this.templateMesh.position.y = 0.0004;
+      this.templateMesh.renderOrder = 5;
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 30), new THREE.LineBasicMaterial({ color: 0x2b7f99 }));
+      this.templateMesh.add(edges);
+      this.headGroup.add(this.templateMesh);
+      this.headGroup.add(this._box(0.03, 0.04, 0.03, alu, 0, 0.022, 0), this._box(0.09, 0.02, 0.09, dark, 0, 0.052, 0));
+    }
     // Rahmen aus Aluprofilen statt geschlossener Platte (Lage bleibt sichtbar)
     const rowsZ = [...new Set(head.elements.map((e) => +e.oz.toFixed(4)))];
     const colsX = [...new Set(head.elements.map((e) => +e.ox.toFixed(4)))];
-    for (const z of rowsZ) this.headGroup.add(this._box(head.extent.x * 2, 0.012, 0.014, alu, 0, 0.036, z));
-    for (const x of colsX) this.headGroup.add(this._box(0.014, 0.012, head.extent.z * 2, alu, x, 0.048, 0));
-    this.headGroup.add(this._box(0.09, 0.02, 0.09, dark, 0, 0.062, 0));
+    if (head.type !== 'schablone') for (const z of rowsZ) this.headGroup.add(this._box(head.extent.x * 2, 0.012, 0.014, alu, 0, 0.036, z));
+    if (head.type !== 'schablone') for (const x of colsX) this.headGroup.add(this._box(0.014, 0.012, head.extent.z * 2, alu, x, 0.048, 0));
+    if (head.type !== 'schablone') this.headGroup.add(this._box(0.09, 0.02, 0.09, dark, 0, 0.062, 0));
     this.elementMeshes = [];
     const accent = new THREE.Color(0x0b8f88);
-    for (const el of head.elements) {
+    for (const el of head.type === 'schablone' ? [] : head.elements) {
       const g = new THREE.Group();
       let body, face;
       const r = el.half;
@@ -218,6 +239,20 @@ export class SceneView {
     this.stitchPts.frustumCulled = false;
     this.dynamic.add(this.stitchPts);
 
+    // Soll-Nahtlinie auf der obersten Lage (in Materialkoordinaten verankert)
+    this.planned = null;
+    const tplPath = head.template?.path;
+    const topCloth = world.cloths.find((c) => c.stackIndex === 1);
+    if (tplPath && topCloth) {
+      const anchors = tplPath.points.map(([u, v]) => locateRest(topCloth, u, v)).filter(Boolean);
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3 * anchors.length), 3));
+      const line = new THREE.Line(g, new THREE.LineDashedMaterial({ color: 0x14a37f, dashSize: 0.006, gapSize: 0.004 }));
+      line.frustumCulled = false;
+      this.dynamic.add(line);
+      this.planned = { line, g, anchors, cloth: topCloth };
+    }
+
     // Kontaktpunkte (Greiferbindungen)
     this.attGeom = new THREE.BufferGeometry();
     this.attGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3 * 4000), 3));
@@ -231,15 +266,13 @@ export class SceneView {
     const geo = new THREE.BufferGeometry();
     const pos = new Float32Array(3 * c.n), uv = new Float32Array(2 * c.n), col = new Float32Array(3 * c.n);
     const texScale = 1 / 0.02; // 2 cm je Texturkachel -> Bindung sichtbar
-    for (let j = 0; j < c.nz; j++) for (let i = 0; i < c.nx; i++) {
-      const v = c.idx(i, j);
-      uv[2 * v] = (i * c.h * texScale) / 4; uv[2 * v + 1] = (j * c.h * texScale) / 4;
-    }
+    for (let v = 0; v < c.n; v++) { uv[2 * v] = (c.rest[2 * v] * texScale) / 4; uv[2 * v + 1] = (c.rest[2 * v + 1] * texScale) / 4; }
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     geo.setIndex(new THREE.BufferAttribute(new Uint32Array(c.tri), 1));
-    const tint = c.tint;
+    // benachbarte Lagen leicht unterschiedlich hell, damit Kanten im Stapel erkennbar sind
+    const tint = '#' + new THREE.Color(c.tint).offsetHSL(0, 0, (c.stackIndex % 2 ? 0.04 : -0.04)).getHexString();
     const map = fabricTexture(c.fabric.pattern, tint);
     const mat = c.fabric.pattern === 'satin'
       ? new THREE.MeshPhysicalMaterial({ map, roughness: 0.35, sheen: 1, sheenColor: new THREE.Color(0xffffff), sheenRoughness: 0.3, side: THREE.DoubleSide })
@@ -263,7 +296,7 @@ export class SceneView {
   }
 
   update(world) {
-    const head = world.head, rp = world.robot.pose;
+    const head = world.head, rp = head.pose;
     // Portal folgt dem Roboter
     this.bridge.position.x = rp.x;
     this.carriage.position.set(rp.x, 1.64, rp.z);
@@ -272,8 +305,23 @@ export class SceneView {
     this.zAxis.scale.y = Math.max(0.01, zTop - zBot);
     this.headGroup.position.set(rp.x, rp.y, rp.z);
     this.headGroup.rotation.y = rp.yaw;
+    if (this.templateMesh) {
+      const m = head.partMap?.();
+      if (m) { this.templateMesh.position.set(m.tx, 0.0004, m.tz); this.templateMesh.rotation.y = m.theta; }
+      this.templateMesh.material.opacity = head.elements[0].act > 0.5 ? 0.45 : 0.25;
+    }
+    if (this.planned) {
+      const { g, anchors, cloth } = this.planned, P = cloth.pos, T = cloth.tri, a = g.attributes.position.array;
+      anchors.forEach((h, k) => {
+        const i0 = 3 * T[3 * h.tri], i1 = 3 * T[3 * h.tri + 1], i2 = 3 * T[3 * h.tri + 2];
+        for (let q = 0; q < 3; q++) a[3 * k + q] = h.b0 * P[i0 + q] + h.b1 * P[i1 + q] + h.b2 * P[i2 + q] + (q === 1 ? cloth.radius + 3e-4 : 0);
+      });
+      g.attributes.position.needsUpdate = true;
+      this.planned.line.computeLineDistances();
+    }
     head.elements.forEach((el, i) => {
       const em = this.elementMeshes[i];
+      if (!em) return;
       em.glow.visible = el.act > 0.05;
       em.glow.material.color.setHSL(0.48, 0.85, 0.25 + 0.3 * el.act);
       em.glow.material.color.set(el.att.length ? 0x0fb8a9 : 0x0b6e69);

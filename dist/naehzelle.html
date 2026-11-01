@@ -223,6 +223,11 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
       </div>
       <div data-pane="setup" class="pane">
         <section class="block">
+          <h2>Szenario</h2>
+          <select id="scenario" aria-label="Szenario"></select>
+          <p class="note" id="scenarioNote"></p>
+        </section>
+        <section class="block">
           <h2>Material</h2>
           <select id="fabric" aria-label="Material"></select>
           <p class="note" id="fabricMeta"></p>
@@ -253,6 +258,13 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
           <label class="row"><span>Stichlänge [mm]</span><input type="number" id="stitch" min="1" max="6" step="0.5"></label>
           <label class="row"><span>Nähfußdruck [N]</span><input type="number" id="footForce" min="5" max="120" step="5"></label>
           <label class="row"><span>Nähfuß</span><select id="footMat" style="width:170px"><option value="stahl">Stahl, poliert</option><option value="ptfe">PTFE-beschichtet</option></select></label>
+          <label class="row"><span>Fadenspannung [N]</span><input type="number" id="threadTension" min="0" max="5" step="0.1"></label>
+        </section>
+        <section class="block">
+          <h2>Roboter</h2>
+          <label class="row"><span>Lageregelung K<sub>v</sub> [1/s]</span><input type="number" id="servoKv" min="5" max="200" step="5"></label>
+          <label class="row"><span>Geschwindigkeitsvorsteuerung [%]</span><input type="number" id="servoFF" min="0" max="100" step="5"></label>
+          <p class="note">Der Schleppfehler (1 − Vorsteuerung)·v/K<sub>v</sub> wirkt sich bei Kurvennähten direkt auf die Nahtabweichung aus.</p>
         </section>
         <section class="block">
           <h2>Numerik</h2>
@@ -262,7 +274,9 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
             <option value="fine">Fein (1 cm, 24)</option>
           </select></label>
           <label class="row"><span>Selbstkontakt der Lagen</span><input type="checkbox" id="selfColl"></label>
-          <button class="btn primary" id="btnApply" type="button">Übernehmen und neu aufbauen</button>
+          <label class="row"><span>Luftpolster beim Ablegen</span><input type="checkbox" id="airCushion"></label>
+          <button class="btn primary" id="btnApply" type="button">Neu aufbauen</button>
+          <p class="note">Änderungen am Aufbau werden sofort übernommen; die Zelle startet dann neu.</p>
         </section>
       </div>
       <div data-pane="prog" class="pane" hidden>
@@ -288,6 +302,8 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
               <tr><td class="mono">TABLEVAC ON|OFF</td><td>Saugtisch im Nähbereich</td></tr>
               <tr><td class="mono">SEW L [rpm] [mm] [SYNC]</td><td>Naht starten, SYNC: Greifer folgt dem Transporteur</td></tr>
               <tr><td class="mono">WAITSEW</td><td>auf Nahtende warten</td></tr>
+              <tr><td class="mono">ALIGNPATH bahn [y] [vorlauf]</td><td>Nahtanfang vor die Nadel, Nahtrichtung = Transportrichtung</td></tr>
+              <tr><td class="mono">SEWPATH bahn [rpm] [mm]</td><td>Kurvennaht: Roboter dreht das Teil um die Nadel</td></tr>
               <tr><td class="mono">HOME</td><td>Grundstellung</td></tr>
             </table>
           </details>
@@ -337,6 +353,8 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
           <div class="kpi"><div class="lbl">Max. Auslastung</div><div class="val" id="kUtil">–</div><div class="sub">Last / Haltekraft</div></div>
           <div class="kpi"><div class="lbl">Ablagefehler</div><div class="val" id="kErr">–</div><div class="sub" id="kErrSub">letzte abgelegte Lage</div></div>
           <div class="kpi"><div class="lbl">Stiche</div><div class="val" id="kStitch">0</div><div class="sub" id="kStitchSub">Naht –</div></div>
+          <div class="kpi"><div class="lbl">Nahtabweichung</div><div class="val" id="kDev">–</div><div class="sub" id="kDevSub">Einstich ↔ Sollbahn</div></div>
+          <div class="kpi"><div class="lbl">Greiferkopf</div><div class="val" id="kPose">–</div><div class="sub" id="kPoseSub">Drehung C-Achse</div></div>
         </div>
       </section>
       <section class="block">
@@ -344,8 +362,8 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
         <div class="headgrid" id="headgrid"></div>
       </section>
       <section class="block">
-        <h2>Greiferkraft, oberste Lage</h2>
-        <div class="legend"><span><i style="background:var(--s1)"></i>Last F<sub>n</sub> (Summe)</span><span><i style="background:var(--s2)"></i>Haltekraft C<sub>n</sub> (Summe)</span></div>
+        <h2>Auslastung der Haltekraft</h2>
+        <div class="legend"><span><i style="background:var(--s1)"></i>höchstbelastetes Element</span><span><i style="background:var(--s2)"></i>Versagensgrenze 100 %</span></div>
         <div class="chart-wrap"><canvas id="chart" height="150"></canvas><div class="tip" id="tip"></div></div>
       </section>
       <section class="block">
@@ -363,8 +381,9 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
 </div>
 <dialog id="dlg"><div class="dh"><h3 id="dlgTitle">Validierung</h3><button class="btn small" id="dlgClose" type="button">Schließen</button></div><div class="db" id="dlgBody"></div></dialog>
 <script type="module">
-import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import * as THREE from 'three';
 
 // ---- src/physics/constants.js ----
 const __M_physics_constants = (() => {
@@ -435,7 +454,7 @@ const FABRICS = [
   },
   {
     id: 'denim', name: 'Denim 12 oz', composition: '98 % CO / 2 % EL', construction: 'Köper 3/1',
-    pattern: 'twill', color: '#3d5a80',
+    pattern: 'twill', color: '#4d6fa0',
     mass: 400, thickness: 0.75, tensWarp: 14000, tensWeft: 7000, shear: 2.6,
     bendWarp: 1.2, bendWeft: 0.6, muSteelS: 0.31, muSteelK: 0.25, muSelfS: 0.56, muSelfK: 0.46,
     airPerm: 25, epsR: 2.1, needleHold: 0.25, cohesion: 1.0, wetting: 0.8, breakStrain: 18,
@@ -463,7 +482,7 @@ const FABRICS = [
   },
   {
     id: 'wolle', name: 'Wollanzugstoff', composition: '100 % WO', construction: 'Köper 2/2',
-    pattern: 'twill', color: '#5c5f66',
+    pattern: 'twill', color: '#8a8f99',
     mass: 250, thickness: 0.45, tensWarp: 4500, tensWeft: 3500, shear: 0.6,
     bendWarp: 0.12, bendWeft: 0.10, muSteelS: 0.28, muSteelK: 0.23, muSelfS: 0.55, muSelfK: 0.46,
     airPerm: 150, epsR: 2.2, needleHold: 0.12, cohesion: 3.0, wetting: 0.5, breakStrain: 30,
@@ -504,7 +523,7 @@ const FABRICS = [
 const SOLIDS = {
   stahl:    { name: 'Stahl, poliert',         density: 7850, E: 210e9, poisson: 0.30, frictionFactor: 1.0, color: '#b8bec6' },
   alu:      { name: 'Aluminium, eloxiert',    density: 2700, E: 70e9,  poisson: 0.33, frictionFactor: 1.05, color: '#a9b1ba' },
-  hpl:      { name: 'HPL-Schichtstoff',       density: 1400, E: 10e9,  poisson: 0.30, frictionFactor: 1.15, color: '#d9d4c7' },
+  hpl:      { name: 'HPL-Schichtstoff',       density: 1400, E: 10e9,  poisson: 0.30, frictionFactor: 1.15, color: '#474d4b' },
   ptfe:     { name: 'PTFE-beschichtet',       density: 2200, E: 0.5e9, poisson: 0.46, frictionFactor: 0.45, color: '#ece9e2' },
   gummi:    { name: 'Gummi (NBR)',            density: 1300, E: 5e6,   poisson: 0.49, frictionFactor: 2.2, color: '#222326' },
   buche:    { name: 'Buche, lackiert',        density: 720,  E: 14e9,  poisson: 0.35, frictionFactor: 1.25, color: '#c49a6c' },
@@ -586,59 +605,169 @@ function rotY(x, z, yaw) {
 
 let NEXT_ID = 0;
 
+// ---- Geometrie-Hilfen für Zuschnittkonturen ----------------------------------
+function closestOnSegment(px, pz, ax, az, bx, bz) {
+  const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz;
+  const t = L2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / L2)) : 0;
+  return [ax + t * dx, az + t * dz];
+}
+function closestOnOutline(poly, px, pz) {
+  let best = null, bd = Infinity;
+  for (let k = 0; k < poly.length; k++) {
+    const a = poly[k], b = poly[(k + 1) % poly.length];
+    const q = closestOnSegment(px, pz, a[0], a[1], b[0], b[1]);
+    const d = (q[0] - px) ** 2 + (q[1] - pz) ** 2;
+    if (d < bd) { bd = d; best = q; }
+  }
+  return { q: best, d: Math.sqrt(bd) };
+}
+function pointInPolygon(poly, x, z) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, zi] = poly[i], [xj, zj] = poly[j];
+    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
 class Cloth {
-  constructor({ fabric, width, length, spacing, center, yaw = 0, name, tint }) {
+  // outline: Zuschnittkontur in lokalen Koordinaten [m] (x = Schuss, z = Kette), Polygon.
+  // Ohne outline entsteht ein Rechteck width × length.
+  constructor({ fabric, width = 0.3, length = 0.4, spacing, center, yaw = 0, name, tint, outline = null }) {
     this.id = NEXT_ID++;
     this.fabric = fabric;
     this.m = toSI(fabric);
     this.name = name || `Lage ${this.id + 1}`;
     this.tint = tint || fabric.color;
     const h = spacing;
-    const nx = Math.max(2, Math.round(width / h) + 1);
-    const nz = Math.max(2, Math.round(length / h) + 1);
-    this.h = h; this.nx = nx; this.nz = nz;
-    this.width = (nx - 1) * h; this.length = (nz - 1) * h;
-    const n = nx * nz;
+    this.h = h;
+    this.isRect = !outline;
+    if (!outline) {
+      const W = (Math.max(2, Math.round(width / h) + 1) - 1) * h, L = (Math.max(2, Math.round(length / h) + 1) - 1) * h;
+      outline = [[-W / 2, -L / 2], [W / 2, -L / 2], [W / 2, L / 2], [-W / 2, L / 2]];
+    }
+    this.outline = outline;
+    let minx = Infinity, maxx = -Infinity, minz = Infinity, maxz = -Infinity;
+    for (const [x, z] of outline) { minx = Math.min(minx, x); maxx = Math.max(maxx, x); minz = Math.min(minz, z); maxz = Math.max(maxz, z); }
+    const nx = Math.round((maxx - minx) / h + 0.499) + 1, nz = Math.round((maxz - minz) / h + 0.499) + 1;
+    this.nx = nx; this.nz = nz;
+    this.width = maxx - minx; this.length = maxz - minz;
+
+    // 1) Gitterknoten: innen, oder Randknoten (auf die Kontur projiziert)
+    const G = nx * nz, gx = new Float64Array(G), gz = new Float64Array(G);
+    const state = new Int8Array(G); // 0 = aus, 1 = innen, 2 = Rand
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+      const g = j * nx + i, x = minx + i * h, z = minz + j * h;
+      gx[g] = x; gz[g] = z;
+      if (pointInPolygon(outline, x, z) || closestOnOutline(outline, x, z).d < 1e-7) state[g] = 1;
+    }
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+      const g = j * nx + i;
+      if (state[g]) continue;
+      const nb = [[i - 1, j], [i + 1, j], [i, j - 1], [i, j + 1]].some(([a, b]) => a >= 0 && b >= 0 && a < nx && b < nz && state[b * nx + a] === 1);
+      if (!nb) continue;
+      const { q, d } = closestOnOutline(outline, gx[g], gz[g]);
+      if (d > 0.95 * h) continue;
+      gx[g] = q[0]; gz[g] = q[1]; state[g] = 2;
+    }
+    // 2) Dreiecke je Zelle (voll: 2 Dreiecke, 3 Ecken aktiv: 1 Dreieck)
+    const tris = [], cellOf = [];
+    const area2 = (a, b, c) => (gx[b] - gx[a]) * (gz[c] - gz[a]) - (gx[c] - gx[a]) * (gz[b] - gz[a]);
+    const okTri = (a, b, c) => Math.abs(area2(a, b, c)) > 0.08 * h * h;
+    for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) {
+      const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1;
+      const act = [a, b, c, d].filter((g) => state[g]);
+      if (act.length === 4) {
+        const T = (i + j) % 2 === 0 ? [[a, c, b], [b, c, d]] : [[a, c, d], [a, d, b]];
+        if (T.every((t) => okTri(...t))) { for (const t of T) { tris.push(t); cellOf.push(4); } continue; }
+        for (const t of T) if (okTri(...t)) { tris.push(t); cellOf.push(3); }
+      } else if (act.length === 3) {
+        let t = act; // Orientierung wie die übrigen Dreiecke (gegen den Uhrzeigersinn in x/z negativ)
+        if (area2(t[0], t[1], t[2]) > 0) t = [t[0], t[2], t[1]];
+        if (okTri(...t)) { tris.push(t); cellOf.push(3); }
+      }
+    }
+    // 3) nur Knoten, die in Dreiecken vorkommen; neu nummerieren
+    const map = new Int32Array(G).fill(-1);
+    let n = 0;
+    for (const t of tris) for (const g of t) if (map[g] < 0) map[g] = n++;
+    this.gridMap = map;
     this.n = n;
+    this.gi = new Int32Array(n); this.gj = new Int32Array(n); this.rest = new Float64Array(2 * n);
+    this.border = new Uint8Array(n);
+    for (let g = 0; g < G; g++) {
+      const v = map[g];
+      if (v < 0) continue;
+      this.gi[v] = g % nx; this.gj[v] = (g / nx) | 0;
+      this.rest[2 * v] = gx[g]; this.rest[2 * v + 1] = gz[g];
+      this.border[v] = state[g] === 2 ? 1 : 0;
+    }
+    this.tri = Int32Array.from(tris.flatMap((t) => t.map((g) => map[g])));
+    this.nTri = tris.length;
+
     this.pos = new Float64Array(3 * n);
     this.prev = new Float64Array(3 * n);
     this.vel = new Float64Array(3 * n);
     this.mass = new Float64Array(n);
-    this.w = new Float64Array(n);            // inverse Masse (0 = fixiert)
-    this.attached = new Int16Array(n).fill(-1); // Index des haltenden Greiferelements
+    this.w = new Float64Array(n);
+    this.attached = new Int16Array(n).fill(-1);
     this.radius = Math.max(this.m.t * 0.5, 5e-5);
-    this.area = this.width * this.length;
-    this.totalMass = this.m.rho * this.area;
 
-    const share = (i, N) => (i === 0 || i === N - 1 ? 0.5 : 1);
-    for (let j = 0; j < nz; j++) {
-      for (let i = 0; i < nx; i++) {
-        const v = j * nx + i;
-        const lx = i * h - this.width / 2, lz = j * h - this.length / 2;
-        const [rx, rz] = rotY(lx, lz, yaw);
-        this.pos[3 * v] = center[0] + rx;
-        this.pos[3 * v + 1] = center[1];
-        this.pos[3 * v + 2] = center[2] + rz;
-        const m = this.m.rho * h * h * share(i, nx) * share(j, nz);
-        this.mass[v] = m; this.w[v] = 1 / m;
+    // Masse: volle Zellen zu je einem Viertel auf ihre vier Ecken (gleichmäßig wie im
+    // Rechteckgitter), Randdreiecke zu je einem Drittel auf ihre Ecken
+    let area = 0;
+    const R = this.rest, T = this.tri;
+    const triA = (t) => { const a = T[3 * t], b = T[3 * t + 1], c = T[3 * t + 2]; return 0.5 * Math.abs((R[2 * b] - R[2 * a]) * (R[2 * c + 1] - R[2 * a + 1]) - (R[2 * c] - R[2 * a]) * (R[2 * b + 1] - R[2 * a + 1])); };
+    for (let t = 0; t < this.nTri; t++) {
+      if (cellOf[t] === 4) {
+        const A = triA(t) + triA(t + 1);
+        const corners = new Set([T[3 * t], T[3 * t + 1], T[3 * t + 2], T[3 * t + 3], T[3 * t + 4], T[3 * t + 5]]);
+        for (const v of corners) this.mass[v] += (this.m.rho * A) / 4;
+        area += A; t++;
+        continue;
       }
+      const A = triA(t);
+      area += A;
+      for (let q = 0; q < 3; q++) this.mass[T[3 * t + q]] += (this.m.rho * A) / 3;
+    }
+    this.area = area;
+    this.totalMass = this.m.rho * area;
+    for (let v = 0; v < n; v++) {
+      this.w[v] = 1 / this.mass[v];
+      const [rx, rz] = rotY(R[2 * v], R[2 * v + 1], yaw);
+      this.pos[3 * v] = center[0] + rx; this.pos[3 * v + 1] = center[1]; this.pos[3 * v + 2] = center[2] + rz;
     }
     this.prev.set(this.pos);
-    this._buildConstraints(share);
-    this._buildTriangles();
+
+    // Abstand jedes Knotens zum Zuschnittrand (für das Luftpolster beim Ablegen)
+    this.edgeDist = new Float64Array(n);
+    for (let v = 0; v < n; v++) this.edgeDist[v] = closestOnOutline(outline, R[2 * v], R[2 * v + 1]).d;
+
+    // Knoten → Dreiecke (CSR)
+    const cnt = new Int32Array(n + 1);
+    for (let k = 0; k < T.length; k++) cnt[T[k] + 1]++;
+    for (let v = 0; v < n; v++) cnt[v + 1] += cnt[v];
+    const list = new Int32Array(T.length), fill = cnt.slice(0, n);
+    for (let t = 0; t < this.nTri; t++) for (let q = 0; q < 3; q++) list[fill[T[3 * t + q]]++] = t;
+    this.nodeTriStart = cnt; this.nodeTriList = list;
+
+    this._buildConstraints(tris, cellOf);
   }
 
-  idx(i, j) { return j * this.nx + i; }
+  // Knotenindex an Gitterposition (−1, wenn außerhalb des Zuschnitts)
+  idx(i, j) { return i < 0 || j < 0 || i >= this.nx || j >= this.nz ? -1 : this.gridMap[j * this.nx + i]; }
+
+  restDist(a, b) { const R = this.rest; return Math.hypot(R[2 * a] - R[2 * b], R[2 * a + 1] - R[2 * b + 1]); }
 
   // ---- Long Range Attachments (Kim, Chentanez, Müller 2012) -------------------
   // Gewebe sind in der Ebene nahezu undehnbar (Dehnung unter Eigengewicht ~10⁻⁴). Ein
   // Gauss-Seidel-Löser mit wenigen Iterationen konvergiert dafür zu langsam und würde
   // die Lage hängend um ein Vielfaches zu stark längen. Einseitige Fesseln von jedem Knoten
   // zu den nächstgelegenen gehaltenen Knoten begrenzen den Abstand auf die geodätische
-  // Ruhelänge (hier = Abstand im ebenen Ausgangszuschnitt) zuzüglich der elastischen
+  // Ruhelänge (kürzester Weg im ebenen Zuschnitt, Dijkstra) zuzüglich der elastischen
   // Dehnung, die bei der Materialsteifigkeit physikalisch möglich ist.
   updateTethers(K = 4) {
-    const { n, nx, h } = this;
+    const n = this.n;
     const groups = new Map();
     for (let v = 0; v < n; v++) {
       const a = this.attached[v];
@@ -651,24 +780,46 @@ class Cloth {
     this.tetherK = K;
     this.hasTethers = groups.size > 0;
     if (!this.hasTethers) return;
-    const best = [];
+    // Nachbarschaft (alle Kanten) einmalig aufbauen
+    if (!this.adjStart) {
+      const deg = new Int32Array(n + 1);
+      for (let c = 0; c < this.sI.length; c++) { deg[this.sI[c] + 1]++; deg[this.sJ[c] + 1]++; }
+      for (let v = 0; v < n; v++) deg[v + 1] += deg[v];
+      const adj = new Int32Array(deg[n]), len = new Float64Array(deg[n]), f = deg.slice(0, n);
+      for (let c = 0; c < this.sI.length; c++) {
+        const a = this.sI[c], b = this.sJ[c];
+        adj[f[a]] = b; len[f[a]++] = this.sRest[c];
+        adj[f[b]] = a; len[f[b]++] = this.sRest[c];
+      }
+      this.adjStart = deg; this.adj = adj; this.adjLen = len;
+    }
+    const dists = [], srcs = [];
+    for (const list of groups.values()) {
+      const d = new Float64Array(n).fill(Infinity), src = new Int32Array(n).fill(-1);
+      const heap = [];
+      const push = (v, dv) => { heap.push([dv, v]); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
+      const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
+      for (const a of list) { d[a] = 0; src[a] = a; push(a, 0); }
+      while (heap.length) {
+        const [dv, v] = pop();
+        if (dv > d[v]) continue;
+        for (let e = this.adjStart[v]; e < this.adjStart[v + 1]; e++) {
+          const u = this.adj[e], nd = dv + this.adjLen[e];
+          if (nd < d[u]) { d[u] = nd; src[u] = src[v]; push(u, nd); }
+        }
+      }
+      dists.push(d); srcs.push(src);
+    }
+    const order = dists.map((_, k) => k);
     for (let v = 0; v < n; v++) {
       if (this.attached[v] >= 0) continue;
-      const vi = v % nx, vj = (v / nx) | 0;
-      best.length = 0;
-      for (const list of groups.values()) {
-        let bd = Infinity, bi = -1;
-        for (const a of list) {
-          const di = (a % nx) - vi, dj = ((a / nx) | 0) - vj;
-          const d = di * di + dj * dj;
-          if (d < bd) { bd = d; bi = a; }
-        }
-        best.push([bd, bi]);
-      }
-      best.sort((x, y) => x[0] - y[0]);
-      for (let k = 0; k < Math.min(K, best.length); k++) {
-        this.tetherIdx[v * K + k] = best[k][1];
-        this.tetherRest[v * K + k] = Math.sqrt(best[k][0]) * h;
+      order.sort((x, y) => dists[x][v] - dists[y][v]);
+      for (let k = 0; k < Math.min(K, order.length); k++) {
+        const g = order[k];
+        if (!Number.isFinite(dists[g][v])) break;
+        // geodätische Länge über den Quellknoten (≥ euklidisch)
+        this.tetherIdx[v * K + k] = srcs[g][v];
+        this.tetherRest[v * K + k] = Math.max(dists[g][v], this.restDist(v, srcs[g][v]));
       }
     }
   }
@@ -692,46 +843,60 @@ class Cloth {
     }
   }
 
-  _buildConstraints(share) {
-    const { nx, nz, h } = this;
+  _buildConstraints(tris, cellOf) {
+    const { h } = this;
     const { Tw, Tf, Gs, Bw, Bf } = this.m;
     const G = Math.max(Gs, 1e-3);
     const TwEff = Math.max(Tw - G, 0.2 * Tw);
     const TfEff = Math.max(Tf - G, 0.2 * Tf);
-    const I = [], J = [], R = [], A = [];
-    // Zug: Schuss (x-Richtung)
-    for (let j = 0; j < nz; j++) for (let i = 0; i < nx - 1; i++) {
-      I.push(this.idx(i, j)); J.push(this.idx(i + 1, j)); R.push(h); A.push(1 / (TfEff * share(j, nz)));
+    const T = this.tri, gi = this.gi, gj = this.gj;
+    // Kanten sammeln: Achskanten zählen angrenzende Zellen (Randanteil), Diagonalen = Scherung
+    const edges = new Map();
+    for (let t = 0; t < this.nTri; t++) {
+      for (let q = 0; q < 3; q++) {
+        const a = T[3 * t + q], b = T[3 * t + (q + 1) % 3];
+        const k = a < b ? a * this.n + b : b * this.n + a;
+        const e = edges.get(k);
+        if (e) e.cnt++; else edges.set(k, { a: Math.min(a, b), b: Math.max(a, b), cnt: 1, full: cellOf[t] === 4 });
+      }
     }
-    // Zug: Kette (z-Richtung)
-    for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx; i++) {
-      I.push(this.idx(i, j)); J.push(this.idx(i, j + 1)); R.push(h); A.push(1 / (TwEff * share(i, nx)));
+    const axis = [], diag = [];
+    for (const e of edges.values()) {
+      const di = Math.abs(gi[e.a] - gi[e.b]), dj = Math.abs(gj[e.a] - gj[e.b]);
+      if (di + dj === 1) axis.push({ ...e, dir: dj ? 1 : 0 }); else diag.push(e);
+    }
+    const I = [], J = [], RL = [], A = [], D = [];
+    this.edgeShare = new Map();
+    for (const e of axis) {
+      const share = e.cnt / 2;
+      I.push(e.a); J.push(e.b); RL.push(this.restDist(e.a, e.b)); D.push(e.dir);
+      A.push(1 / ((e.dir ? TwEff : TfEff) * share));
+      this.edgeShare.set(e.a * this.n + e.b, share);
     }
     this.nStruct = I.length;
-    // Scherung: eine Diagonale je Zelle (die Dreieckskante, Richtung alternierend).
-    // Zwei Diagonalen würden jede Zelle gegen Verwölbung versteifen (4 Punkte, 6 Abstände
-    // = starr) und doppelt gekrümmtes Drapieren verhindern. Energie je Zelle
-    // ½·k_d·(h·√2·γ/2)² = ½·G·γ²·h²  ⇒  k_d = 2·G.
-    const d = h * Math.SQRT2;
-    for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) {
-      if ((i + j) % 2 === 0) { I.push(this.idx(i + 1, j)); J.push(this.idx(i, j + 1)); }
-      else { I.push(this.idx(i, j)); J.push(this.idx(i + 1, j + 1)); }
-      R.push(d); A.push(1 / (2 * G));
-    }
+    // Scherung: Dreiecksdiagonale je Zelle, k = 2G (halbe Zelle: G). Zwei Diagonalen je Zelle
+    // würden jede Zelle gegen Verwölbung versteifen und das Drapieren verhindern.
+    for (const e of diag) { I.push(e.a); J.push(e.b); RL.push(this.restDist(e.a, e.b)); A.push(1 / (2 * G * (e.full ? 1 : 0.5))); }
     this.sI = Int32Array.from(I); this.sJ = Int32Array.from(J);
-    this.sRest = Float64Array.from(R); this.sAlpha = Float64Array.from(A);
-    this.sDir = new Uint8Array(this.nStruct); // 0 = Schuss, 1 = Kette
-    for (let c = (nx - 1) * nz; c < this.nStruct; c++) this.sDir[c] = 1;
+    this.sRest = Float64Array.from(RL); this.sAlpha = Float64Array.from(A);
+    this.sDir = Uint8Array.from(D);
 
-    // Biegung: Knotentripel entlang beider Fadenrichtungen
+    // Biegung: Knotentripel entlang beider Fadenrichtungen (nur gerade, gleichmäßige Ruhelage)
+    const share = (a, b) => this.edgeShare.get(Math.min(a, b) * this.n + Math.max(a, b));
     const a = [], b = [], c = [], al = [];
-    for (let j = 0; j < nz; j++) for (let i = 1; i < nx - 1; i++) {
-      a.push(this.idx(i - 1, j)); b.push(this.idx(i, j)); c.push(this.idx(i + 1, j));
-      al.push((h * h) / (Math.max(Bf, 1e-12) * share(j, nz)));
-    }
-    for (let j = 1; j < nz - 1; j++) for (let i = 0; i < nx; i++) {
-      a.push(this.idx(i, j - 1)); b.push(this.idx(i, j)); c.push(this.idx(i, j + 1));
-      al.push((h * h) / (Math.max(Bw, 1e-12) * share(i, nx)));
+    const R = this.rest;
+    for (let v = 0; v < this.n; v++) {
+      for (const dir of [0, 1]) {
+        const i = gi[v], j = gj[v];
+        const u = dir ? this.idx(i, j - 1) : this.idx(i - 1, j), w = dir ? this.idx(i, j + 1) : this.idx(i + 1, j);
+        if (u < 0 || w < 0) continue;
+        const s1 = share(u, v), s2 = share(v, w);
+        if (!s1 || !s2) continue;
+        const ex = R[2 * u] + R[2 * w] - 2 * R[2 * v], ez = R[2 * u + 1] + R[2 * w + 1] - 2 * R[2 * v + 1];
+        if (Math.hypot(ex, ez) > 0.1 * h) continue;
+        a.push(u); b.push(v); c.push(w);
+        al.push((h * h) / (Math.max(dir ? Bw : Bf, 1e-12) * Math.min(s1, s2)));
+      }
     }
     this.bA = Int32Array.from(a); this.bB = Int32Array.from(b); this.bC = Int32Array.from(c);
     this.bAlpha = Float64Array.from(al);
@@ -742,11 +907,24 @@ class Cloth {
   // Zug, behindern Biegen/Falten also nicht, und übertragen Zugkräfte in einem
   // Teilschritt über die ganze Lage. Grenze: Dehnung bei der Linienlast limitLoad.
   _buildLimits() {
-    const { nx, nz, h } = this;
     const I = [], J = [], R = [], D = [];
-    for (const span of [1, 2, 4, 8, 16]) {
-      for (let j = 0; j < nz; j++) for (let i = 0; i + span < nx; i++) { I.push(this.idx(i, j)); J.push(this.idx(i + span, j)); R.push(span * h); D.push(0); }
-      for (let j = 0; j + span < nz; j++) for (let i = 0; i < nx; i++) { I.push(this.idx(i, j)); J.push(this.idx(i, j + span)); R.push(span * h); D.push(1); }
+    const hasEdge = (a, b) => this.edgeShare.has(Math.min(a, b) * this.n + Math.max(a, b));
+    for (let v = 0; v < this.n; v++) {
+      for (const dir of [0, 1]) {
+        let prev = v, len = 0, step = 0;
+        for (const span of [1, 2, 4, 8, 16]) {
+          // entlang der Gitterlinie bis span laufen, nur über vorhandene Kanten
+          let ok = true;
+          while (step < span) {
+            const i = this.gi[prev] + (dir ? 0 : 1), j = this.gj[prev] + (dir ? 1 : 0);
+            const nx = this.idx(i, j);
+            if (nx < 0 || !hasEdge(prev, nx)) { ok = false; break; }
+            len += this.restDist(prev, nx); prev = nx; step++;
+          }
+          if (!ok) break;
+          I.push(v); J.push(prev); R.push(len); D.push(dir);
+        }
+      }
     }
     this.lI = Int32Array.from(I); this.lJ = Int32Array.from(J); this.lR = Float64Array.from(R); this.lD = Uint8Array.from(D);
   }
@@ -769,16 +947,7 @@ class Cloth {
     }
   }
 
-  _buildTriangles() {
-    const { nx, nz } = this;
-    const T = [];
-    for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) {
-      const a = this.idx(i, j), b = this.idx(i + 1, j), c = this.idx(i, j + 1), d = this.idx(i + 1, j + 1);
-      if ((i + j) % 2 === 0) { T.push(a, c, b, b, c, d); } else { T.push(a, c, d, a, d, b); }
-    }
-    this.tri = Int32Array.from(T);
-    this.nTri = T.length / 3;
-  }
+
 
   // Interne Materialkräfte, XPBD-Gauss-Seidel-Durchlauf mit Lagrange-Multiplikatoren.
   // iters = 1 (Echtzeit): Bei einem Durchlauf je Teilschritt wirkt eine Bedingung mit der
@@ -872,15 +1041,26 @@ class Cloth {
     return [x / M, y / M, z / M];
   }
 
-  // Lage in der Ebene: Schwerpunkt (x, z) und Winkel der Kettrichtung.
+  // Lage in der Ebene: Schwerpunkt (x, z) und Winkel der Kettrichtung (Procrustes-Anpassung
+  // des Ausgangszuschnitts an die aktuelle Lage).
   pose2D() {
     const [cx, , cz] = this.centroid();
-    let wx = 0, wz = 0;
-    for (let i = 0; i < this.nx; i++) {
-      const a = this.idx(i, 0) * 3, b = this.idx(i, this.nz - 1) * 3;
-      wx += this.pos[b] - this.pos[a]; wz += this.pos[b + 2] - this.pos[a + 2];
+    let ru = 0, rv = 0, M = 0;
+    for (let v = 0; v < this.n; v++) { ru += this.mass[v] * this.rest[2 * v]; rv += this.mass[v] * this.rest[2 * v + 1]; M += this.mass[v]; }
+    ru /= M; rv /= M;
+    let A = 0, B = 0;
+    for (let v = 0; v < this.n; v++) {
+      const u = this.rest[2 * v] - ru, w = this.rest[2 * v + 1] - rv;
+      const x = this.pos[3 * v] - cx, z = this.pos[3 * v + 2] - cz, m = this.mass[v];
+      A += m * (x * u + z * w); B += m * (x * w - z * u);
     }
-    return { x: cx, z: cz, theta: Math.atan2(wx, wz) };
+    return { x: cx, z: cz, theta: Math.atan2(B, A) };
+  }
+
+  // Materialkoordinate (Ausgangszuschnitt) eines Punkts in Dreieck t mit baryzentrischen Koordinaten
+  restPoint(t, b0, b1, b2) {
+    const T = this.tri, R = this.rest, a = T[3 * t], b = T[3 * t + 1], c = T[3 * t + 2];
+    return [b0 * R[2 * a] + b1 * R[2 * b] + b2 * R[2 * c], b0 * R[2 * a + 1] + b1 * R[2 * b + 1] + b2 * R[2 * c + 1]];
   }
 
   maxStrain() {
@@ -948,7 +1128,23 @@ class Cloth {
   }
 }
 
-return { rotY, Cloth };
+// Dreieck und baryzentrische Koordinaten eines Punkts im Ausgangszuschnitt (u, v)
+function locateRest(c, u, v) {
+  const R = c.rest, T = c.tri;
+  for (let t = 0; t < c.nTri; t++) {
+    const a = T[3 * t], b = T[3 * t + 1], d = T[3 * t + 2];
+    const v0x = R[2 * d] - R[2 * a], v0z = R[2 * d + 1] - R[2 * a + 1];
+    const v1x = R[2 * b] - R[2 * a], v1z = R[2 * b + 1] - R[2 * a + 1];
+    const v2x = u - R[2 * a], v2z = v - R[2 * a + 1];
+    const den = v0x * v1z - v1x * v0z;
+    if (Math.abs(den) < 1e-14) continue;
+    const s = (v2x * v1z - v1x * v2z) / den, w = (v0x * v2z - v2x * v0z) / den;
+    if (s >= -1e-9 && w >= -1e-9 && s + w <= 1 + 1e-9) return { tri: t, b0: 1 - s - w, b1: w, b2: s };
+  }
+  return null;
+}
+
+return { rotY, closestOnOutline, pointInPolygon, Cloth, locateRest };
 })();
 
 // ---- src/physics/colliders.js ----
@@ -1197,14 +1393,14 @@ class ClothContacts {
 
   _query(cloths, vc, tc, H, margin, mSurf, qr, inv) {
     const { count, E, mask, stamp, G } = H;
-    const C = cloths[vc], D = cloths[tc], p = C.pos, nx = C.nx, B = D.aabb;
+    const C = cloths[vc], D = cloths[tc], p = C.pos, gi = C.gi, gj = C.gj, B = D.aabb;
     const T = D.tri;
     const self = tc === vc;
     const rr = C.radius + D.radius;
     for (let v = 0; v < C.n; v++) {
       const x = p[3 * v], y = p[3 * v + 1], z = p[3 * v + 2];
       if (x < B[0] - margin || x > B[3] + margin || y < B[1] - margin || y > B[4] + margin || z < B[2] - margin || z > B[5] + margin) continue;
-      const vi = v % nx, vj = (v / nx) | 0;
+      const vi = gi[v], vj = gj[v];
       const sv = ++this._stamp;
       let bestT = -1, bestQ = -Infinity, bestSide = 1;
       const x0 = Math.floor((x - qr) * inv), x1 = Math.floor((x + qr) * inv);
@@ -1219,9 +1415,9 @@ class ClothContacts {
           const i0 = T[3 * t], i1 = T[3 * t + 1], i2 = T[3 * t + 2];
           if (self) {
             if (i0 === v || i1 === v || i2 === v) continue;
-            if (Math.abs((i0 % nx) - vi) <= 2 && Math.abs(((i0 / nx) | 0) - vj) <= 2) continue;
-            if (Math.abs((i1 % nx) - vi) <= 2 && Math.abs(((i1 / nx) | 0) - vj) <= 2) continue;
-            if (Math.abs((i2 % nx) - vi) <= 2 && Math.abs(((i2 / nx) | 0) - vj) <= 2) continue;
+            if (Math.abs(gi[i0] - vi) <= 2 && Math.abs(gj[i0] - vj) <= 2) continue;
+            if (Math.abs(gi[i1] - vi) <= 2 && Math.abs(gj[i1] - vj) <= 2) continue;
+            if (Math.abs(gi[i2] - vi) <= 2 && Math.abs(gj[i2] - vj) <= 2) continue;
           }
           const o = t * 16;
           const iden = G[o + 15];
@@ -1253,6 +1449,8 @@ class ClothContacts {
 
   solve(cloths, dt) {
     const dt2 = dt * dt;
+    // Spalt zur Lage darunter je Knoten (für das Luftpolster)
+    for (const c of cloths) { if (!c.gapBelow) c.gapBelow = new Float64Array(c.n); c.gapBelow.fill(Infinity); }
     for (let k = 0; k < this.n; k++) {
       const C = cloths[this.vc[k]], D = cloths[this.tc[k]];
       const v = this.vi[k], t = this.ti[k], s = this.side[k];
@@ -1269,6 +1467,7 @@ class ClothContacts {
       const dist = wx * nX + wy * nY + wz * nZ;
       const thick = C.radius + D.radius;
       const coh = Math.min(C.m.cohesion, D.m.cohesion);
+      if (nY > 0.7 && dist > thick && dist - thick < C.gapBelow[v]) C.gapBelow[v] = dist - thick;
       if (dist >= thick + (coh > 0 ? this.cohesionRange : 0)) continue;
       const px = wx - dist * nX, py = wy - dist * nY, pz = wz - dist * nZ;
       const d00 = e1x * e1x + e1y * e1y + e1z * e1z, d01 = e1x * e2x + e1y * e2y + e1z * e2z;
@@ -1363,6 +1562,17 @@ const GRIPPER_TYPES = {
     tauOn: 0.25, tauOff: 0.9, gap: 2e-3, shape: 'square',
     note: 'Maxwell-Spannung p = ½·ε₀·εr·E², Streufeld fällt mit exp(−2π·z/Teilung) ab. Restladung verzögert das Ablegen.',
   },
+  schablone: {
+    name: 'Nähschablone (Klemmrahmen)',
+    short: 'Schablone',
+    params: [
+      ['pressure', 'Klemmdruck', 'kPa', 3, 0.5, 20, 0.5],
+      ['slot', 'Nahtschlitz (halbe Breite)', 'mm', 16, 8, 30, 1],
+      ['clampGap', 'Klemmspalt', 'mm', 2.5, 0.5, 10, 0.1],
+    ],
+    tauOn: 0.3, tauOff: 0.25, gap: 2e-3, shape: 'template',
+    note: 'Teilespezifische Schablone: klemmt alle Lagen flächig (Reibschluss μ·p·A) und lässt nur einen Schlitz entlang der Naht frei. Industriestandard für automatisches Konturnähen.',
+  },
   kryo: {
     name: 'Kryogreifer (Gefrieren)',
     short: 'Kryo',
@@ -1382,12 +1592,14 @@ function defaultParams(type) {
 }
 
 function footprintArea(type, p) {
+  if (type === 'schablone') return 0.1;
   if (type === 'vakuum') return Math.PI * (p.diameter * 0.5e-3) ** 2;
   if (type === 'kryo') return Math.PI * (p.diameter * 0.5e-3) ** 2;
   return (p.size * 1e-3) ** 2;
 }
 
 function footprintHalf(type, p) {
+  if (type === 'schablone') return 0.3;
   if (type === 'vakuum' || type === 'kryo') return p.diameter * 0.5e-3;
   return p.size * 0.5e-3;
 }
@@ -1481,6 +1693,19 @@ function capacityModel(type, p, column, covered = 1) {
     return out;
   }
 
+  if (type === 'schablone') {
+    // Klemmung: Reibschluss oben (Stahl) bzw. zur Nachbarlage, alle Lagen im Klemmspalt
+    const P = p.pressure * 1e3, A = column.areas || column.map(() => 0.05);
+    for (let i = 0; i < column.length; i++) {
+      const { m, depthTop } = column[i];
+      const inGap = depthTop + m.t <= p.clampGap * 1e-3 + 1e-4;
+      const mu = i === 0 ? m.muSteelS : m.muSelfS;
+      out[i].Cn = inGap ? P * A[i] : 0;        // Klemmkraft (formschlüssig zwischen den Platten)
+      out[i].Ct = inGap ? mu * P * A[i] : 0;
+    }
+    return out;
+  }
+
   if (type === 'kryo') {
     let phi = 1;
     const sigma = p.sigma * 1e3;
@@ -1509,6 +1734,7 @@ class GripperHead {
     this.compliance = 2e-5; // Nachgiebigkeit der Bindung Stoff–Greiferfläche [m/N]
     const half = footprintHalf(type, this.params);
     let n = 0;
+    if (type === 'schablone') { rows = 1; cols = 1; }
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
       const ox = (c - (cols - 1) / 2) * pitchX, oz = (r - (rows - 1) / 2) * pitchZ;
       const el = {
@@ -1534,7 +1760,58 @@ class GripperHead {
     };
     this.plate = new BoxCollider({ name: 'Greiferplatte', center: [0, 0, 0], half: [this.extent.x, 0.008, this.extent.z], material: 'alu', kinematic: true, visual: false });
     this.colliders = [...this.elements.map((e) => e.collider), this.plate];
+    if (type === 'schablone') {
+      // Die Schablone liegt flach auf dem Stoff; Stoff außerhalb des Schlitzes ist geklemmt
+      for (const k of this.colliders) { k.enabled = false; k.half[1] = 0.002; }
+      this.extent = { x: 0.3, z: 0.25 };
+    }
     this.events = [];
+  }
+
+  // Schablonengeometrie: Kontur und Nahtbahn im Zuschnittkoordinatensystem
+  setTemplate(tpl) { this.template = tpl; }
+
+  // Nähschablone: alle Knoten außerhalb des Nahtschlitzes klemmen (einmal je Schließen)
+  _templateFrame(el, cloths, t) {
+    const tpl = this.template, P = this.params;
+    if (!tpl || !el.on || el.act < 0.5) return;
+    const [cx, fy, cz] = this.elementCenter(el);
+    const yaw = this.pose.yaw, cs = Math.cos(yaw), sn = Math.sin(yaw);
+    const groups = [];
+    for (const c of cloths) {
+      if (el.since.has(c.id)) continue;
+      const verts = [];
+      let dsum = 0;
+      for (let v = 0; v < c.n; v++) {
+        const depthTop = fy - (c.pos[3 * v + 1] + c.radius);
+        if (depthTop < -3e-3 || depthTop > P.clampGap * 1e-3) continue;
+        const dx = c.pos[3 * v] - cx, dz = c.pos[3 * v + 2] - cz;
+        if (Math.abs(dx) > 0.4 || Math.abs(dz) > 0.4) continue;
+        if (tpl.dist(c.rest[2 * v], c.rest[2 * v + 1]) < P.slot * 1e-3) continue;
+        verts.push(v); dsum += depthTop;
+      }
+      if (verts.length > 20) groups.push({ c, verts, depth: dsum / verts.length });
+    }
+    if (!groups.length) return;
+    groups.sort((a, b) => a.depth - b.depth);
+    const col = groups.map((g) => ({ m: g.c.m, depthTop: Math.max(0, g.depth) }));
+    col.areas = groups.map((g) => g.verts.reduce((a, v) => a + g.c.mass[v] / g.c.m.rho, 0));
+    const caps = capacityModel('schablone', P, col, 1);
+    let above = 0;
+    groups.forEach((g, k) => {
+      if (caps[k].Cn <= 0) return;
+      const ly = -(above + g.c.radius);
+      for (const v of g.verts) {
+        if (g.c.attached[v] >= 0) continue;
+        const dx = g.c.pos[3 * v] - cx, dz = g.c.pos[3 * v + 2] - cz;
+        g.c.attached[v] = el.index;
+        el.att.push({ cloth: g.c, v, lx: dx * cs - dz * sn, ly, lz: dx * sn + dz * cs });
+      }
+      el.since.set(g.c.id, t);
+      el.frozen.set(g.c.id, { cloth: g.c, ply: k, Cn: caps[k].Cn, Ct: caps[k].Ct });
+      above += 2 * g.c.radius;
+    });
+    el.column = groups.map((g, k) => ({ cloth: g.c, ply: k, depth: g.depth, Cn: caps[k].Cn * el.act, Ct: caps[k].Ct * el.act }));
   }
 
   elementCenter(el) {
@@ -1581,6 +1858,13 @@ class GripperHead {
         el.column = []; el.cap.clear();
         continue;
       }
+      if (def.shape === 'template') {
+        this._templateFrame(el, cloths, t);
+        el.cap = new Map();
+        for (const [id, f] of el.frozen) el.cap.set(id, { ...f, Cn: f.Cn * el.act, Ct: f.Ct * el.act });
+        el.column = [...el.frozen.values()].map((f) => ({ cloth: f.cloth, ply: f.ply, Cn: f.Cn * el.act, Ct: f.Ct * el.act }));
+        continue;
+      }
       const [cx, fy, cz] = this.elementCenter(el);
       const half = el.half, round = def.shape === 'round';
       const maxDepth = 8e-3;
@@ -1597,9 +1881,7 @@ class GripperHead {
           const lx = dx * cs - dz * sn, lz = dx * sn + dz * cs;
           const inside = round ? lx * lx + lz * lz <= half * half : Math.abs(lx) <= half && Math.abs(lz) <= half;
           if (inside) cand.push(v);
-          const i = v % c.nx, j = (v / c.nx) | 0;
-          for (let a = i - 1; a <= i; a++) for (let b = j - 1; b <= j; b++)
-            if (a >= 0 && b >= 0 && a < c.nx - 1 && b < c.nz - 1) cells.add(b * (c.nx - 1) + a);
+          for (let e = c.nodeTriStart[v]; e < c.nodeTriStart[v + 1]; e++) cells.add(c.nodeTriList[e]);
         }
         if (!cells.size) continue;
         let hits = 0, dsum = 0;
@@ -1607,8 +1889,8 @@ class GripperHead {
         for (const [sx, sz] of samples) {
           for (const cell of cells) {
             let found = false;
-            for (let q = 0; q < 2; q++) {
-              const tIdx = 2 * cell + q;
+            for (let q = 0; q < 1; q++) {
+              const tIdx = cell;
               const r = triHit(c, tIdx, sx, sz);
               if (!r) continue;
               const depthTop = fy - (r.y + c.radius);
@@ -1754,6 +2036,33 @@ class GripperHead {
   releaseAll() { for (const el of this.elements) { el.on = false; el.act = 0; this._release(el, null); } }
 
   // Telemetrie je Element: gegriffene Lagen mit Last und Kapazität
+  // Lage des gegriffenen (obersten) Zuschnitts im Kopfkoordinatensystem:
+  // kopf = R(θ)·zuschnitt + t, bestimmt aus den Bindungspunkten (2D-Procrustes).
+  // Entspricht dem Einmessen der Teillage, z. B. mit einer Kamera am Greifer.
+  partMap() {
+    let cloth = null;
+    for (const el of this.elements) for (const [id, f] of el.frozen) if (f.ply === 0 && el.att.some((a) => a.cloth.id === id)) cloth = f.cloth;
+    if (!cloth) return null;
+    const P = [], Q = [];
+    for (const el of this.elements) for (const a of el.att) {
+      if (a.cloth !== cloth) continue;
+      P.push([cloth.rest[2 * a.v], cloth.rest[2 * a.v + 1]]);
+      Q.push([el.ox + a.lx, el.oz + a.lz]);
+    }
+    if (P.length < 3) return null;
+    const cp = [0, 0], cq = [0, 0];
+    for (let k = 0; k < P.length; k++) { cp[0] += P[k][0]; cp[1] += P[k][1]; cq[0] += Q[k][0]; cq[1] += Q[k][1]; }
+    cp[0] /= P.length; cp[1] /= P.length; cq[0] /= P.length; cq[1] /= P.length;
+    let A = 0, B = 0;
+    for (let k = 0; k < P.length; k++) {
+      const u = P[k][0] - cp[0], v = P[k][1] - cp[1], x = Q[k][0] - cq[0], z = Q[k][1] - cq[1];
+      A += x * u + z * v; B += x * v - z * u;
+    }
+    const theta = Math.atan2(B, A);
+    const [rx, rz] = rotY(cp[0], cp[1], theta);
+    return { cloth, theta, tx: cq[0] - rx, tz: cq[1] - rz };
+  }
+
   status() {
     return this.elements.map((el) => {
       const held = new Map();
@@ -1783,6 +2092,10 @@ const __M_physics_sewing = (() => {
 //    Lagenverschiebung beim Nähen mehrerer Lagen.
 //  • Nadel im Stoff (Phase 0…0,45): alle Lagen an der Einstichstelle fixiert.
 //  • Jeder Einstich erzeugt einen Stich, der die Lagen mechanisch verbindet.
+//  • Fadenspannung: Ober- und Unterfaden ziehen die Naht in Längsrichtung zusammen
+//    (Stauchung ε = F_Faden / (T · b_Naht)); bei dünnen Stoffen entsteht Nahtkräuseln.
+//  • Kurvennaht: Führt der Roboter das Teil (SEWPATH), folgt der Transporteur der
+//    Starrkörperbewegung des Teils (Drehung um die Nadel), statt nur geradeaus zu schieben.
 
 const { BoxCollider } = __M_physics_colliders;
 const { SOLIDS } = __M_physics_materials;
@@ -1808,16 +2121,24 @@ class SewingMachine {
     this.needleDepth = 0;            // für Darstellung (0 = oben, 1 = unten)
     this.pinned = [];
     this.order = new Map();             // Lagenreihenfolge unter dem Fuß
+    this.threadTension = 1.2;           // Fadenspannung [N]
+    this.seamLinks = [];                // Fadenzug entlang der Naht
+    this.deviations = [];               // Abstand Einstich ↔ Sollbahn [m]
+    this.follow = null;                 // Starrkörperbewegung des geführten Teils (Kurvennaht)
     this.foot = new BoxCollider({ name: 'Nähfuß', center: [needle[0], needle[1] + this.footLift + 0.004, needle[2]], half: [this.half[0], 0.004, this.half[1]], material: 'stahl', kinematic: true, visual: false });
     this.footY = needle[1] + this.footLift;
   }
 
-  startSew(length, rpm, stitch) {
+  startSew(length, rpm, stitch, path = null, pathCloth = null) {
     if (rpm) this.rpm = rpm;
     if (stitch) this.stitchLength = stitch;
     this.sewTarget = Math.max(1, Math.round((length * 1000) / this.stitchLength));
     this.stitches = 0;
     this.sewing = true;
+    this.activePath = path;
+    this.pathCloth = pathCloth;
+    this.deviations = [];
+    this.lastHits = null;
   }
 
   get busy() { return this.sewing; }
@@ -1883,6 +2204,7 @@ class SewingMachine {
   solve(cloths, dt, t) {
     // Stiche (bleibende Verbindungen der Lagen)
     for (const j of this.joins) this._solveJoin(j);
+    for (const l of this.seamLinks) this._solveSeamLink(l);
     if (this.footUp) { this.order.clear(); return; }
     const groups = this._zone(cloths);
     if (!groups.length) {
@@ -1916,7 +2238,11 @@ class SewingMachine {
         let dx = p[i] - pp[i], dz = p[i + 2] - pp[i + 2];
         // Sollverschiebung aus der Lage darunter bzw. dem Transporteur
         let tx, tz, mu;
-        if (k === 0) { tx = fx; tz = fz; mu = this.dogMu; }
+        if (k === 0) {
+          mu = this.dogMu;
+          if (this.follow && vf > 0) { const d = this.follow(pp[i], pp[i + 2]); tx = d[0]; tz = d[1]; }
+          else { tx = fx; tz = fz; }
+        }
         else { tx = below[0]; tz = below[1]; mu = 0.5 * (c.m.muSelfS + groups[k - 1].c.m.muSelfS); }
         let cx = tx - dx, cz = tz - dz;
         let cl = Math.hypot(cx, cz), L = lim(mu);
@@ -1951,10 +2277,50 @@ class SewingMachine {
     if (!hits.length) return;
     const top = hits[hits.length - 1];
     this.stitchPoints.push({ cloth: top.c, ...top.hit });
+    // Nahtabweichung: Einstichstelle im Zuschnitt gegen die Sollbahn
+    if (this.activePath && this.distToPath) {
+      const h = hits.find((x) => x.c === this.pathCloth) || top;
+      const [u, v] = h.c.restPoint(h.hit.tri, h.hit.b0, h.hit.b1, h.hit.b2);
+      this.deviations.push(this.distToPath(this.activePath, u, v));
+    }
+    // Fadenzug zum vorigen Einstich in jeder Lage (nur Zug, verkürzte Ruhelänge)
+    if (this.lastHits) {
+      for (const hcur of hits) {
+        const hprev = this.lastHits.find((x) => x.c === hcur.c);
+        if (!hprev) continue;
+        const c = hcur.c;
+        const pa = triPoint(c, hprev.hit), pb = triPoint(c, hcur.hit);
+        const L = Math.hypot(pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]);
+        if (L < 1e-4 || L > 3 * this.stitchLength * 1e-3) continue;
+        const eps = Math.min(0.05, this.threadTension / (Math.min(c.m.Tw, c.m.Tf) * 0.01));
+        this.seamLinks.push({ c, a: hprev.hit, b: hcur.hit, rest: L * (1 - eps) });
+      }
+    }
+    this.lastHits = hits;
     // Der Faden verbindet benachbarte Lagen an der Einstichstelle (trägt nur Zug)
     for (let k = 1; k < hits.length; k++) {
       const a = hits[k - 1], b = hits[k];
       this.joins.push({ ca: a.c, ta: a.hit.tri, ba: [a.hit.b0, a.hit.b1, a.hit.b2], cb: b.c, tb: b.hit.tri, bb: [b.hit.b0, b.hit.b1, b.hit.b2], rest: a.c.radius + b.c.radius });
+    }
+  }
+
+  _solveSeamLink(l) {
+    const c = l.c, p = c.pos, T = c.tri;
+    const ia = [T[3 * l.a.tri], T[3 * l.a.tri + 1], T[3 * l.a.tri + 2]], ba = [l.a.b0, l.a.b1, l.a.b2];
+    const ib = [T[3 * l.b.tri], T[3 * l.b.tri + 1], T[3 * l.b.tri + 2]], bb = [l.b.b0, l.b.b1, l.b.b2];
+    let ax = 0, ay = 0, az = 0, bx = 0, by = 0, bz = 0, W = 0;
+    for (let k = 0; k < 3; k++) {
+      ax += ba[k] * p[3 * ia[k]]; ay += ba[k] * p[3 * ia[k] + 1]; az += ba[k] * p[3 * ia[k] + 2];
+      bx += bb[k] * p[3 * ib[k]]; by += bb[k] * p[3 * ib[k] + 1]; bz += bb[k] * p[3 * ib[k] + 2];
+      W += c.w[ia[k]] * ba[k] ** 2 + c.w[ib[k]] * bb[k] ** 2;
+    }
+    const dx = bx - ax, dy = by - ay, dz = bz - az, len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (len <= l.rest || !W) return;
+    const s = (len - l.rest) / (len * W);
+    for (let k = 0; k < 3; k++) {
+      const fa = c.w[ia[k]] * ba[k] * s, fb = c.w[ib[k]] * bb[k] * s;
+      p[3 * ia[k]] += fa * dx; p[3 * ia[k] + 1] += fa * dy; p[3 * ia[k] + 2] += fa * dz;
+      p[3 * ib[k]] -= fb * dx; p[3 * ib[k] + 1] -= fb * dy; p[3 * ib[k] + 2] -= fb * dz;
     }
   }
 
@@ -1982,7 +2348,7 @@ class SewingMachine {
   }
 
   reset() {
-    this.stitchPoints = []; this.joins = []; this.sewing = false; this.footUp = true; this.phase = 0.6;
+    this.stitchPoints = []; this.joins = []; this.seamLinks = []; this.sewing = false; this.footUp = true; this.phase = 0.6;
   }
 }
 
@@ -2002,6 +2368,11 @@ function locateTriangle(c, x, z) {
     if (u >= -1e-6 && v >= -1e-6 && u + v <= 1 + 1e-6) return { tri: t, b0: 1 - u - v, b1: v, b2: u };
   }
   return null;
+}
+
+function triPoint(c, hit) {
+  const T = c.tri, p = c.pos, a = 3 * T[3 * hit.tri], b = 3 * T[3 * hit.tri + 1], d = 3 * T[3 * hit.tri + 2];
+  return [0, 1, 2].map((k) => hit.b0 * p[a + k] + hit.b1 * p[b + k] + hit.b2 * p[d + k]);
 }
 
 return { SewingMachine, locateTriangle };
@@ -2025,9 +2396,16 @@ const __M_physics_robot = (() => {
 //   SEW L [rpm] [mm] [SYNC]  Naht starten (läuft parallel weiter); SYNC koppelt den
 //                      Greifer an die Transporteurbewegung (synchrones Mitführen)
 //   WAITSEW            warten, bis die Naht fertig ist
+//   ALIGNPATH name [y] [vorlauf]  Teil so positionieren, dass der Nahtanfang [vorlauf m]
+//                      vor der Nadel liegt und die Nahtrichtung in Transportrichtung zeigt
+//   SEWPATH name [rpm] [mm]  Naht entlang der Bahn; der Roboter führt und dreht das Teil
+//                      um die Nadel, sodass die Nahttangente stets in Transportrichtung liegt
 //   HOME               Grundstellung
 
 const ROT_WEIGHT = 0.2; // m je rad für die Bahnlänge
+
+// Drehung um y in der Konvention der Simulation (wie rotY in cloth.js)
+function rot(x, z, yaw) { const c = Math.cos(yaw), s = Math.sin(yaw); return [x * c + z * s, -x * s + z * c]; }
 
 function parseProgram(text) {
   const lines = text.split(/\r?\n/);
@@ -2043,7 +2421,7 @@ function parseProgram(text) {
   return out;
 }
 
-const KNOWN = new Set(['SPEED', 'ACCEL', 'MOVE', 'MOVEREL', 'TOUCH', 'GRIP', 'WAIT', 'FOOT', 'SEW', 'WAITSEW', 'HOME', 'TABLEVAC']);
+const KNOWN = new Set(['SPEED', 'ACCEL', 'MOVE', 'MOVEREL', 'TOUCH', 'GRIP', 'WAIT', 'FOOT', 'SEW', 'WAITSEW', 'HOME', 'TABLEVAC', 'ALIGNPATH', 'SEWPATH']);
 
 function validateProgram(prog) {
   const errs = [];
@@ -2060,7 +2438,7 @@ class GantryRobot {
     this.home = { ...home };
     this.pose = { ...home };
     this.vmax = 0.5; this.amax = 2.0;
-    this.limits = limits || { x: [-0.95, 1.05], y: [0.78, 1.5], z: [-0.4, 0.45] };
+    this.limits = limits || { x: [-0.95, 1.05], y: [0.78, 1.5], z: [-0.42, 0.52] };
     this.reset();
   }
 
@@ -2075,6 +2453,7 @@ class GantryRobot {
     this.current = null;
     this.speed = 0;
     this.follow = false;
+    this.pathFollow = null;
   }
 
   load(text) {
@@ -2119,7 +2498,36 @@ class GantryRobot {
   }
 
   // ctx: { head, machine, contact(): bool, log(msg) }
+  // Lage des Roboters, bei der der Bahnpunkt s unter der Nadel liegt (plus Vorlauf in +z)
+  posePath(f, s, ctx, lead = 0) {
+    const { p, t } = ctx.pathAt(f.path, s);
+    const M = f.map;
+    const [qx0, qz0] = rot(p[0], p[1], M.theta);
+    const qx = qx0 + M.tx, qz = qz0 + M.tz;
+    const [tx, tz] = rot(t[0], t[1], M.theta);
+    // Tangente (Richtung noch nicht genähter Naht) muss in Weltkoordinaten nach +z zeigen
+    let yaw = -Math.atan2(tx, tz);
+    const ref = f.yaw ?? this.pose.yaw;
+    while (yaw - ref > Math.PI) yaw -= 2 * Math.PI;
+    while (yaw - ref < -Math.PI) yaw += 2 * Math.PI;
+    const [wx, wz] = rot(qx, qz, yaw);
+    const N = ctx.machine.needle;
+    return { x: N[0] - wx, y: this.pose.y, z: N[2] + lead - wz, yaw };
+  }
+
   update(t, dt, ctx) {
+    // Bahnführung beim Nähen (Kurvennaht)
+    if (this.pathFollow) {
+      const f = this.pathFollow;
+      if (ctx.machine.sewing) {
+        f.s = Math.min(f.path.length, f.s + ctx.machine.feedVelocity() * dt);
+        const np = this.posePath(f, f.s, ctx);
+        np.y = this.pose.y;
+        f.yaw = np.yaw;
+        this.speed = Math.hypot(np.x - this.pose.x, np.z - this.pose.z) / dt;
+        this.pose = this._clamp(np);
+      } else this.pathFollow = null;
+    }
     // synchrones Mitführen mit dem Transporteur
     if (this.follow) {
       if (ctx.machine.sewing) {
@@ -2144,7 +2552,7 @@ class GantryRobot {
     }
     if (!this.running) return;
     if (t < this.waitUntil) return;
-    if (this.current && this.current.cmd === 'WAITSEW' && ctx.machine.busy) return;
+    if (this.current && (this.current.cmd === 'WAITSEW' || this.current.cmd === 'SEWPATH') && ctx.machine.busy) return;
     // nächste Anweisung
     while (this.running && !this.seg && t >= this.waitUntil) {
       if (this.pc >= this.prog.length) { this.running = false; this.current = null; ctx.log?.('Programm beendet'); return; }
@@ -2177,6 +2585,24 @@ class GantryRobot {
           ctx.log?.(`Nähen ${((n[0] || 0.1) * 100).toFixed(1)} cm`);
           break;
         case 'WAITSEW': if (ctx.machine.busy) return; break;
+        case 'ALIGNPATH': {
+          const path = ctx.paths?.[ins.args[0]];
+          const map = path && ctx.partMap();
+          if (!path || !map) { ctx.log?.(`ALIGNPATH: ${!path ? 'Bahn „' + ins.args[0] + '“ unbekannt' : 'kein Teil gegriffen'}`, 'error'); break; }
+          const tgt = this.posePath({ path, map }, 0, ctx, Number.isFinite(n[2]) ? n[2] : 0.04);
+          tgt.y = Number.isFinite(n[1]) ? n[1] : this.pose.y;
+          this.moveTo(tgt, t);
+          break;
+        }
+        case 'SEWPATH': {
+          const path = ctx.paths?.[ins.args[0]];
+          const map = path && ctx.partMap();
+          if (!path || !map) { ctx.log?.(`SEWPATH: ${!path ? 'Bahn „' + ins.args[0] + '“ unbekannt' : 'kein Teil gegriffen'}`, 'error'); break; }
+          ctx.machine.startSew(path.length, Number.isFinite(n[1]) ? n[1] : undefined, Number.isFinite(n[2]) ? n[2] : undefined, path, map.cloth);
+          this.pathFollow = { path, map, s: 0, yaw: this.pose.yaw };
+          ctx.log?.(`Kurvennaht „${ins.args[0]}“, ${(path.length * 100).toFixed(1)} cm`);
+          return; // wartet wie WAITSEW
+        }
         default: break;
       }
     }
@@ -2184,6 +2610,149 @@ class GantryRobot {
 }
 
 return { ROT_WEIGHT, parseProgram, validateProgram, GantryRobot };
+})();
+
+// ---- src/physics/garments.js ----
+const __M_physics_garments = (() => {
+// Schnittteile und Nahtbahnen.
+//
+// Koordinaten im Zuschnitt [m]: x quer (Schussrichtung), z längs (Kettrichtung).
+// z < 0 zeigt zur Schulter, z > 0 zum Saum.
+
+const { pointInPolygon } = __M_physics_cloth;
+function bezier(p0, p1, p2, n) {
+  const out = [];
+  for (let k = 1; k <= n; k++) {
+    const t = k / n, u = 1 - t;
+    out.push([u * u * p0[0] + 2 * u * t * p1[0] + t * t * p2[0], u * u * p0[1] + 2 * u * t * p1[1] + t * t * p2[1]]);
+  }
+  return out;
+}
+
+// Kinder-T-Shirt Gr. 104/110 im Kimonoschnitt (angeschnittener Ärmel).
+// Rückgabe: Kontur (Polygon) und benannte Konturabschnitte (Indexbereiche) für Nähte.
+function tshirtPanel({ neckDepth = 0.06 } = {}) {
+  const bw = 0.165;   // halbe Körperweite
+  const hem = 0.21, sh = -0.212;   // Saum, Schulterhöhe am Hals
+  const st = 0.27;    // Ärmelspitze (halbe Spannweite)
+  const cuffTop = -0.195, cuffBot = -0.11;
+  const ua = -0.025;  // Beginn der Achselrundung an der Seitennaht
+  const neckW = 0.065;
+  const right = [];
+  right.push([bw, hem]);
+  right.push([bw, 0.1], [bw, 0.0]);
+  right.push([bw, ua]);
+  right.push(...bezier([bw, ua], [bw + 0.006, -0.088], [0.215, -0.097], 8));   // Achselrundung
+  right.push([st, cuffBot]);                                                     // Ärmelunterkante
+  right.push([st, cuffTop]);                                                     // Ärmelsaum
+  right.push([neckW, sh]);                                                       // Schulter
+  right.push(...bezier([neckW, sh], [neckW - 0.005, sh + neckDepth], [0, sh + neckDepth], 6)); // Halsausschnitt
+  // spiegeln (ohne die Mittelpunkte doppelt)
+  const left = right.slice(0, -1).map(([x, z]) => [-x, z]).reverse();
+  const outline = [...right, ...left];
+  const iUa = 3, iCuff = right.findIndex((p) => p[0] === st && p[1] === cuffBot);
+  const nR = right.length;
+  return {
+    outline,
+    // Linke Seitennaht inkl. Ärmelunternaht: Saum → Achsel → Ärmelsaum (links liegt das
+    // Teil beim Nähen außerhalb des Maschinenarms)
+    chains: {
+      seite_links: outline.slice(nR - 1).reverse().slice(0, iCuff + 1),
+      seite_rechts: right.slice(0, iCuff + 1),
+    },
+    iUa,
+  };
+}
+
+// Abschnitt der Kontur um die Nahtzugabe nach innen versetzen und gleichmäßig abtasten.
+// trim: Abstand der ersten/letzten Einstichstelle von der Schnittkante [m]
+function seamPath(outline, chain, allowance = 0.01, step = 0.002, trim = 0.004) {
+  // Normale je Segment, die ins Teil zeigt
+  const segN = [];
+  for (let k = 0; k < chain.length - 1; k++) {
+    const [ax, az] = chain[k], [bx, bz] = chain[k + 1];
+    const dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz);
+    let nx = -dz / L, nz = dx / L;
+    const mx = (ax + bx) / 2 + nx * 1e-3, mz = (az + bz) / 2 + nz * 1e-3;
+    if (!pointInPolygon(outline, mx, mz)) { nx = -nx; nz = -nz; }
+    segN.push([nx, nz]);
+  }
+  // Gehrung an den Ecken
+  const pts = chain.map((p, k) => {
+    const n0 = segN[Math.max(0, k - 1)], n1 = segN[Math.min(segN.length - 1, k)];
+    let nx = n0[0] + n1[0], nz = n0[1] + n1[1];
+    const L = Math.hypot(nx, nz) || 1;
+    nx /= L; nz /= L;
+    const c = Math.max(0.3, nx * n1[0] + nz * n1[1]);
+    return [p[0] + (nx * allowance) / c, p[1] + (nz * allowance) / c];
+  });
+  // Endpunkte auf die Kanten zurückziehen (Saum- und Ärmelkante liegen senkrecht zur Naht)
+  const resampled = [];
+  const cum = [0];
+  for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1] + Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]));
+  const total = cum[cum.length - 1];
+  const at = (s) => {
+    let k = 1;
+    while (k < cum.length - 1 && cum[k] < s) k++;
+    const t = (s - cum[k - 1]) / Math.max(1e-12, cum[k] - cum[k - 1]);
+    return [pts[k - 1][0] + t * (pts[k][0] - pts[k - 1][0]), pts[k - 1][1] + t * (pts[k][1] - pts[k - 1][1])];
+  };
+  for (let s = trim; s <= total - trim + 1e-9; s += step) resampled.push(at(s));
+  return makePath(resampled);
+}
+
+function makePath(points) {
+  const cum = [0];
+  for (let k = 1; k < points.length; k++) cum.push(cum[k - 1] + Math.hypot(points[k][0] - points[k - 1][0], points[k][1] - points[k - 1][1]));
+  return { points, cum, length: cum[cum.length - 1] };
+}
+
+// Punkt und geglättete Tangente bei Bogenlänge s (Fenster ±win für ruhige Drehbewegung)
+function pathAt(path, s, win = 0.006) {
+  const { points: P, cum } = path;
+  s = Math.max(0, Math.min(path.length, s));
+  const interp = (q) => {
+    q = Math.max(0, Math.min(path.length, q));
+    let lo = 0, hi = cum.length - 1;
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (cum[m] <= q) lo = m; else hi = m; }
+    const t = (q - cum[lo]) / Math.max(1e-12, cum[hi] - cum[lo]);
+    return [P[lo][0] + t * (P[hi][0] - P[lo][0]), P[lo][1] + t * (P[hi][1] - P[lo][1])];
+  };
+  const p = interp(s), a = interp(s - win), b = interp(s + win);
+  const tx = b[0] - a[0], tz = b[1] - a[1], L = Math.hypot(tx, tz) || 1;
+  return { p, t: [tx / L, tz / L] };
+}
+
+// Abstand eines Punkts zur Bahn (Polylinie)
+function distToPath(path, x, z) {
+  let bd = Infinity;
+  const P = path.points;
+  for (let k = 0; k < P.length - 1; k++) {
+    const [ax, az] = P[k], [bx, bz] = P[k + 1];
+    const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz;
+    const t = L2 > 0 ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)) : 0;
+    bd = Math.min(bd, Math.hypot(x - ax - t * dx, z - az - t * dz));
+  }
+  return bd;
+}
+
+// Schablonenkontur: Zuschnittkontur, deren Nahtabschnitt durch eine um (Zugabe + Schlitz)
+// nach innen versetzte Linie ersetzt ist (für die Darstellung der Schablone mit Nahtschlitz).
+function templateOutline(outline, chain, inset) {
+  const key = (p) => `${p[0].toFixed(6)},${p[1].toFixed(6)}`;
+  const idx = outline.map(key);
+  const i0 = idx.indexOf(key(chain[0])), i1 = idx.indexOf(key(chain[chain.length - 1]));
+  if (i0 < 0 || i1 < 0) return outline;
+  const inner = seamPath(outline, chain, inset, 0.004, 0).points;
+  // Kontur ab dem Ende des Nahtabschnitts bis zu seinem Anfang durchlaufen, dann die Innenlinie
+  const n = outline.length, rest = [];
+  const forward = (i0 + chain.length - 1) % n === i1;
+  if (forward) { for (let k = i1; k !== i0; k = (k + 1) % n) rest.push(outline[k]); }
+  else { for (let k = i0; k !== i1; k = (k + 1) % n) rest.push(outline[k]); }
+  return forward ? [...rest, outline[i0], ...inner, outline[i1]] : [...rest, outline[i1], ...inner.slice().reverse(), outline[i0]];
+}
+
+return { tshirtPanel, seamPath, makePath, pathAt, distToPath, templateOutline };
 })();
 
 // ---- src/physics/world.js ----
@@ -2199,6 +2768,7 @@ const { ClothContacts } = __M_physics_collision;
 const { GripperHead, defaultParams } = __M_physics_grippers;
 const { SewingMachine } = __M_physics_sewing;
 const { GantryRobot } = __M_physics_robot;
+const { tshirtPanel, seamPath, pathAt, distToPath, templateOutline } = __M_physics_garments;
 const TABLE_TOP = 0.80;
 const STACK_POS = [-0.5, 0.05];
 const NEEDLE = [0.62, TABLE_TOP, -0.12];
@@ -2209,9 +2779,10 @@ const DEFAULT_PROGRAM = `# Pick & Place zweier Zuschnitte und robotergeführte N
 # 1. Lage vom Stapel nehmen
 SPEED 0.5
 ACCEL 2
-MOVE -0.5 0.95 0.05 0       # über den Stapel
+MOVE -0.53 0.95 0.05 0      # über den Stapel, 3 cm außermittig gegriffen,
+                            # damit der Rahmen später links der Nadelstange bleibt
 SPEED 0.12
-MOVE -0.5 0.81 0.05
+MOVE -0.53 0.81 0.05
 TOUCH 0.01                  # Tastfahrt bis Kontakt mit der obersten Lage
 GRIP ON
 WAIT 0.3                    # Haltekraft aufbauen
@@ -2219,24 +2790,26 @@ SPEED 0.03
 MOVEREL 0 0.04 0            # langsam abheben: mitgesaugte Unterlage fällt ab
 WAIT 0.3
 SPEED 0.5
-MOVE -0.5 0.95 0.05
-MOVE 0.485 0.95 0.12        # Transport zur Nähmaschine
+MOVE -0.53 0.95 0.05
+MOVE 0.455 0.95 0.12        # Transport zur Nähmaschine
 SPEED 0.12
-MOVE 0.485 0.815 0.12
+MOVE 0.455 0.815 0.12
 TOUCH 0.01
 SPEED 0.05
 MOVEREL 0 0.003 -0.05       # Vorderkante unter den Nähfuß schieben
 GRIP OFF
 TABLEVAC ON                 # Saugtisch hält die untere Lage
 WAIT 0.3
+SPEED 0.2
+MOVEREL -0.08 0.004 0       # erst seitlich weg vom Nähkopf …
 SPEED 0.3
-MOVEREL 0 0.12 0
+MOVEREL 0 0.12 0            # … dann anheben (sonst stößt der Rahmen an)
 
 # 2. Lage holen und deckungsgleich auflegen
 SPEED 0.5
-MOVE -0.5 0.95 0.05
+MOVE -0.53 0.95 0.05
 SPEED 0.12
-MOVE -0.5 0.81 0.05
+MOVE -0.53 0.81 0.05
 TOUCH 0.01
 GRIP ON
 WAIT 0.3
@@ -2244,10 +2817,10 @@ SPEED 0.03
 MOVEREL 0 0.04 0
 WAIT 0.3
 SPEED 0.5
-MOVE -0.5 0.95 0.05
-MOVE 0.485 0.95 0.12
+MOVE -0.53 0.95 0.05
+MOVE 0.455 0.95 0.12
 SPEED 0.12
-MOVE 0.485 0.815 0.12
+MOVE 0.455 0.815 0.12
 TOUCH 0.01
 SPEED 0.05
 MOVEREL 0 0.003 -0.05       # über die gehaltene 1. Lage schieben
@@ -2262,10 +2835,66 @@ WAITSEW
 FOOT UP
 GRIP OFF
 WAIT 0.4
+SPEED 0.2
+MOVEREL -0.08 0.004 0
 SPEED 0.3
 MOVEREL 0 0.12 0
 HOME
 `;
+
+const TSHIRT_PROGRAM = `# Kinder-T-Shirt (Kimonoschnitt, Gr. 104/110): Vorder- und Rückenteil
+# liegen rechts auf rechts im Zuschnittstapel. Genäht wird die linke
+# Seitennaht mit Ärmelunternaht in einem Zug – mit der Achselrundung.
+
+SPEED 0.5
+ACCEL 2
+MOVE -0.5 0.95 0.05 0
+SPEED 0.12
+MOVE -0.5 0.81 0.05
+TOUCH 0.01
+GRIP ON                     # Nähschablone klemmt beide Teile (Nahtschlitz bleibt frei)
+WAIT 0.4
+SPEED 0.04
+MOVEREL 0 0.03 0
+SPEED 0.4
+MOVE -0.5 0.95 0.05
+# Nahtanfang 4 cm vor die Nadel, Nahtrichtung in Transportrichtung
+ALIGNPATH seite_links 0.83 0.04
+SPEED 0.12
+TOUCH 0.01
+SPEED 0.04
+MOVEREL 0 0.002 -0.04       # Saumkante unter den Nähfuß schieben
+FOOT DOWN
+WAIT 0.2
+# Der Roboter führt das Teil und dreht es in der Achselrundung um die Nadel
+SEWPATH seite_links 500 3
+FOOT UP
+GRIP OFF
+WAIT 0.3
+SPEED 0.3
+MOVEREL 0 0.12 0
+HOME
+`;
+
+// Szenarien: setzen Material, Greifer, Raster und Programm passend vor
+const SCENARIOS = {
+  rechteck: {
+    name: 'Rechteckzuschnitte, gerade Naht',
+    set: { scenario: 'rechteck', fabricId: 'popeline', plies: 4, gripper: 'vakuum', rows: 3, cols: 3, pitchX: 0.11, pitchZ: 0.14, rpm: 600, stitch: 3, pickPlies: 1, program: null },
+  },
+  tshirt: {
+    name: 'T-Shirt, Kurvennaht (Seite + Ärmel)',
+    set: { scenario: 'tshirt', fabricId: 'jersey', plies: 2, gripper: 'schablone', gripperParams: {}, rows: 1, cols: 1, pitchX: 0.10, pitchZ: 0.13, rpm: 500, stitch: 3, pickPlies: 2, program: null },
+  },
+};
+
+function applyScenario(cfg, id) {
+  const sc = SCENARIOS[id] || SCENARIOS.rechteck;
+  Object.assign(cfg, sc.set);
+  cfg.gripperParams = { ...defaultParams(cfg.gripper), ...(sc.set.gripperParams || {}) };
+  cfg.program = id === 'tshirt' ? TSHIRT_PROGRAM : DEFAULT_PROGRAM;
+  return cfg;
+}
 
 function defaultConfig() {
   return {
@@ -2287,6 +2916,12 @@ function defaultConfig() {
     selfCollision: true,
     program: DEFAULT_PROGRAM,
     seed: 7,
+    servoKv: 40,         // Lageregelung der Portalachsen [1/s]
+    threadTension: 1.2,  // Fadenspannung [N]
+    airCushion: true,    // Luftpolster (Quetschströmung) beim Ablegen
+    servoFF: 0.9,        // Geschwindigkeitsvorsteuerung (0 … 1)
+    scenario: 'rechteck',
+    pickPlies: 1,        // gewollte Lagen je Griff (Doppelgriff-Warnung darüber)
   };
 }
 
@@ -2310,27 +2945,46 @@ class World {
     this.colliders = [
       new BoxCollider({ name: 'Hallenboden', center: [0, -0.05, 0], half: [4, 0.05, 4], material: 'beton', visual: false }),
       new BoxCollider({ name: 'Stapeltisch', center: [STACK_POS[0], T - 0.02, STACK_POS[1]], half: [0.35, 0.02, 0.3], material: c.tableMaterial }),
-      new BoxCollider({ name: 'Nähtisch', center: [0.55, T - 0.02, 0.05], half: [0.45, 0.02, 0.3], material: c.tableMaterial }),
+      new BoxCollider({ name: 'Nähtisch', center: [0.55, T - 0.02, -0.05], half: [0.45, 0.02, 0.4], material: c.tableMaterial }),
       new BoxCollider({ name: 'Stichplatte', center: [NEEDLE[0] + 0.13, T - 0.004, NEEDLE[2]], half: [0.18, 0.004, 0.07], material: 'stahl', color: '#c9cdd2' }),
       new BoxCollider({ name: 'Nähkopf', center: [NEEDLE[0] + 0.02, T + 0.2, NEEDLE[2]], half: [0.05, 0.08, 0.05], material: 'guss' }),
       new BoxCollider({ name: 'Arm', center: [NEEDLE[0] + 0.2, T + 0.23, NEEDLE[2]], half: [0.16, 0.04, 0.045], material: 'guss' }),
       new BoxCollider({ name: 'Ständer', center: [NEEDLE[0] + 0.33, T + 0.12, NEEDLE[2]], half: [0.05, 0.12, 0.055], material: 'guss' }),
     ];
     this.colliders[2].vacuum = true; // Nähtisch mit Saugfeld
+    this.tableColliders = this.colliders.slice(1, 4);
     this.staticColliders = this.colliders.slice();
 
     // Stapel aus Zuschnitten mit realistischer Legetoleranz (±1,5 mm, ±0,5°)
     const R = rng(c.seed);
     this.cloths = [];
     const t = this.fabric.thickness * 1e-3;
-    for (let i = 0; i < c.plies; i++) {
+    this.paths = {};
+    const tshirt = c.scenario === 'tshirt';
+    const plies = tshirt ? 2 : c.plies;
+    let shapes = [];
+    if (tshirt) {
+      const front = tshirtPanel({ neckDepth: 0.06 }), back = tshirtPanel({ neckDepth: 0.02 });
+      shapes = [{ outline: back.outline, name: 'Rückenteil' }, { outline: front.outline, name: 'Vorderteil' }];
+      for (const [k, chain] of Object.entries(front.chains)) this.paths[k] = seamPath(front.outline, chain, 0.01);
+      this.garment = { front, back };
+    } else {
+      const W = c.plyW, L = c.plyL;
+      const out = [[-W / 2, -L / 2], [W / 2, -L / 2], [W / 2, L / 2], [-W / 2, L / 2]];
+      // gerade Naht entlang der rechten Kante (vom vorderen zum hinteren Ende), 1 cm Zugabe
+      this.rectOutline = out; this.rectChain = [[W / 2, -L / 2], [W / 2, L / 2]];
+      this.paths.kante_rechts = seamPath(out, this.rectChain, 0.01);
+    }
+    for (let i = 0; i < plies; i++) {
       const y = T + t * (i + 0.5) + 1e-5;
+      const tol = tshirt ? 0.001 : 0.003; // paarweise geschnittene Teile liegen genauer
       const cloth = new Cloth({
         fabric: this.fabric, width: c.plyW, length: c.plyL, spacing: c.spacing,
-        center: [STACK_POS[0] + (R() - 0.5) * 0.003, y, STACK_POS[1] + (R() - 0.5) * 0.003],
-        yaw: ((R() - 0.5) * Math.PI) / 180, name: `Lage ${c.plies - i}`,
+        outline: tshirt ? shapes[i].outline : null,
+        center: [STACK_POS[0] + (R() - 0.5) * tol, y, STACK_POS[1] + (R() - 0.5) * tol],
+        yaw: ((R() - 0.5) * Math.PI) / 180, name: tshirt ? shapes[i].name : `Lage ${plies - i}`,
       });
-      cloth.stackIndex = c.plies - i; // 1 = oberste
+      cloth.stackIndex = plies - i; // 1 = oberste
       this.cloths.push(cloth);
     }
     this.cloths.sort((a, b) => a.stackIndex - b.stackIndex);
@@ -2342,8 +2996,19 @@ class World {
     // Saugtisch im Nähbereich: hält aufliegende Lagen über Unterdruck (erhöht die Normalkraft)
     this.tableVac = { on: false, pressure: c.tableVacPa ?? 800, region: [0.345, 0.625, -0.12, 0.25], top: T }; // Saugfeld unter der 1. Lage (Zonensteuerung)
     this.machine.tableVac = this.tableVac;
+    this.machine.distToPath = distToPath;
+    // Nähschablone passend zum Teil (Kontur, Nahtbahn, Schlitz)
+    {
+      const pathName = tshirt ? 'seite_links' : 'kante_rechts';
+      const path = this.paths[pathName];
+      const outline = tshirt ? this.garment.front.outline : this.rectOutline;
+      const chain = tshirt ? this.garment.front.chains.seite_links : this.rectChain;
+      const slot = (this.head.params.slot || 16) * 1e-3;
+      this.head.setTemplate({ path, outline, dist: (u, v) => distToPath(path, u, v), shape: templateOutline(outline, chain, 0.01 + slot), slot });
+    }
+    this.machineBoxes = this.colliders.filter((k) => ['Nähkopf', 'Arm', 'Ständer'].includes(k.name));
     this.head.tableVac = this.tableVac;
-    Object.assign(this.machine, { rpm: c.rpm, stitchLength: c.stitch, footForce: c.footForce, footMaterial: c.footMaterial });
+    Object.assign(this.machine, { rpm: c.rpm, stitchLength: c.stitch, footForce: c.footForce, footMaterial: c.footMaterial, threadTension: c.threadTension ?? 1.2 });
     this.contacts = new ClothContacts();
     this.contacts.selfCollision = c.selfCollision;
     this.kinematic = [...this.head.colliders, this.machine.foot];
@@ -2388,7 +3053,7 @@ class World {
     return top + held;
   }
 
-  headContact() { return this.robot.pose.y <= this.touchTop + 0.1e-3; }
+  headContact() { return (this._servoPose?.y ?? this.robot.pose.y) <= this.touchTop + 0.1e-3; }
 
   _updateSleep(frameDt) {
     const head = this.head, m = this.machine;
@@ -2503,7 +3168,10 @@ class World {
     }
     this.touchTop = this._touchSurface();
 
-    const ctx = { head: this.head, machine: this.machine, contact: () => this.headContact(), log: (m) => this.log(m) };
+    const ctx = {
+      head: this.head, machine: this.machine, contact: () => this.headContact(), log: (m, l) => this.log(m, l),
+      paths: this.paths, pathAt, partMap: () => this.head.partMap(),
+    };
     for (let s = 0; s < n; s++) {
       if (s % detectEvery === 0) {
         this.contacts.detect(cloths, Math.min(detectEvery, n - s) * dt);
@@ -2511,10 +3179,25 @@ class World {
       this.t += dt;
       for (const k of this.kinematic) k.beginSubstep();
       const wasOn = this.head.elements.some((e) => e.on);
+      const prevPose = { ...this.robot.pose };
       this.robot.update(this.t, dt, ctx);
+      // Kurvennaht: Transporteur folgt der Starrkörperbewegung des geführten Teils
+      if (this.robot.pathFollow) {
+        const a = this._servoPrev || prevPose, b = this._servoNext(dt);
+        this.machine.follow = (x, z) => {
+          const [lx, lz] = rotY(x - a.x, z - a.z, -a.yaw);
+          const [wx, wz] = rotY(lx, lz, b.yaw);
+          return [b.x + wx - x, b.z + wz - z];
+        };
+      } else this.machine.follow = null;
       const isOn = this.head.elements.some((e) => e.on);
       if (!wasOn && isOn) this.cycle = { gripY: this.robot.pose.y, double: false, empty: false };
-      this.head.pose = this.robot.pose;
+      if (this.robot.running && !this._runSeen) { this._runSeen = true; this.collided = false; }
+      if (!this.robot.running) this._runSeen = false;
+      // Lageregelung: Istlage folgt der Sollbahn mit P-Regler (Geschwindigkeitsverstärkung Kv)
+      this.head.pose = this._servoNext(dt);
+      this._servoPrev = { ...this.head.pose };
+      this._servoDone = false;
       this.head.updateColliders();
       this.machine.update(this.t, dt);
 
@@ -2522,12 +3205,29 @@ class World {
         if (c.sleeping) continue;
         if (s % 4 === 0 || !c.acc) this._drag(c, dt * Math.min(4, n - s));
         const p = c.pos, pp = c.prev, v = c.vel, w = c.w, acc = c.acc;
+        const sq = this.cfg.airCushion === false ? null : { a: Math.min(c.width, c.length) / 2 };
+        const gb = c.gapBelow;
         for (let i = 0, N = c.n; i < N; i++) {
           const k = 3 * i;
           pp[k] = p[k]; pp[k + 1] = p[k + 1]; pp[k + 2] = p[k + 2];
           if (!w[i]) continue;
           v[k] += acc[k] * dt; v[k + 2] += acc[k + 2] * dt;
           v[k + 1] += (acc[k + 1] - G) * dt;
+          // Luftpolster (Quetschströmung) beim Annähern an eine Fläche
+          if (v[k + 1] < 0 && sq) {
+            let gap = gb ? gb[i] : Infinity;
+            if (p[k + 1] < TABLE_TOP + 0.012) {
+              const top = this._tableTop(p[k], p[k + 2]);
+              if (top > -1) gap = Math.min(gap, p[k + 1] - c.radius - top);
+            }
+            if (gap > 0 && gap < 5e-3) {
+              const vn = -v[k + 1], e = Math.min(c.edgeDist[i], sq.a);
+              const hEff = gap + 2e-4;                            // Rauheit: Luft entweicht auch durch die Oberflächenstruktur
+              const pSq = (6 * AIR.viscosity * vn * e * (2 * sq.a - e)) / (hEff * hEff * hEff);
+              const pr = 1 / (1 / Math.max(pSq, 1e-12) + c.m.k / vn); // parallel: seitlich + durch den Stoff
+              v[k + 1] += Math.min(vn, (pr / c.m.rho) * dt);
+            }
+          }
           p[k] += v[k] * dt; p[k + 1] += v[k + 1] * dt; p[k + 2] += v[k + 2] * dt;
         }
       }
@@ -2574,6 +3274,55 @@ class World {
     this._afterFrame();
   }
 
+  // Istlage der Achsen für diesen Teilschritt (einmal je Teilschritt berechnet).
+  // P-Lageregler mit Kv = 40 1/s (typisch für Servo-Linearachsen) und 90 % Geschwindigkeits-
+  // vorsteuerung; der verbleibende Schleppfehler beträgt (1 − ff)·v/Kv.
+  _servoNext(dt) {
+    if (this._servoDone) return this._servoPose;
+    const cmd = this.robot.pose, kv = this.cfg.servoKv ?? 40, ff = this.cfg.servoFF ?? 0.9;
+    const f = this._servoFilt || { ...cmd };
+    const k = 1 - Math.exp(-kv * dt);
+    this._servoFilt = { x: f.x + (cmd.x - f.x) * k, y: f.y + (cmd.y - f.y) * k, z: f.z + (cmd.z - f.z) * k, yaw: f.yaw + (cmd.yaw - f.yaw) * k };
+    // Geschwindigkeitsvorsteuerung (Anteil ff): nur der Rest folgt verzögert
+    const F = this._servoFilt, mix = (a, b) => ff * a + (1 - ff) * b;
+    this._servoPose = { x: mix(cmd.x, F.x), y: mix(cmd.y, F.y), z: mix(cmd.z, F.z), yaw: mix(cmd.yaw, F.yaw) };
+    this.servoError = Math.hypot(cmd.x - this._servoPose.x, cmd.y - this._servoPose.y, cmd.z - this._servoPose.z);
+    this._servoDone = true;
+    return this._servoPose;
+  }
+
+  // Höchste Tischoberfläche unter (x, z) – für das Luftpolster
+  _tableTop(x, z) {
+    let top = -Infinity;
+    for (const k of this.tableColliders || []) top = Math.max(top, k.topAt(x, z));
+    return top;
+  }
+
+  // Kollisionsüberwachung Greiferkopf ↔ Nähmaschine (Roboter ist kinematisch, daher Warnung)
+  _checkHeadCollision() {
+    if (this.collided) return;
+    if (this.head.type === 'schablone') return; // Nähfuß läuft im Schablonenschlitz
+    const yw = Math.abs(Math.cos(this.head.pose.yaw)), ys = Math.abs(Math.sin(this.head.pose.yaw));
+    for (const k of this.head.colliders) {
+      // achsparallele Hülle des gedrehten Quaders
+      const ex = yw * k.half[0] + ys * k.half[2], ez = ys * k.half[0] + yw * k.half[2];
+      for (const m of this.machineBoxes) {
+        if (Math.abs(k.c[0] - m.c[0]) < ex + m.half[0] && Math.abs(k.c[2] - m.c[2]) < ez + m.half[2] && Math.abs(k.c[1] - m.c[1]) < k.half[1] + m.half[1]) {
+          this.collided = true;
+          this.log(`Kollision: Greiferkopf berührt ${m.name} der Nähmaschine`, 'error');
+          return;
+        }
+      }
+      // Nadelstange und Nähfußstange (Ø ca. 8 mm, vom Fuß bis zum Kopf)
+      const N = this.machine.needle;
+      if (Math.abs(k.c[0] - N[0]) < ex + 0.006 && Math.abs(k.c[2] - N[2]) < ez + 0.02 && k.c[1] - k.half[1] < N[1] + 0.12) {
+        this.collided = true;
+        this.log('Kollision: Greiferkopf an Nadel- oder Nähfußstange', 'error');
+        return;
+      }
+    }
+  }
+
   // Sicherheitsnetz: nicht-endliche Werte (numerische Instabilität) zurücksetzen
   _recover(c) {
     const p = c.pos, pp = c.prev;
@@ -2583,6 +3332,7 @@ class World {
   }
 
   _afterFrame() {
+    this._checkHeadCollision();
     for (const e of this.head.events.splice(0)) {
       const detail = `F_n ${e.Fn.toFixed(3)}/${e.Cn.toFixed(3)} N, F_t ${e.Ft.toFixed(3)}/${e.Ct.toFixed(3)} N`;
       if (e.type === 'separate') continue; // Unterlage löst sich – Zusammenfassung je Lage folgt
@@ -2597,7 +3347,8 @@ class World {
       if (held && !tr.held) {
         tr.held = true; tr.prevState = tr.state;
         // als Unterlage mitgegriffen (durch die obere Lage hindurch)?
-        tr.sub = this.head.elements.some((el) => el.frozen.get(c.id)?.ply > 0) && !this.head.elements.some((el) => el.frozen.get(c.id)?.ply === 0);
+        const want = this.cfg.pickPlies || 1;
+        tr.sub = this.head.elements.some((el) => el.frozen.get(c.id)?.ply >= want) && !this.head.elements.some((el) => el.frozen.get(c.id)?.ply < want);
         if (!tr.sub) { tr.state = 'gegriffen'; tr.error = null; tr.ideal = null; tr.pick = c.pose2D(); tr.gpick = { ...this.head.pose }; }
       } else if (!held && tr.held) {
         tr.held = false;
@@ -2632,7 +3383,7 @@ class World {
         }
       }
     }
-    if (this.cycle.gripY !== null && !this.cycle.double && heldCount >= 2 && this.robot.pose.y > this.cycle.gripY + 0.06) {
+    if (this.cycle.gripY !== null && !this.cycle.double && heldCount > (this.cfg.pickPlies || 1) && this.robot.pose.y > this.cycle.gripY + 0.06) {
       this.cycle.double = true;
       this.log(`Doppelgriff: ${heldCount} Lagen gleichzeitig gegriffen`, 'error');
     }
@@ -2653,7 +3404,7 @@ class World {
   }
 }
 
-return { TABLE_TOP, STACK_POS, NEEDLE, DEFAULT_PROGRAM, defaultConfig, World };
+return { TABLE_TOP, STACK_POS, NEEDLE, DEFAULT_PROGRAM, TSHIRT_PROGRAM, SCENARIOS, applyScenario, defaultConfig, World };
 })();
 
 // ---- src/physics/validation.js ----
@@ -2909,9 +3660,11 @@ const __M_render_scene = (() => {
 // 3D-Darstellung der Nähzelle mit Three.js.
 
 
+
 const { fabricTexture, gridTexture } = __M_render_textures;
 const { SOLIDS } = __M_physics_materials;
 const { NEEDLE, TABLE_TOP } = __M_physics_world;
+const { locateRest } = __M_physics_cloth;
 const VIEWS = {
   gesamt: { pos: [1.55, 2.0, 2.6], target: [0.05, 0.78, -0.05] },
   stapel: { pos: [-0.25, 1.3, 0.85], target: [-0.5, 0.8, 0.05] },
@@ -2932,7 +3685,11 @@ class SceneView {
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(38, 1, 0.01, 40);
+    // Umgebungslicht für realistische Reflexe auf Metall und Satin
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environmentIntensity = 0.45;
+    this.camera = new THREE.PerspectiveCamera(38, 1, 0.03, 30); // near nicht zu klein: Tiefenauflösung für dünne Lagen
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.maxPolarAngle = Math.PI * 0.495;
@@ -3024,14 +3781,14 @@ class SceneView {
     for (const col of world.staticColliders) {
       if (!col.visual) continue;
       const s = SOLIDS[col.material];
-      const color = col.color || (col.material === 'hpl' ? '#d6d2c6' : col.material === 'guss' ? '#5f6f68' : s.color);
+      const color = col.color || (col.material === 'hpl' ? '#474d4b' : col.material === 'guss' ? '#5f6f68' : s.color);
       const mat = this._mat(color, col.material === 'stahl' ? 0.3 : 0.65, col.material === 'stahl' ? 0.7 : 0.05);
       const m = this._box(col.half[0] * 2, col.half[1] * 2, col.half[2] * 2, mat, ...col.c);
       m.rotation.set(col.euler[1], col.euler[0], col.euler[2], 'YXZ');
       this.static.add(m);
     }
     // Tischbeine und Zargen
-    for (const [cx, cz, hx, hz] of [[-0.5, 0.05, 0.35, 0.3], [0.55, 0.05, 0.45, 0.3]]) {
+    for (const [cx, cz, hx, hz] of [[-0.5, 0.05, 0.35, 0.3], [0.55, -0.05, 0.45, 0.4]]) {
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
         this.static.add(this._box(0.04, TABLE_TOP - 0.04, 0.04, steel, cx + sx * (hx - 0.05), (TABLE_TOP - 0.04) / 2, cz + sz * (hz - 0.05)));
       }
@@ -3079,15 +3836,30 @@ class SceneView {
     // Greiferkopf
     this.headGroup = new THREE.Group();
     const head = world.head;
+    this.templateMesh = null;
+    if (head.type === 'schablone' && head.template) {
+      // Nähschablone: Acrylplatte in Teilekontur mit Nahtschlitz, Aufnahme in der Mitte
+      const shape = new THREE.Shape(head.template.shape.map(([x, z]) => new THREE.Vector2(x, -z)));
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.003, bevelEnabled: false });
+      geo.rotateX(-Math.PI / 2);
+      const mat = new THREE.MeshPhysicalMaterial({ color: 0x9fd3e6, transparent: true, opacity: 0.38, roughness: 0.15, metalness: 0, side: THREE.DoubleSide, depthWrite: false });
+      this.templateMesh = new THREE.Mesh(geo, mat);
+      this.templateMesh.position.y = 0.0004;
+      this.templateMesh.renderOrder = 5;
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 30), new THREE.LineBasicMaterial({ color: 0x2b7f99 }));
+      this.templateMesh.add(edges);
+      this.headGroup.add(this.templateMesh);
+      this.headGroup.add(this._box(0.03, 0.04, 0.03, alu, 0, 0.022, 0), this._box(0.09, 0.02, 0.09, dark, 0, 0.052, 0));
+    }
     // Rahmen aus Aluprofilen statt geschlossener Platte (Lage bleibt sichtbar)
     const rowsZ = [...new Set(head.elements.map((e) => +e.oz.toFixed(4)))];
     const colsX = [...new Set(head.elements.map((e) => +e.ox.toFixed(4)))];
-    for (const z of rowsZ) this.headGroup.add(this._box(head.extent.x * 2, 0.012, 0.014, alu, 0, 0.036, z));
-    for (const x of colsX) this.headGroup.add(this._box(0.014, 0.012, head.extent.z * 2, alu, x, 0.048, 0));
-    this.headGroup.add(this._box(0.09, 0.02, 0.09, dark, 0, 0.062, 0));
+    if (head.type !== 'schablone') for (const z of rowsZ) this.headGroup.add(this._box(head.extent.x * 2, 0.012, 0.014, alu, 0, 0.036, z));
+    if (head.type !== 'schablone') for (const x of colsX) this.headGroup.add(this._box(0.014, 0.012, head.extent.z * 2, alu, x, 0.048, 0));
+    if (head.type !== 'schablone') this.headGroup.add(this._box(0.09, 0.02, 0.09, dark, 0, 0.062, 0));
     this.elementMeshes = [];
     const accent = new THREE.Color(0x0b8f88);
-    for (const el of head.elements) {
+    for (const el of head.type === 'schablone' ? [] : head.elements) {
       const g = new THREE.Group();
       let body, face;
       const r = el.half;
@@ -3125,6 +3897,20 @@ class SceneView {
     this.stitchPts.frustumCulled = false;
     this.dynamic.add(this.stitchPts);
 
+    // Soll-Nahtlinie auf der obersten Lage (in Materialkoordinaten verankert)
+    this.planned = null;
+    const tplPath = head.template?.path;
+    const topCloth = world.cloths.find((c) => c.stackIndex === 1);
+    if (tplPath && topCloth) {
+      const anchors = tplPath.points.map(([u, v]) => locateRest(topCloth, u, v)).filter(Boolean);
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3 * anchors.length), 3));
+      const line = new THREE.Line(g, new THREE.LineDashedMaterial({ color: 0x14a37f, dashSize: 0.006, gapSize: 0.004 }));
+      line.frustumCulled = false;
+      this.dynamic.add(line);
+      this.planned = { line, g, anchors, cloth: topCloth };
+    }
+
     // Kontaktpunkte (Greiferbindungen)
     this.attGeom = new THREE.BufferGeometry();
     this.attGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3 * 4000), 3));
@@ -3138,15 +3924,13 @@ class SceneView {
     const geo = new THREE.BufferGeometry();
     const pos = new Float32Array(3 * c.n), uv = new Float32Array(2 * c.n), col = new Float32Array(3 * c.n);
     const texScale = 1 / 0.02; // 2 cm je Texturkachel -> Bindung sichtbar
-    for (let j = 0; j < c.nz; j++) for (let i = 0; i < c.nx; i++) {
-      const v = c.idx(i, j);
-      uv[2 * v] = (i * c.h * texScale) / 4; uv[2 * v + 1] = (j * c.h * texScale) / 4;
-    }
+    for (let v = 0; v < c.n; v++) { uv[2 * v] = (c.rest[2 * v] * texScale) / 4; uv[2 * v + 1] = (c.rest[2 * v + 1] * texScale) / 4; }
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     geo.setIndex(new THREE.BufferAttribute(new Uint32Array(c.tri), 1));
-    const tint = c.tint;
+    // benachbarte Lagen leicht unterschiedlich hell, damit Kanten im Stapel erkennbar sind
+    const tint = '#' + new THREE.Color(c.tint).offsetHSL(0, 0, (c.stackIndex % 2 ? 0.04 : -0.04)).getHexString();
     const map = fabricTexture(c.fabric.pattern, tint);
     const mat = c.fabric.pattern === 'satin'
       ? new THREE.MeshPhysicalMaterial({ map, roughness: 0.35, sheen: 1, sheenColor: new THREE.Color(0xffffff), sheenRoughness: 0.3, side: THREE.DoubleSide })
@@ -3170,7 +3954,7 @@ class SceneView {
   }
 
   update(world) {
-    const head = world.head, rp = world.robot.pose;
+    const head = world.head, rp = head.pose;
     // Portal folgt dem Roboter
     this.bridge.position.x = rp.x;
     this.carriage.position.set(rp.x, 1.64, rp.z);
@@ -3179,8 +3963,23 @@ class SceneView {
     this.zAxis.scale.y = Math.max(0.01, zTop - zBot);
     this.headGroup.position.set(rp.x, rp.y, rp.z);
     this.headGroup.rotation.y = rp.yaw;
+    if (this.templateMesh) {
+      const m = head.partMap?.();
+      if (m) { this.templateMesh.position.set(m.tx, 0.0004, m.tz); this.templateMesh.rotation.y = m.theta; }
+      this.templateMesh.material.opacity = head.elements[0].act > 0.5 ? 0.45 : 0.25;
+    }
+    if (this.planned) {
+      const { g, anchors, cloth } = this.planned, P = cloth.pos, T = cloth.tri, a = g.attributes.position.array;
+      anchors.forEach((h, k) => {
+        const i0 = 3 * T[3 * h.tri], i1 = 3 * T[3 * h.tri + 1], i2 = 3 * T[3 * h.tri + 2];
+        for (let q = 0; q < 3; q++) a[3 * k + q] = h.b0 * P[i0 + q] + h.b1 * P[i1 + q] + h.b2 * P[i2 + q] + (q === 1 ? cloth.radius + 3e-4 : 0);
+      });
+      g.attributes.position.needsUpdate = true;
+      this.planned.line.computeLineDistances();
+    }
     head.elements.forEach((el, i) => {
       const em = this.elementMeshes[i];
+      if (!em) return;
       em.glow.visible = el.act > 0.05;
       em.glow.material.color.setHSL(0.48, 0.85, 0.25 + 0.3 * el.act);
       em.glow.material.color.set(el.att.length ? 0x0fb8a9 : 0x0b6e69);
@@ -3284,7 +4083,7 @@ class LoadChart {
     const L = 52, R = 10, T = 8, B = 20;
     const tNow = this.t.length ? this.t[this.t.length - 1] : 0;
     const t0 = Math.max(0, tNow - this.win), t1 = Math.max(this.win, tNow);
-    let ymax = 0.1;
+    let ymax = 10;
     for (let i = 0; i < this.t.length; i++) ymax = Math.max(ymax, this.a[i], this.b[i]);
     const step = niceStep(ymax / 4);
     ymax = Math.ceil(ymax / step) * step;
@@ -3295,7 +4094,7 @@ class LoadChart {
     g.textAlign = 'right'; g.textBaseline = 'middle';
     for (let v = 0; v <= ymax + 1e-9; v += step) {
       g.beginPath(); g.moveTo(L, Y(v) + 0.5); g.lineTo(W - R, Y(v) + 0.5); g.stroke();
-      g.fillText(`${+v.toFixed(3)} N`.replace('.', ','), L - 4, Y(v));
+      g.fillText(`${+v.toFixed(1)} %`.replace('.', ','), L - 4, Y(v));
     }
     g.textAlign = 'center'; g.textBaseline = 'top';
     for (let t = Math.ceil(t0 / 5) * 5; t <= t1; t += 5) g.fillText(`${t} s`, X(t), H - B + 4);
@@ -3317,7 +4116,7 @@ class LoadChart {
       const x = X(this.t[k]);
       g.strokeStyle = ink3; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(x, T); g.lineTo(x, H - B); g.stroke(); g.setLineDash([]);
       this.tip.style.display = 'block';
-      this.tip.innerHTML = `t ${this.t[k].toFixed(2)} s<br>Last ${this.a[k].toFixed(3)} N<br>Haltekraft ${this.b[k].toFixed(3)} N`;
+      this.tip.innerHTML = `t ${this.t[k].toFixed(2)} s<br>Auslastung ${this.a[k].toFixed(1)} %`;
       this.tip.style.left = `${Math.min(W - 150, Math.max(0, x + 8))}px`;
       this.tip.style.top = '6px';
     }
@@ -3357,6 +4156,16 @@ const MODEL_INFO = `
 <p class="note">Versagen, wenn (F<sub>n</sub>/C<sub>n</sub>)² + (F<sub>t</sub>/C<sub>t</sub>)² &gt; 1. Die Lasten entstehen aus der Simulation (Gewicht, Trägheit, Luft, Reibung, Lagenhaftung). Auf- und Abbau der Haltekraft mit Zeitkonstanten je Greiferprinzip.</p></section>
 <section class="block"><h2>Nähmaschine</h2>
 <p class="note">Untertransport mit Transporteur (Reibschluss bis μ·F<sub>Fuß</sub>), Nähfuß bremst die obere Lage, Nadel fixiert die Lagen während des Einstichs. Jeder Stich verbindet die Lagen über einen nur zugtragenden Faden. Daraus entstehen Lagenverschiebung und Verdrehen am Werkstück.</p></section>
+<section class="block"><h2>Kurvennähte und Schnittteile</h2>
+<p class="note">Zuschnitte haben beliebige Konturen (z. B. T-Shirt-Vorder- und Rückenteil); die Netzknoten am Rand liegen auf der Schnittkante. Nahtbahnen entstehen aus der Kontur, versetzt um die Nahtzugabe. Bei SEWPATH dreht der Roboter das Teil laufend um die Nadel, sodass die Nahttangente in Transportrichtung zeigt; der Transporteur folgt dabei der Starrkörperbewegung des Teils. Gemessen wird die Abweichung jedes Einstichs von der Sollbahn im Zuschnitt.</p></section>
+<section class="block"><h2>Weitere physikalische Effekte</h2>
+<table class="kv">
+<tr><td>Luftpolster</td><td>Quetschströmung nach Reynolds beim Annähern an Tisch oder Lage: p = 6μ·v·e(2a−e)/h³, parallel dazu Durchströmung des Stoffs. Dichte Stoffe schweben beim Ablegen, offene fallen sofort.</td></tr>
+<tr><td>Fadenspannung</td><td>Stauchung der Naht ε = F/(T·1 cm), nur zugtragend; erzeugt Nahtkräuseln bei dünnen Stoffen.</td></tr>
+<tr><td>Achsregelung</td><td>P-Lageregler (K<sub>v</sub>) mit Geschwindigkeitsvorsteuerung; der Schleppfehler geht in die Nahtabweichung ein.</td></tr>
+<tr><td>Kollisionen</td><td>Greiferkopf gegen Nähkopf, Arm, Ständer, Nadel- und Fußstange (Warnung, der Roboter ist kinematisch).</td></tr>
+<tr><td>Saugtisch</td><td>Unterdruck erhöht die Normalkraft der aufliegenden Lage, Reibschluss nach Coulomb.</td></tr>
+</table></section>
 <section class="block"><h2>Grenzen</h2>
 <p class="note">Keine Strömungssimulation (CFD), keine Temperatur- und Feuchteabhängigkeit, Maschinenteile und Tische sind starr. Netzauflösung 1–2 cm: Effekte kleiner als die Maschenweite (Einzelfäden, Kanten-Ausfransen) werden nicht abgebildet.</p></section>`;
 
@@ -3366,7 +4175,7 @@ return { MODEL_INFO };
 // ---- src/ui/app.js ----
 const __M_ui_app = (() => {
 // Bedienoberfläche: verbindet Simulation, 3D-Ansicht und Messwerte.
-const { World, defaultConfig, DEFAULT_PROGRAM } = __M_physics_world;
+const { World, defaultConfig, DEFAULT_PROGRAM, TSHIRT_PROGRAM, SCENARIOS, applyScenario } = __M_physics_world;
 const { FABRICS, FABRIC_FIELDS, SOLIDS, fabricById, toSI, bendingLength } = __M_physics_materials;
 const { GRIPPER_TYPES, defaultParams, capacityModel } = __M_physics_grippers;
 const { validateProgram, parseProgram } = __M_physics_robot;
@@ -3378,6 +4187,8 @@ const { MODEL_INFO } = __M_ui_modelinfo;
 const $ = (id) => document.getElementById(id);
 const fmt = (x, d = 2) => (Number.isFinite(x) ? x.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d }) : '–');
 const QUALITY = { fast: { spacing: 0.02, substeps: 10 }, std: { spacing: 0.0125, substeps: 16 }, fine: { spacing: 0.01, substeps: 24 } };
+// große Teile (T-Shirt): gröberes Netz bei gleicher Stufe, damit die Rechenzeit vergleichbar bleibt
+const QUALITY_LARGE = { fast: { spacing: 0.022, substeps: 10 }, std: { spacing: 0.015, substeps: 14 }, fine: { spacing: 0.011, substeps: 20 } };
 
 const cfg = defaultConfig();
 cfg.quality = 'std';
@@ -3390,24 +4201,46 @@ const csvRows = [];
 // ---------------------------------------------------------------- Aufbau ----
 function currentFabric() { return cfg.customFabric || fabricById(cfg.fabricId); }
 
+let rebuildTimer = 0;
+// Aufbau geändert: Welt neu aufbauen und das Programm wieder starten
+function setupChanged() {
+  clearTimeout(rebuildTimer);
+  rebuildTimer = setTimeout(() => { rebuild(); startProgram(); }, 350);
+}
+
 function buildSetupUI() {
+  const sc = $('scenario');
+  sc.innerHTML = Object.entries(SCENARIOS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
+  sc.value = cfg.scenario;
+  $('scenarioNote').textContent = cfg.scenario === 'tshirt'
+    ? 'Vorder- und Rückenteil eines Kinder-T-Shirts (Kimonoschnitt). Eine Nähschablone klemmt beide Teile, der Roboter führt die Seitennaht mit Achselrundung und Ärmelunternaht in einem Zug.'
+    : 'Stapel rechteckiger Zuschnitte: vereinzeln, ablegen, zwei Lagen gerade zusammennähen.';
+  sc.onchange = () => {
+    applyScenario(cfg, sc.value);
+    cfg.customFabric = null;
+    $('program').value = cfg.program; renderGutter();
+    buildSetupUI();
+    setupChanged();
+  };
   const sel = $('fabric');
   sel.innerHTML = FABRICS.map((f) => `<option value="${f.id}">${f.name}</option>`).join('');
   sel.value = cfg.fabricId;
-  sel.onchange = () => { cfg.fabricId = sel.value; cfg.customFabric = null; renderMaterial(); renderPredict(); };
+  sel.onchange = () => { cfg.fabricId = sel.value; cfg.customFabric = null; renderMaterial(); renderPredict(); setupChanged(); };
   $('tableMat').innerHTML = ['hpl', 'stahl', 'ptfe', 'buche', 'gummi'].map((k) => `<option value="${k}">${SOLIDS[k].name}</option>`).join('');
   $('tableMat').value = cfg.tableMaterial;
   const g = $('gripper');
   g.innerHTML = Object.entries(GRIPPER_TYPES).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
   g.value = cfg.gripper;
-  g.onchange = () => { cfg.gripper = g.value; cfg.gripperParams = defaultParams(g.value); renderGripper(); renderPredict(); };
-  for (const [id, key, scale] of [['plies', 'plies', 1], ['plyW', 'plyW', 100], ['plyL', 'plyL', 100], ['rows', 'rows', 1], ['cols', 'cols', 1], ['rpm', 'rpm', 1], ['stitch', 'stitch', 1], ['footForce', 'footForce', 1]]) {
+  g.onchange = () => { cfg.gripper = g.value; cfg.gripperParams = defaultParams(g.value); renderGripper(); renderPredict(); setupChanged(); };
+  for (const [id, key, scale] of [['plies', 'plies', 1], ['plyW', 'plyW', 100], ['plyL', 'plyL', 100], ['rows', 'rows', 1], ['cols', 'cols', 1], ['rpm', 'rpm', 1], ['stitch', 'stitch', 1], ['footForce', 'footForce', 1], ['threadTension', 'threadTension', 1], ['servoKv', 'servoKv', 1], ['servoFF', 'servoFF', 100]]) {
     $(id).value = +(cfg[key] * scale).toFixed(3);
-    $(id).onchange = () => { cfg[key] = +$(id).value / scale; renderPredict(); };
+    $(id).onchange = () => { cfg[key] = +$(id).value / scale; renderPredict(); setupChanged(); };
   }
   $('footMat').value = cfg.footMaterial;
   $('quality').value = cfg.quality;
   $('selfColl').checked = cfg.selfCollision;
+  $('airCushion').checked = cfg.airCushion !== false;
+  $('selfColl').onchange = $('airCushion').onchange = $('quality').onchange = $('tableMat').onchange = $('footMat').onchange = () => setupChanged();
   renderMaterial();
   renderGripper();
   renderPredict();
@@ -3421,7 +4254,7 @@ function renderMaterial() {
     inp.onchange = () => {
       const base = currentFabric();
       cfg.customFabric = { ...base, [inp.dataset.key]: +inp.value, name: base.name.replace(/ \(angepasst\)$/, '') + ' (angepasst)' };
-      renderDerived(); renderPredict();
+      renderDerived(); renderPredict(); setupChanged();
     };
   });
   renderDerived();
@@ -3430,7 +4263,7 @@ function renderMaterial() {
 function renderDerived() {
   const f = currentFabric(), m = toSI(f);
   const vt = Math.sqrt((2 * m.rho * G) / (AIR.density * 1.17));
-  const mass = m.rho * cfg.plyW * cfg.plyL * 1000;
+  const mass = m.rho * (cfg.scenario === 'tshirt' ? 0.155 : cfg.plyW * cfg.plyL) * 1000;
   $('derived').innerHTML = [
     ['Biegelänge Kette / Schuss', `${fmt(bendingLength(f, 'warp') * 100, 1)} / ${fmt(bendingLength(f, 'weft') * 100, 1)}`, 'cm'],
     ['Masse je Zuschnitt', fmt(mass, 1), 'g'],
@@ -3449,8 +4282,9 @@ function renderGripper() {
     <input type="number" id="gpn-${k}" min="${min}" max="${max}" step="${step}" value="${cfg.gripperParams[k]}" aria-label="${label}"></div>`).join('');
   for (const [k] of def.params) {
     const set = (v) => { cfg.gripperParams[k] = +v; $(`gp-${k}`).value = v; $(`gpn-${k}`).value = v; $(`gpv-${k}`).textContent = v; renderPredict(); };
+    $(`gp-${k}`).onchange = () => setupChanged();
     $(`gp-${k}`).oninput = (e) => set(e.target.value);
-    $(`gpn-${k}`).onchange = (e) => set(e.target.value);
+    $(`gpn-${k}`).onchange = (e) => { set(e.target.value); setupChanged(); };
   }
 }
 
@@ -3465,7 +4299,10 @@ function renderPredict() {
   const cling = (m.cohesion * cfg.plyW * cfg.plyL) / nEl;            // Lagenhaftung je Element
   const need = weight + cling;
   let chip;
-  if (caps[0].Cn < 1.5 * need) chip = '<span class="chip crit">Haltekraft zu gering</span>';
+  const want = cfg.pickPlies || 1;
+  if (cfg.gripper === 'schablone') chip = '<span class="chip accent">flächige Klemmung</span>';
+  else if (caps[0].Cn < 1.5 * need) chip = '<span class="chip crit">Haltekraft zu gering</span>';
+  else if (want >= 2 && caps[1].Cn > need && caps[2].Cn < need) chip = '<span class="chip good">zwei Lagen wie gewollt</span>';
   else if (caps[1].Cn > need) chip = '<span class="chip warn">Doppelgriff-Risiko</span>';
   else chip = '<span class="chip good">Einzelgriff erwartet</span>';
   $('predict').innerHTML = `<div class="head"><strong>Statische Abschätzung je Element</strong>${chip}</div>
@@ -3480,8 +4317,9 @@ function readSetup() {
   cfg.tableMaterial = $('tableMat').value;
   cfg.footMaterial = $('footMat').value;
   cfg.quality = $('quality').value;
-  Object.assign(cfg, QUALITY[cfg.quality]);
+  Object.assign(cfg, (cfg.scenario === 'tshirt' ? QUALITY_LARGE : QUALITY)[cfg.quality]);
   cfg.selfCollision = $('selfColl').checked;
+  cfg.airCushion = $('airCushion').checked;
   cfg.program = $('program').value;
 }
 
@@ -3564,7 +4402,8 @@ function renderUi(force = false) {
     $(`elf-${s.index}`).textContent = top ? `${fmt(top.Fn, 3)} / ${fmt(top.Cn, 3)} N` : (w.head.type === 'vakuum' && s.on ? `${fmt(s.chamber / 1000, 1)} kPa` : '–');
   }
   $('kHeld').textContent = heldIds.size;
-  $('kHeldSub').innerHTML = heldIds.size > 1 ? '<span class="chip crit">Doppelgriff</span>' : heldIds.size === 1 ? '<span class="chip good">Einzelgriff</span>' : 'keine';
+  const want = w.cfg.pickPlies || 1;
+  $('kHeldSub').innerHTML = heldIds.size > want ? '<span class="chip crit">Doppelgriff</span>' : heldIds.size === want ? `<span class="chip good">${want > 1 ? want + ' Lagen, gewollt' : 'Einzelgriff'}</span>` : heldIds.size ? `<span class="chip warn">${heldIds.size} von ${want}</span>` : 'keine';
   $('kUtil').textContent = heldIds.size ? `${fmt(maxU * 100, 0)} %` : '–';
 
   // Lagen
@@ -3585,6 +4424,16 @@ function renderUi(force = false) {
   $('kStitch').textContent = w.machine.stitchPoints.length;
   $('kStitchSub').textContent = w.machine.busy ? `läuft, ${w.machine.stitches}/${w.machine.sewTarget}` : w.machine.stitchPoints.length ? `${fmt((w.machine.stitchPoints.length * w.machine.stitchLength) / 10, 1)} cm genäht` : 'Naht –';
 
+  const dev = w.machine.deviations || [];
+  if (dev.length) {
+    const mean = dev.reduce((a, b) => a + b, 0) / dev.length, mx = Math.max(...dev);
+    $('kDev').textContent = `${fmt(mean * 1000, 1)} mm`;
+    $('kDevSub').innerHTML = `max. ${fmt(mx * 1000, 1)} mm ` + (mx < 0.003 ? '<span class="chip good">i. O.</span>' : mx < 0.006 ? '<span class="chip warn">grenzwertig</span>' : '<span class="chip crit">n. i. O.</span>');
+  } else { $('kDev').textContent = '–'; $('kDevSub').textContent = w.machine.activePath ? 'erste Stiche …' : 'nur bei Bahnnaht (SEWPATH)'; }
+  const rp = w.robot.pose;
+  $('kPose').textContent = `${fmt(((rp.yaw * 180) / Math.PI), 0)}°`;
+  $('kPoseSub').textContent = `x ${fmt(rp.x, 3)} · z ${fmt(rp.z, 3)} m`;
+
   // Ereignisse
   if (w.events.length < lastLog) lastLog = 0;
   const log = $('log');
@@ -3601,13 +4450,14 @@ function renderUi(force = false) {
 
 function sample() {
   const w = world;
-  // Summen über alle Elemente für die oberste gehaltene Lage
-  let Fn = 0, Cn = 0;
+  // Summen über alle Elemente für die oberste gehaltene Lage; Auslastung = max. je Element
+  let Fn = 0, Cn = 0, util = 0;
   for (const s of w.head.status()) {
     const top = s.plies.find((p) => p.held > 0);
     if (top) { Fn += top.Fn; Cn += top.Cn; }
+    for (const p of s.plies) if (p.held > 0 && p.Cn > 0) util = Math.max(util, Math.hypot(p.Fn / p.Cn, p.Ft / Math.max(p.Ct, 1e-9)));
   }
-  chart.push(w.t, Fn, Cn);
+  chart.push(w.t, util * 100, 100);
   if (csvRows.length < 200000) {
     const rp = w.robot.pose;
     const plies = w.plyReport().map((p) => `${p.state};${p.pose.x.toFixed(5)};${p.pose.z.toFixed(5)};${(p.pose.theta * 180 / Math.PI).toFixed(3)};${(p.strain * 100).toFixed(4)}`).join(';');
@@ -3696,8 +4546,8 @@ function init() {
   $('btnStop').onclick = () => world.robot.stop();
   $('btnPause').onclick = () => { running = !running; $('btnPause').textContent = running ? 'Pause' : 'Weiter'; };
   $('btnReset').onclick = rebuild;
-  $('btnApply').onclick = rebuild;
-  $('btnDefault').onclick = () => { $('program').value = DEFAULT_PROGRAM; renderGutter(); };
+  $('btnApply').onclick = () => { rebuild(); startProgram(); };
+  $('btnDefault').onclick = () => { $('program').value = cfg.scenario === 'tshirt' ? TSHIRT_PROGRAM : DEFAULT_PROGRAM; renderGutter(); };
   $('timeScale').onchange = (e) => { timeScale = +e.target.value; };
   $('btnValidate').onclick = showValidation;
   $('dlgClose').onclick = () => $('dlg').close();

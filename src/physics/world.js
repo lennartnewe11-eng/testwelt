@@ -9,6 +9,7 @@ import { ClothContacts } from './collision.js';
 import { GripperHead, defaultParams } from './grippers.js';
 import { SewingMachine } from './sewing.js';
 import { GantryRobot } from './robot.js';
+import { tshirtPanel, seamPath, pathAt, distToPath, templateOutline } from './garments.js';
 
 export const TABLE_TOP = 0.80;
 export const STACK_POS = [-0.5, 0.05];
@@ -20,9 +21,10 @@ export const DEFAULT_PROGRAM = `# Pick & Place zweier Zuschnitte und robotergef�
 # 1. Lage vom Stapel nehmen
 SPEED 0.5
 ACCEL 2
-MOVE -0.5 0.95 0.05 0       # über den Stapel
+MOVE -0.53 0.95 0.05 0      # über den Stapel, 3 cm außermittig gegriffen,
+                            # damit der Rahmen später links der Nadelstange bleibt
 SPEED 0.12
-MOVE -0.5 0.81 0.05
+MOVE -0.53 0.81 0.05
 TOUCH 0.01                  # Tastfahrt bis Kontakt mit der obersten Lage
 GRIP ON
 WAIT 0.3                    # Haltekraft aufbauen
@@ -30,24 +32,26 @@ SPEED 0.03
 MOVEREL 0 0.04 0            # langsam abheben: mitgesaugte Unterlage fällt ab
 WAIT 0.3
 SPEED 0.5
-MOVE -0.5 0.95 0.05
-MOVE 0.485 0.95 0.12        # Transport zur Nähmaschine
+MOVE -0.53 0.95 0.05
+MOVE 0.455 0.95 0.12        # Transport zur Nähmaschine
 SPEED 0.12
-MOVE 0.485 0.815 0.12
+MOVE 0.455 0.815 0.12
 TOUCH 0.01
 SPEED 0.05
 MOVEREL 0 0.003 -0.05       # Vorderkante unter den Nähfuß schieben
 GRIP OFF
 TABLEVAC ON                 # Saugtisch hält die untere Lage
 WAIT 0.3
+SPEED 0.2
+MOVEREL -0.08 0.004 0       # erst seitlich weg vom Nähkopf …
 SPEED 0.3
-MOVEREL 0 0.12 0
+MOVEREL 0 0.12 0            # … dann anheben (sonst stößt der Rahmen an)
 
 # 2. Lage holen und deckungsgleich auflegen
 SPEED 0.5
-MOVE -0.5 0.95 0.05
+MOVE -0.53 0.95 0.05
 SPEED 0.12
-MOVE -0.5 0.81 0.05
+MOVE -0.53 0.81 0.05
 TOUCH 0.01
 GRIP ON
 WAIT 0.3
@@ -55,10 +59,10 @@ SPEED 0.03
 MOVEREL 0 0.04 0
 WAIT 0.3
 SPEED 0.5
-MOVE -0.5 0.95 0.05
-MOVE 0.485 0.95 0.12
+MOVE -0.53 0.95 0.05
+MOVE 0.455 0.95 0.12
 SPEED 0.12
-MOVE 0.485 0.815 0.12
+MOVE 0.455 0.815 0.12
 TOUCH 0.01
 SPEED 0.05
 MOVEREL 0 0.003 -0.05       # über die gehaltene 1. Lage schieben
@@ -73,10 +77,66 @@ WAITSEW
 FOOT UP
 GRIP OFF
 WAIT 0.4
+SPEED 0.2
+MOVEREL -0.08 0.004 0
 SPEED 0.3
 MOVEREL 0 0.12 0
 HOME
 `;
+
+export const TSHIRT_PROGRAM = `# Kinder-T-Shirt (Kimonoschnitt, Gr. 104/110): Vorder- und Rückenteil
+# liegen rechts auf rechts im Zuschnittstapel. Genäht wird die linke
+# Seitennaht mit Ärmelunternaht in einem Zug – mit der Achselrundung.
+
+SPEED 0.5
+ACCEL 2
+MOVE -0.5 0.95 0.05 0
+SPEED 0.12
+MOVE -0.5 0.81 0.05
+TOUCH 0.01
+GRIP ON                     # Nähschablone klemmt beide Teile (Nahtschlitz bleibt frei)
+WAIT 0.4
+SPEED 0.04
+MOVEREL 0 0.03 0
+SPEED 0.4
+MOVE -0.5 0.95 0.05
+# Nahtanfang 4 cm vor die Nadel, Nahtrichtung in Transportrichtung
+ALIGNPATH seite_links 0.83 0.04
+SPEED 0.12
+TOUCH 0.01
+SPEED 0.04
+MOVEREL 0 0.002 -0.04       # Saumkante unter den Nähfuß schieben
+FOOT DOWN
+WAIT 0.2
+# Der Roboter führt das Teil und dreht es in der Achselrundung um die Nadel
+SEWPATH seite_links 500 3
+FOOT UP
+GRIP OFF
+WAIT 0.3
+SPEED 0.3
+MOVEREL 0 0.12 0
+HOME
+`;
+
+// Szenarien: setzen Material, Greifer, Raster und Programm passend vor
+export const SCENARIOS = {
+  rechteck: {
+    name: 'Rechteckzuschnitte, gerade Naht',
+    set: { scenario: 'rechteck', fabricId: 'popeline', plies: 4, gripper: 'vakuum', rows: 3, cols: 3, pitchX: 0.11, pitchZ: 0.14, rpm: 600, stitch: 3, pickPlies: 1, program: null },
+  },
+  tshirt: {
+    name: 'T-Shirt, Kurvennaht (Seite + Ärmel)',
+    set: { scenario: 'tshirt', fabricId: 'jersey', plies: 2, gripper: 'schablone', gripperParams: {}, rows: 1, cols: 1, pitchX: 0.10, pitchZ: 0.13, rpm: 500, stitch: 3, pickPlies: 2, program: null },
+  },
+};
+
+export function applyScenario(cfg, id) {
+  const sc = SCENARIOS[id] || SCENARIOS.rechteck;
+  Object.assign(cfg, sc.set);
+  cfg.gripperParams = { ...defaultParams(cfg.gripper), ...(sc.set.gripperParams || {}) };
+  cfg.program = id === 'tshirt' ? TSHIRT_PROGRAM : DEFAULT_PROGRAM;
+  return cfg;
+}
 
 export function defaultConfig() {
   return {
@@ -98,6 +158,12 @@ export function defaultConfig() {
     selfCollision: true,
     program: DEFAULT_PROGRAM,
     seed: 7,
+    servoKv: 40,         // Lageregelung der Portalachsen [1/s]
+    threadTension: 1.2,  // Fadenspannung [N]
+    airCushion: true,    // Luftpolster (Quetschströmung) beim Ablegen
+    servoFF: 0.9,        // Geschwindigkeitsvorsteuerung (0 … 1)
+    scenario: 'rechteck',
+    pickPlies: 1,        // gewollte Lagen je Griff (Doppelgriff-Warnung darüber)
   };
 }
 
@@ -121,27 +187,46 @@ export class World {
     this.colliders = [
       new BoxCollider({ name: 'Hallenboden', center: [0, -0.05, 0], half: [4, 0.05, 4], material: 'beton', visual: false }),
       new BoxCollider({ name: 'Stapeltisch', center: [STACK_POS[0], T - 0.02, STACK_POS[1]], half: [0.35, 0.02, 0.3], material: c.tableMaterial }),
-      new BoxCollider({ name: 'Nähtisch', center: [0.55, T - 0.02, 0.05], half: [0.45, 0.02, 0.3], material: c.tableMaterial }),
+      new BoxCollider({ name: 'Nähtisch', center: [0.55, T - 0.02, -0.05], half: [0.45, 0.02, 0.4], material: c.tableMaterial }),
       new BoxCollider({ name: 'Stichplatte', center: [NEEDLE[0] + 0.13, T - 0.004, NEEDLE[2]], half: [0.18, 0.004, 0.07], material: 'stahl', color: '#c9cdd2' }),
       new BoxCollider({ name: 'Nähkopf', center: [NEEDLE[0] + 0.02, T + 0.2, NEEDLE[2]], half: [0.05, 0.08, 0.05], material: 'guss' }),
       new BoxCollider({ name: 'Arm', center: [NEEDLE[0] + 0.2, T + 0.23, NEEDLE[2]], half: [0.16, 0.04, 0.045], material: 'guss' }),
       new BoxCollider({ name: 'Ständer', center: [NEEDLE[0] + 0.33, T + 0.12, NEEDLE[2]], half: [0.05, 0.12, 0.055], material: 'guss' }),
     ];
     this.colliders[2].vacuum = true; // Nähtisch mit Saugfeld
+    this.tableColliders = this.colliders.slice(1, 4);
     this.staticColliders = this.colliders.slice();
 
     // Stapel aus Zuschnitten mit realistischer Legetoleranz (±1,5 mm, ±0,5°)
     const R = rng(c.seed);
     this.cloths = [];
     const t = this.fabric.thickness * 1e-3;
-    for (let i = 0; i < c.plies; i++) {
+    this.paths = {};
+    const tshirt = c.scenario === 'tshirt';
+    const plies = tshirt ? 2 : c.plies;
+    let shapes = [];
+    if (tshirt) {
+      const front = tshirtPanel({ neckDepth: 0.06 }), back = tshirtPanel({ neckDepth: 0.02 });
+      shapes = [{ outline: back.outline, name: 'Rückenteil' }, { outline: front.outline, name: 'Vorderteil' }];
+      for (const [k, chain] of Object.entries(front.chains)) this.paths[k] = seamPath(front.outline, chain, 0.01);
+      this.garment = { front, back };
+    } else {
+      const W = c.plyW, L = c.plyL;
+      const out = [[-W / 2, -L / 2], [W / 2, -L / 2], [W / 2, L / 2], [-W / 2, L / 2]];
+      // gerade Naht entlang der rechten Kante (vom vorderen zum hinteren Ende), 1 cm Zugabe
+      this.rectOutline = out; this.rectChain = [[W / 2, -L / 2], [W / 2, L / 2]];
+      this.paths.kante_rechts = seamPath(out, this.rectChain, 0.01);
+    }
+    for (let i = 0; i < plies; i++) {
       const y = T + t * (i + 0.5) + 1e-5;
+      const tol = tshirt ? 0.001 : 0.003; // paarweise geschnittene Teile liegen genauer
       const cloth = new Cloth({
         fabric: this.fabric, width: c.plyW, length: c.plyL, spacing: c.spacing,
-        center: [STACK_POS[0] + (R() - 0.5) * 0.003, y, STACK_POS[1] + (R() - 0.5) * 0.003],
-        yaw: ((R() - 0.5) * Math.PI) / 180, name: `Lage ${c.plies - i}`,
+        outline: tshirt ? shapes[i].outline : null,
+        center: [STACK_POS[0] + (R() - 0.5) * tol, y, STACK_POS[1] + (R() - 0.5) * tol],
+        yaw: ((R() - 0.5) * Math.PI) / 180, name: tshirt ? shapes[i].name : `Lage ${plies - i}`,
       });
-      cloth.stackIndex = c.plies - i; // 1 = oberste
+      cloth.stackIndex = plies - i; // 1 = oberste
       this.cloths.push(cloth);
     }
     this.cloths.sort((a, b) => a.stackIndex - b.stackIndex);
@@ -153,8 +238,19 @@ export class World {
     // Saugtisch im Nähbereich: hält aufliegende Lagen über Unterdruck (erhöht die Normalkraft)
     this.tableVac = { on: false, pressure: c.tableVacPa ?? 800, region: [0.345, 0.625, -0.12, 0.25], top: T }; // Saugfeld unter der 1. Lage (Zonensteuerung)
     this.machine.tableVac = this.tableVac;
+    this.machine.distToPath = distToPath;
+    // Nähschablone passend zum Teil (Kontur, Nahtbahn, Schlitz)
+    {
+      const pathName = tshirt ? 'seite_links' : 'kante_rechts';
+      const path = this.paths[pathName];
+      const outline = tshirt ? this.garment.front.outline : this.rectOutline;
+      const chain = tshirt ? this.garment.front.chains.seite_links : this.rectChain;
+      const slot = (this.head.params.slot || 16) * 1e-3;
+      this.head.setTemplate({ path, outline, dist: (u, v) => distToPath(path, u, v), shape: templateOutline(outline, chain, 0.01 + slot), slot });
+    }
+    this.machineBoxes = this.colliders.filter((k) => ['Nähkopf', 'Arm', 'Ständer'].includes(k.name));
     this.head.tableVac = this.tableVac;
-    Object.assign(this.machine, { rpm: c.rpm, stitchLength: c.stitch, footForce: c.footForce, footMaterial: c.footMaterial });
+    Object.assign(this.machine, { rpm: c.rpm, stitchLength: c.stitch, footForce: c.footForce, footMaterial: c.footMaterial, threadTension: c.threadTension ?? 1.2 });
     this.contacts = new ClothContacts();
     this.contacts.selfCollision = c.selfCollision;
     this.kinematic = [...this.head.colliders, this.machine.foot];
@@ -199,7 +295,7 @@ export class World {
     return top + held;
   }
 
-  headContact() { return this.robot.pose.y <= this.touchTop + 0.1e-3; }
+  headContact() { return (this._servoPose?.y ?? this.robot.pose.y) <= this.touchTop + 0.1e-3; }
 
   _updateSleep(frameDt) {
     const head = this.head, m = this.machine;
@@ -314,7 +410,10 @@ export class World {
     }
     this.touchTop = this._touchSurface();
 
-    const ctx = { head: this.head, machine: this.machine, contact: () => this.headContact(), log: (m) => this.log(m) };
+    const ctx = {
+      head: this.head, machine: this.machine, contact: () => this.headContact(), log: (m, l) => this.log(m, l),
+      paths: this.paths, pathAt, partMap: () => this.head.partMap(),
+    };
     for (let s = 0; s < n; s++) {
       if (s % detectEvery === 0) {
         this.contacts.detect(cloths, Math.min(detectEvery, n - s) * dt);
@@ -322,10 +421,25 @@ export class World {
       this.t += dt;
       for (const k of this.kinematic) k.beginSubstep();
       const wasOn = this.head.elements.some((e) => e.on);
+      const prevPose = { ...this.robot.pose };
       this.robot.update(this.t, dt, ctx);
+      // Kurvennaht: Transporteur folgt der Starrkörperbewegung des geführten Teils
+      if (this.robot.pathFollow) {
+        const a = this._servoPrev || prevPose, b = this._servoNext(dt);
+        this.machine.follow = (x, z) => {
+          const [lx, lz] = rotY(x - a.x, z - a.z, -a.yaw);
+          const [wx, wz] = rotY(lx, lz, b.yaw);
+          return [b.x + wx - x, b.z + wz - z];
+        };
+      } else this.machine.follow = null;
       const isOn = this.head.elements.some((e) => e.on);
       if (!wasOn && isOn) this.cycle = { gripY: this.robot.pose.y, double: false, empty: false };
-      this.head.pose = this.robot.pose;
+      if (this.robot.running && !this._runSeen) { this._runSeen = true; this.collided = false; }
+      if (!this.robot.running) this._runSeen = false;
+      // Lageregelung: Istlage folgt der Sollbahn mit P-Regler (Geschwindigkeitsverstärkung Kv)
+      this.head.pose = this._servoNext(dt);
+      this._servoPrev = { ...this.head.pose };
+      this._servoDone = false;
       this.head.updateColliders();
       this.machine.update(this.t, dt);
 
@@ -333,12 +447,29 @@ export class World {
         if (c.sleeping) continue;
         if (s % 4 === 0 || !c.acc) this._drag(c, dt * Math.min(4, n - s));
         const p = c.pos, pp = c.prev, v = c.vel, w = c.w, acc = c.acc;
+        const sq = this.cfg.airCushion === false ? null : { a: Math.min(c.width, c.length) / 2 };
+        const gb = c.gapBelow;
         for (let i = 0, N = c.n; i < N; i++) {
           const k = 3 * i;
           pp[k] = p[k]; pp[k + 1] = p[k + 1]; pp[k + 2] = p[k + 2];
           if (!w[i]) continue;
           v[k] += acc[k] * dt; v[k + 2] += acc[k + 2] * dt;
           v[k + 1] += (acc[k + 1] - G) * dt;
+          // Luftpolster (Quetschströmung) beim Annähern an eine Fläche
+          if (v[k + 1] < 0 && sq) {
+            let gap = gb ? gb[i] : Infinity;
+            if (p[k + 1] < TABLE_TOP + 0.012) {
+              const top = this._tableTop(p[k], p[k + 2]);
+              if (top > -1) gap = Math.min(gap, p[k + 1] - c.radius - top);
+            }
+            if (gap > 0 && gap < 5e-3) {
+              const vn = -v[k + 1], e = Math.min(c.edgeDist[i], sq.a);
+              const hEff = gap + 2e-4;                            // Rauheit: Luft entweicht auch durch die Oberflächenstruktur
+              const pSq = (6 * AIR.viscosity * vn * e * (2 * sq.a - e)) / (hEff * hEff * hEff);
+              const pr = 1 / (1 / Math.max(pSq, 1e-12) + c.m.k / vn); // parallel: seitlich + durch den Stoff
+              v[k + 1] += Math.min(vn, (pr / c.m.rho) * dt);
+            }
+          }
           p[k] += v[k] * dt; p[k + 1] += v[k + 1] * dt; p[k + 2] += v[k + 2] * dt;
         }
       }
@@ -385,6 +516,55 @@ export class World {
     this._afterFrame();
   }
 
+  // Istlage der Achsen für diesen Teilschritt (einmal je Teilschritt berechnet).
+  // P-Lageregler mit Kv = 40 1/s (typisch für Servo-Linearachsen) und 90 % Geschwindigkeits-
+  // vorsteuerung; der verbleibende Schleppfehler beträgt (1 − ff)·v/Kv.
+  _servoNext(dt) {
+    if (this._servoDone) return this._servoPose;
+    const cmd = this.robot.pose, kv = this.cfg.servoKv ?? 40, ff = this.cfg.servoFF ?? 0.9;
+    const f = this._servoFilt || { ...cmd };
+    const k = 1 - Math.exp(-kv * dt);
+    this._servoFilt = { x: f.x + (cmd.x - f.x) * k, y: f.y + (cmd.y - f.y) * k, z: f.z + (cmd.z - f.z) * k, yaw: f.yaw + (cmd.yaw - f.yaw) * k };
+    // Geschwindigkeitsvorsteuerung (Anteil ff): nur der Rest folgt verzögert
+    const F = this._servoFilt, mix = (a, b) => ff * a + (1 - ff) * b;
+    this._servoPose = { x: mix(cmd.x, F.x), y: mix(cmd.y, F.y), z: mix(cmd.z, F.z), yaw: mix(cmd.yaw, F.yaw) };
+    this.servoError = Math.hypot(cmd.x - this._servoPose.x, cmd.y - this._servoPose.y, cmd.z - this._servoPose.z);
+    this._servoDone = true;
+    return this._servoPose;
+  }
+
+  // Höchste Tischoberfläche unter (x, z) – für das Luftpolster
+  _tableTop(x, z) {
+    let top = -Infinity;
+    for (const k of this.tableColliders || []) top = Math.max(top, k.topAt(x, z));
+    return top;
+  }
+
+  // Kollisionsüberwachung Greiferkopf ↔ Nähmaschine (Roboter ist kinematisch, daher Warnung)
+  _checkHeadCollision() {
+    if (this.collided) return;
+    if (this.head.type === 'schablone') return; // Nähfuß läuft im Schablonenschlitz
+    const yw = Math.abs(Math.cos(this.head.pose.yaw)), ys = Math.abs(Math.sin(this.head.pose.yaw));
+    for (const k of this.head.colliders) {
+      // achsparallele Hülle des gedrehten Quaders
+      const ex = yw * k.half[0] + ys * k.half[2], ez = ys * k.half[0] + yw * k.half[2];
+      for (const m of this.machineBoxes) {
+        if (Math.abs(k.c[0] - m.c[0]) < ex + m.half[0] && Math.abs(k.c[2] - m.c[2]) < ez + m.half[2] && Math.abs(k.c[1] - m.c[1]) < k.half[1] + m.half[1]) {
+          this.collided = true;
+          this.log(`Kollision: Greiferkopf berührt ${m.name} der Nähmaschine`, 'error');
+          return;
+        }
+      }
+      // Nadelstange und Nähfußstange (Ø ca. 8 mm, vom Fuß bis zum Kopf)
+      const N = this.machine.needle;
+      if (Math.abs(k.c[0] - N[0]) < ex + 0.006 && Math.abs(k.c[2] - N[2]) < ez + 0.02 && k.c[1] - k.half[1] < N[1] + 0.12) {
+        this.collided = true;
+        this.log('Kollision: Greiferkopf an Nadel- oder Nähfußstange', 'error');
+        return;
+      }
+    }
+  }
+
   // Sicherheitsnetz: nicht-endliche Werte (numerische Instabilität) zurücksetzen
   _recover(c) {
     const p = c.pos, pp = c.prev;
@@ -394,6 +574,7 @@ export class World {
   }
 
   _afterFrame() {
+    this._checkHeadCollision();
     for (const e of this.head.events.splice(0)) {
       const detail = `F_n ${e.Fn.toFixed(3)}/${e.Cn.toFixed(3)} N, F_t ${e.Ft.toFixed(3)}/${e.Ct.toFixed(3)} N`;
       if (e.type === 'separate') continue; // Unterlage löst sich – Zusammenfassung je Lage folgt
@@ -408,7 +589,8 @@ export class World {
       if (held && !tr.held) {
         tr.held = true; tr.prevState = tr.state;
         // als Unterlage mitgegriffen (durch die obere Lage hindurch)?
-        tr.sub = this.head.elements.some((el) => el.frozen.get(c.id)?.ply > 0) && !this.head.elements.some((el) => el.frozen.get(c.id)?.ply === 0);
+        const want = this.cfg.pickPlies || 1;
+        tr.sub = this.head.elements.some((el) => el.frozen.get(c.id)?.ply >= want) && !this.head.elements.some((el) => el.frozen.get(c.id)?.ply < want);
         if (!tr.sub) { tr.state = 'gegriffen'; tr.error = null; tr.ideal = null; tr.pick = c.pose2D(); tr.gpick = { ...this.head.pose }; }
       } else if (!held && tr.held) {
         tr.held = false;
@@ -443,7 +625,7 @@ export class World {
         }
       }
     }
-    if (this.cycle.gripY !== null && !this.cycle.double && heldCount >= 2 && this.robot.pose.y > this.cycle.gripY + 0.06) {
+    if (this.cycle.gripY !== null && !this.cycle.double && heldCount > (this.cfg.pickPlies || 1) && this.robot.pose.y > this.cycle.gripY + 0.06) {
       this.cycle.double = true;
       this.log(`Doppelgriff: ${heldCount} Lagen gleichzeitig gegriffen`, 'error');
     }

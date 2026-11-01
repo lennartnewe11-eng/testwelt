@@ -223,6 +223,11 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
       </div>
       <div data-pane="setup" class="pane">
         <section class="block">
+          <h2>Szenario</h2>
+          <select id="scenario" aria-label="Szenario"></select>
+          <p class="note" id="scenarioNote"></p>
+        </section>
+        <section class="block">
           <h2>Material</h2>
           <select id="fabric" aria-label="Material"></select>
           <p class="note" id="fabricMeta"></p>
@@ -253,6 +258,13 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
           <label class="row"><span>Stichlänge [mm]</span><input type="number" id="stitch" min="1" max="6" step="0.5"></label>
           <label class="row"><span>Nähfußdruck [N]</span><input type="number" id="footForce" min="5" max="120" step="5"></label>
           <label class="row"><span>Nähfuß</span><select id="footMat" style="width:170px"><option value="stahl">Stahl, poliert</option><option value="ptfe">PTFE-beschichtet</option></select></label>
+          <label class="row"><span>Fadenspannung [N]</span><input type="number" id="threadTension" min="0" max="5" step="0.1"></label>
+        </section>
+        <section class="block">
+          <h2>Roboter</h2>
+          <label class="row"><span>Lageregelung K<sub>v</sub> [1/s]</span><input type="number" id="servoKv" min="5" max="200" step="5"></label>
+          <label class="row"><span>Geschwindigkeitsvorsteuerung [%]</span><input type="number" id="servoFF" min="0" max="100" step="5"></label>
+          <p class="note">Der Schleppfehler (1 − Vorsteuerung)·v/K<sub>v</sub> wirkt sich bei Kurvennähten direkt auf die Nahtabweichung aus.</p>
         </section>
         <section class="block">
           <h2>Numerik</h2>
@@ -262,7 +274,9 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
             <option value="fine">Fein (1 cm, 24)</option>
           </select></label>
           <label class="row"><span>Selbstkontakt der Lagen</span><input type="checkbox" id="selfColl"></label>
-          <button class="btn primary" id="btnApply" type="button">Übernehmen und neu aufbauen</button>
+          <label class="row"><span>Luftpolster beim Ablegen</span><input type="checkbox" id="airCushion"></label>
+          <button class="btn primary" id="btnApply" type="button">Neu aufbauen</button>
+          <p class="note">Änderungen am Aufbau werden sofort übernommen; die Zelle startet dann neu.</p>
         </section>
       </div>
       <div data-pane="prog" class="pane" hidden>
@@ -288,6 +302,8 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
               <tr><td class="mono">TABLEVAC ON|OFF</td><td>Saugtisch im Nähbereich</td></tr>
               <tr><td class="mono">SEW L [rpm] [mm] [SYNC]</td><td>Naht starten, SYNC: Greifer folgt dem Transporteur</td></tr>
               <tr><td class="mono">WAITSEW</td><td>auf Nahtende warten</td></tr>
+              <tr><td class="mono">ALIGNPATH bahn [y] [vorlauf]</td><td>Nahtanfang vor die Nadel, Nahtrichtung = Transportrichtung</td></tr>
+              <tr><td class="mono">SEWPATH bahn [rpm] [mm]</td><td>Kurvennaht: Roboter dreht das Teil um die Nadel</td></tr>
               <tr><td class="mono">HOME</td><td>Grundstellung</td></tr>
             </table>
           </details>
@@ -337,6 +353,8 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
           <div class="kpi"><div class="lbl">Max. Auslastung</div><div class="val" id="kUtil">–</div><div class="sub">Last / Haltekraft</div></div>
           <div class="kpi"><div class="lbl">Ablagefehler</div><div class="val" id="kErr">–</div><div class="sub" id="kErrSub">letzte abgelegte Lage</div></div>
           <div class="kpi"><div class="lbl">Stiche</div><div class="val" id="kStitch">0</div><div class="sub" id="kStitchSub">Naht –</div></div>
+          <div class="kpi"><div class="lbl">Nahtabweichung</div><div class="val" id="kDev">–</div><div class="sub" id="kDevSub">Einstich ↔ Sollbahn</div></div>
+          <div class="kpi"><div class="lbl">Greiferkopf</div><div class="val" id="kPose">–</div><div class="sub" id="kPoseSub">Drehung C-Achse</div></div>
         </div>
       </section>
       <section class="block">
@@ -344,8 +362,8 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
         <div class="headgrid" id="headgrid"></div>
       </section>
       <section class="block">
-        <h2>Greiferkraft, oberste Lage</h2>
-        <div class="legend"><span><i style="background:var(--s1)"></i>Last F<sub>n</sub> (Summe)</span><span><i style="background:var(--s2)"></i>Haltekraft C<sub>n</sub> (Summe)</span></div>
+        <h2>Auslastung der Haltekraft</h2>
+        <div class="legend"><span><i style="background:var(--s1)"></i>höchstbelastetes Element</span><span><i style="background:var(--s2)"></i>Versagensgrenze 100 %</span></div>
         <div class="chart-wrap"><canvas id="chart" height="150"></canvas><div class="tip" id="tip"></div></div>
       </section>
       <section class="block">

@@ -111,14 +111,14 @@ export class ClothContacts {
 
   _query(cloths, vc, tc, H, margin, mSurf, qr, inv) {
     const { count, E, mask, stamp, G } = H;
-    const C = cloths[vc], D = cloths[tc], p = C.pos, nx = C.nx, B = D.aabb;
+    const C = cloths[vc], D = cloths[tc], p = C.pos, gi = C.gi, gj = C.gj, B = D.aabb;
     const T = D.tri;
     const self = tc === vc;
     const rr = C.radius + D.radius;
     for (let v = 0; v < C.n; v++) {
       const x = p[3 * v], y = p[3 * v + 1], z = p[3 * v + 2];
       if (x < B[0] - margin || x > B[3] + margin || y < B[1] - margin || y > B[4] + margin || z < B[2] - margin || z > B[5] + margin) continue;
-      const vi = v % nx, vj = (v / nx) | 0;
+      const vi = gi[v], vj = gj[v];
       const sv = ++this._stamp;
       let bestT = -1, bestQ = -Infinity, bestSide = 1;
       const x0 = Math.floor((x - qr) * inv), x1 = Math.floor((x + qr) * inv);
@@ -133,9 +133,9 @@ export class ClothContacts {
           const i0 = T[3 * t], i1 = T[3 * t + 1], i2 = T[3 * t + 2];
           if (self) {
             if (i0 === v || i1 === v || i2 === v) continue;
-            if (Math.abs((i0 % nx) - vi) <= 2 && Math.abs(((i0 / nx) | 0) - vj) <= 2) continue;
-            if (Math.abs((i1 % nx) - vi) <= 2 && Math.abs(((i1 / nx) | 0) - vj) <= 2) continue;
-            if (Math.abs((i2 % nx) - vi) <= 2 && Math.abs(((i2 / nx) | 0) - vj) <= 2) continue;
+            if (Math.abs(gi[i0] - vi) <= 2 && Math.abs(gj[i0] - vj) <= 2) continue;
+            if (Math.abs(gi[i1] - vi) <= 2 && Math.abs(gj[i1] - vj) <= 2) continue;
+            if (Math.abs(gi[i2] - vi) <= 2 && Math.abs(gj[i2] - vj) <= 2) continue;
           }
           const o = t * 16;
           const iden = G[o + 15];
@@ -167,6 +167,8 @@ export class ClothContacts {
 
   solve(cloths, dt) {
     const dt2 = dt * dt;
+    // Spalt zur Lage darunter je Knoten (für das Luftpolster)
+    for (const c of cloths) { if (!c.gapBelow) c.gapBelow = new Float64Array(c.n); c.gapBelow.fill(Infinity); }
     for (let k = 0; k < this.n; k++) {
       const C = cloths[this.vc[k]], D = cloths[this.tc[k]];
       const v = this.vi[k], t = this.ti[k], s = this.side[k];
@@ -183,6 +185,7 @@ export class ClothContacts {
       const dist = wx * nX + wy * nY + wz * nZ;
       const thick = C.radius + D.radius;
       const coh = Math.min(C.m.cohesion, D.m.cohesion);
+      if (nY > 0.7 && dist > thick && dist - thick < C.gapBelow[v]) C.gapBelow[v] = dist - thick;
       if (dist >= thick + (coh > 0 ? this.cohesionRange : 0)) continue;
       const px = wx - dist * nX, py = wy - dist * nY, pz = wz - dist * nZ;
       const d00 = e1x * e1x + e1y * e1y + e1z * e1z, d01 = e1x * e2x + e1y * e2y + e1z * e2z;

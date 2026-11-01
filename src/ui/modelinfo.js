@@ -22,5 +22,15 @@ export const MODEL_INFO = `
 <p class="note">Versagen, wenn (F<sub>n</sub>/C<sub>n</sub>)² + (F<sub>t</sub>/C<sub>t</sub>)² &gt; 1. Die Lasten entstehen aus der Simulation (Gewicht, Trägheit, Luft, Reibung, Lagenhaftung). Auf- und Abbau der Haltekraft mit Zeitkonstanten je Greiferprinzip.</p></section>
 <section class="block"><h2>Nähmaschine</h2>
 <p class="note">Untertransport mit Transporteur (Reibschluss bis μ·F<sub>Fuß</sub>), Nähfuß bremst die obere Lage, Nadel fixiert die Lagen während des Einstichs. Jeder Stich verbindet die Lagen über einen nur zugtragenden Faden. Daraus entstehen Lagenverschiebung und Verdrehen am Werkstück.</p></section>
+<section class="block"><h2>Kurvennähte und Schnittteile</h2>
+<p class="note">Zuschnitte haben beliebige Konturen (z. B. T-Shirt-Vorder- und Rückenteil); die Netzknoten am Rand liegen auf der Schnittkante. Nahtbahnen entstehen aus der Kontur, versetzt um die Nahtzugabe. Bei SEWPATH dreht der Roboter das Teil laufend um die Nadel, sodass die Nahttangente in Transportrichtung zeigt; der Transporteur folgt dabei der Starrkörperbewegung des Teils. Gemessen wird die Abweichung jedes Einstichs von der Sollbahn im Zuschnitt.</p></section>
+<section class="block"><h2>Weitere physikalische Effekte</h2>
+<table class="kv">
+<tr><td>Luftpolster</td><td>Quetschströmung nach Reynolds beim Annähern an Tisch oder Lage: p = 6μ·v·e(2a−e)/h³, parallel dazu Durchströmung des Stoffs. Dichte Stoffe schweben beim Ablegen, offene fallen sofort.</td></tr>
+<tr><td>Fadenspannung</td><td>Stauchung der Naht ε = F/(T·1 cm), nur zugtragend; erzeugt Nahtkräuseln bei dünnen Stoffen.</td></tr>
+<tr><td>Achsregelung</td><td>P-Lageregler (K<sub>v</sub>) mit Geschwindigkeitsvorsteuerung; der Schleppfehler geht in die Nahtabweichung ein.</td></tr>
+<tr><td>Kollisionen</td><td>Greiferkopf gegen Nähkopf, Arm, Ständer, Nadel- und Fußstange (Warnung, der Roboter ist kinematisch).</td></tr>
+<tr><td>Saugtisch</td><td>Unterdruck erhöht die Normalkraft der aufliegenden Lage, Reibschluss nach Coulomb.</td></tr>
+</table></section>
 <section class="block"><h2>Grenzen</h2>
 <p class="note">Keine Strömungssimulation (CFD), keine Temperatur- und Feuchteabhängigkeit, Maschinenteile und Tische sind starr. Netzauflösung 1–2 cm: Effekte kleiner als die Maschenweite (Einzelfäden, Kanten-Ausfransen) werden nicht abgebildet.</p></section>`;

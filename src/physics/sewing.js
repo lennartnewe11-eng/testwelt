@@ -8,6 +8,10 @@
 //    Lagenverschiebung beim Nähen mehrerer Lagen.
 //  • Nadel im Stoff (Phase 0…0,45): alle Lagen an der Einstichstelle fixiert.
 //  • Jeder Einstich erzeugt einen Stich, der die Lagen mechanisch verbindet.
+//  • Fadenspannung: Ober- und Unterfaden ziehen die Naht in Längsrichtung zusammen
+//    (Stauchung ε = F_Faden / (T · b_Naht)); bei dünnen Stoffen entsteht Nahtkräuseln.
+//  • Kurvennaht: Führt der Roboter das Teil (SEWPATH), folgt der Transporteur der
+//    Starrkörperbewegung des Teils (Drehung um die Nadel), statt nur geradeaus zu schieben.
 
 import { BoxCollider } from './colliders.js';
 import { SOLIDS } from './materials.js';
@@ -34,16 +38,24 @@ export class SewingMachine {
     this.needleDepth = 0;            // für Darstellung (0 = oben, 1 = unten)
     this.pinned = [];
     this.order = new Map();             // Lagenreihenfolge unter dem Fuß
+    this.threadTension = 1.2;           // Fadenspannung [N]
+    this.seamLinks = [];                // Fadenzug entlang der Naht
+    this.deviations = [];               // Abstand Einstich ↔ Sollbahn [m]
+    this.follow = null;                 // Starrkörperbewegung des geführten Teils (Kurvennaht)
     this.foot = new BoxCollider({ name: 'Nähfuß', center: [needle[0], needle[1] + this.footLift + 0.004, needle[2]], half: [this.half[0], 0.004, this.half[1]], material: 'stahl', kinematic: true, visual: false });
     this.footY = needle[1] + this.footLift;
   }
 
-  startSew(length, rpm, stitch) {
+  startSew(length, rpm, stitch, path = null, pathCloth = null) {
     if (rpm) this.rpm = rpm;
     if (stitch) this.stitchLength = stitch;
     this.sewTarget = Math.max(1, Math.round((length * 1000) / this.stitchLength));
     this.stitches = 0;
     this.sewing = true;
+    this.activePath = path;
+    this.pathCloth = pathCloth;
+    this.deviations = [];
+    this.lastHits = null;
   }
 
   get busy() { return this.sewing; }
@@ -109,6 +121,7 @@ export class SewingMachine {
   solve(cloths, dt, t) {
     // Stiche (bleibende Verbindungen der Lagen)
     for (const j of this.joins) this._solveJoin(j);
+    for (const l of this.seamLinks) this._solveSeamLink(l);
     if (this.footUp) { this.order.clear(); return; }
     const groups = this._zone(cloths);
     if (!groups.length) {
@@ -142,7 +155,11 @@ export class SewingMachine {
         let dx = p[i] - pp[i], dz = p[i + 2] - pp[i + 2];
         // Sollverschiebung aus der Lage darunter bzw. dem Transporteur
         let tx, tz, mu;
-        if (k === 0) { tx = fx; tz = fz; mu = this.dogMu; }
+        if (k === 0) {
+          mu = this.dogMu;
+          if (this.follow && vf > 0) { const d = this.follow(pp[i], pp[i + 2]); tx = d[0]; tz = d[1]; }
+          else { tx = fx; tz = fz; }
+        }
         else { tx = below[0]; tz = below[1]; mu = 0.5 * (c.m.muSelfS + groups[k - 1].c.m.muSelfS); }
         let cx = tx - dx, cz = tz - dz;
         let cl = Math.hypot(cx, cz), L = lim(mu);
@@ -177,10 +194,50 @@ export class SewingMachine {
     if (!hits.length) return;
     const top = hits[hits.length - 1];
     this.stitchPoints.push({ cloth: top.c, ...top.hit });
+    // Nahtabweichung: Einstichstelle im Zuschnitt gegen die Sollbahn
+    if (this.activePath && this.distToPath) {
+      const h = hits.find((x) => x.c === this.pathCloth) || top;
+      const [u, v] = h.c.restPoint(h.hit.tri, h.hit.b0, h.hit.b1, h.hit.b2);
+      this.deviations.push(this.distToPath(this.activePath, u, v));
+    }
+    // Fadenzug zum vorigen Einstich in jeder Lage (nur Zug, verkürzte Ruhelänge)
+    if (this.lastHits) {
+      for (const hcur of hits) {
+        const hprev = this.lastHits.find((x) => x.c === hcur.c);
+        if (!hprev) continue;
+        const c = hcur.c;
+        const pa = triPoint(c, hprev.hit), pb = triPoint(c, hcur.hit);
+        const L = Math.hypot(pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]);
+        if (L < 1e-4 || L > 3 * this.stitchLength * 1e-3) continue;
+        const eps = Math.min(0.05, this.threadTension / (Math.min(c.m.Tw, c.m.Tf) * 0.01));
+        this.seamLinks.push({ c, a: hprev.hit, b: hcur.hit, rest: L * (1 - eps) });
+      }
+    }
+    this.lastHits = hits;
     // Der Faden verbindet benachbarte Lagen an der Einstichstelle (trägt nur Zug)
     for (let k = 1; k < hits.length; k++) {
       const a = hits[k - 1], b = hits[k];
       this.joins.push({ ca: a.c, ta: a.hit.tri, ba: [a.hit.b0, a.hit.b1, a.hit.b2], cb: b.c, tb: b.hit.tri, bb: [b.hit.b0, b.hit.b1, b.hit.b2], rest: a.c.radius + b.c.radius });
+    }
+  }
+
+  _solveSeamLink(l) {
+    const c = l.c, p = c.pos, T = c.tri;
+    const ia = [T[3 * l.a.tri], T[3 * l.a.tri + 1], T[3 * l.a.tri + 2]], ba = [l.a.b0, l.a.b1, l.a.b2];
+    const ib = [T[3 * l.b.tri], T[3 * l.b.tri + 1], T[3 * l.b.tri + 2]], bb = [l.b.b0, l.b.b1, l.b.b2];
+    let ax = 0, ay = 0, az = 0, bx = 0, by = 0, bz = 0, W = 0;
+    for (let k = 0; k < 3; k++) {
+      ax += ba[k] * p[3 * ia[k]]; ay += ba[k] * p[3 * ia[k] + 1]; az += ba[k] * p[3 * ia[k] + 2];
+      bx += bb[k] * p[3 * ib[k]]; by += bb[k] * p[3 * ib[k] + 1]; bz += bb[k] * p[3 * ib[k] + 2];
+      W += c.w[ia[k]] * ba[k] ** 2 + c.w[ib[k]] * bb[k] ** 2;
+    }
+    const dx = bx - ax, dy = by - ay, dz = bz - az, len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (len <= l.rest || !W) return;
+    const s = (len - l.rest) / (len * W);
+    for (let k = 0; k < 3; k++) {
+      const fa = c.w[ia[k]] * ba[k] * s, fb = c.w[ib[k]] * bb[k] * s;
+      p[3 * ia[k]] += fa * dx; p[3 * ia[k] + 1] += fa * dy; p[3 * ia[k] + 2] += fa * dz;
+      p[3 * ib[k]] -= fb * dx; p[3 * ib[k] + 1] -= fb * dy; p[3 * ib[k] + 2] -= fb * dz;
     }
   }
 
@@ -208,7 +265,7 @@ export class SewingMachine {
   }
 
   reset() {
-    this.stitchPoints = []; this.joins = []; this.sewing = false; this.footUp = true; this.phase = 0.6;
+    this.stitchPoints = []; this.joins = []; this.seamLinks = []; this.sewing = false; this.footUp = true; this.phase = 0.6;
   }
 }
 
@@ -228,4 +285,9 @@ export function locateTriangle(c, x, z) {
     if (u >= -1e-6 && v >= -1e-6 && u + v <= 1 + 1e-6) return { tri: t, b0: 1 - u - v, b1: v, b2: u };
   }
   return null;
+}
+
+function triPoint(c, hit) {
+  const T = c.tri, p = c.pos, a = 3 * T[3 * hit.tri], b = 3 * T[3 * hit.tri + 1], d = 3 * T[3 * hit.tri + 2];
+  return [0, 1, 2].map((k) => hit.b0 * p[a + k] + hit.b1 * p[b + k] + hit.b2 * p[d + k]);
 }

@@ -15,10 +15,21 @@ Lagenhaftung und mehr. Alle Werte lassen sich in der Oberfläche durch eigene Me
 npm start            # statischer Server ohne Abhängigkeiten → http://localhost:8080
 npm test             # Validierung des Physikmodells gegen analytische Lösungen
 npm run scenario     # Beispielprogramm ohne Grafik durchrechnen (Protokoll im Terminal)
+npm run scenario -- scenario=tshirt   # T-Shirt-Kurvennaht mit Nahtabweichung
 npm run build        # dist/naehzelle.html: eine eigenständige Datei zum Weitergeben
 ```
 
 Benötigt Node.js ≥ 18 und einen aktuellen Browser mit WebGL. Three.js wird vom CDN geladen.
+
+## Szenarien
+
+| Szenario | Inhalt |
+|---|---|
+| Rechteckzuschnitte, gerade Naht | Popeline-Stapel, Vakuumgreifer, zwei Lagen vereinzeln, mit Saugtisch ablegen, robotergeführt gerade nähen |
+| T-Shirt, Kurvennaht | Vorder- und Rückenteil eines Kinder-T-Shirts (Jersey) in einer Nähschablone; der Roboter näht die linke Seitennaht mit Achselrundung und Ärmelunternaht in einem Zug und dreht das Teil dabei um die Nadel |
+
+Wie man darauf aufbauend ein komplettes T-Shirt automatisiert, beschreibt
+[docs/t-shirt-automatisierung.md](docs/t-shirt-automatisierung.md).
 
 ## Was die Zelle enthält
 
@@ -26,7 +37,8 @@ Benötigt Node.js ≥ 18 und einen aktuellen Browser mit WebGL. Three.js wird vo
 |---|---|
 | Zuschnittstapel | 1–8 Lagen mit Legetoleranz (±1,5 mm, ±0,5°) auf einem Tisch (HPL, Stahl, PTFE, Buche, Gummi wählbar) |
 | Portalroboter | Achsen X, Y, Z, C; Trapez-Geschwindigkeitsprofil mit v_max und a_max; Tastfahrt; synchrones Mitführen beim Nähen |
-| Greiferkopf | Raster aus 1–25 Elementen; Vakuum-, Nadel-, Elektroadhäsions- oder Kryogreifer |
+| Greiferkopf | Raster aus 1–25 Elementen; Vakuum-, Nadel-, Elektroadhäsions- oder Kryogreifer, oder Nähschablone (Klemmrahmen mit Nahtschlitz) |
+| Zuschnitte | Rechteck oder beliebige Kontur (T-Shirt-Teile); Randknoten liegen auf der Schnittkante |
 | Nähmaschine | Flachbett mit Transporteur, Nähfuß (Druck einstellbar, Stahl oder PTFE), Nadel, Stichbildung |
 | Saugtisch | Zonen-Saugfeld im Nähbereich, hält die untere Lage beim Auflegen der oberen |
 
@@ -65,7 +77,17 @@ Haltekraft. Gegriffene Knoten sind nachgiebig an das Element gebunden. Die über
 
 **Nähmaschine** (`src/physics/sewing.js`): Transporteur mit Reibschluss bis μ·F_Fuß, Nähfuß bremst
 die obere Lage (Lagenverschiebung), Nadel fixiert die Lagen beim Einstich, jeder Stich verbindet
-die Lagen über einen nur zugtragenden Faden an der Einstichstelle.
+die Lagen über einen nur zugtragenden Faden an der Einstichstelle. Die Fadenspannung staucht die
+Naht (ε = F/(T·1 cm)) und erzeugt Nahtkräuseln.
+
+**Kurvennaht** (`src/physics/garments.js`, `robot.js`): Nahtbahn = Schnittkontur, um die Nahtzugabe
+nach innen versetzt. Der Roboter misst die Lage des Teils im Greifer ein (2D-Procrustes über die
+Bindungspunkte) und dreht es laufend um die Nadel, sodass die Nahttangente in Transportrichtung
+zeigt. Gemessen wird die Abweichung jedes Einstichs von der Sollbahn.
+
+**Weitere Effekte**: Luftpolster beim Ablegen (Quetschströmung nach Reynolds, parallel zur
+Durchströmung des Stoffs), Lageregelung der Portalachsen mit K_v und Geschwindigkeitsvorsteuerung
+(Schleppfehler), Kollisionsüberwachung Greiferkopf ↔ Nähmaschine.
 
 ## Validierung (`npm test`)
 
@@ -76,8 +98,8 @@ die Lagen über einen nur zugtragenden Faden an der Einstichstelle.
 | Haften auf Stahlrampe unter arctan μ_H | 0 mm | 0 mm | – |
 | Gleiten auf Stahlrampe (a = g·(sin α − μ_G·cos α)) | 249,7 mm | 249,4 mm | 0,1 % |
 | Biegelänge Popeline (ASTM D1388) | 1,80 cm | 1,80 cm | 0,0 % |
-| Biegelänge Denim (ASTM D1388) | 3,33 cm | 3,11 cm | 7,3 % |
-| Biegelänge Nappaleder (ASTM D1388) | 3,79 cm | 3,85 cm | −1,5 % |
+| Biegelänge Denim (ASTM D1388) | 3,33 cm | 3,11 cm | 7,1 % |
+| Biegelänge Nappaleder (ASTM D1388) | 3,77 cm | 3,85 cm | −2,2 % |
 | Zugversuch Single Jersey 3 N/m (XPBD konvergiert) | 0,366 % | 0,353 % | 3,8 % |
 | Sauggreifer auf luftdichtem Material, F = Δp·A | 18,68 N | 18,85 N | −0,9 % |
 
@@ -98,13 +120,16 @@ FOOT UP|DOWN             Nähfuß
 TABLEVAC ON|OFF          Saugtisch im Nähbereich
 SEW L [rpm] [mm] [SYNC]  Naht der Länge L starten; SYNC koppelt den Greifer an den Transporteur
 WAITSEW                  auf das Nahtende warten
+ALIGNPATH bahn [y] [v]   Teil so legen, dass der Nahtanfang v Meter vor der Nadel liegt
+SEWPATH bahn [rpm] [mm]  Kurvennaht entlang der Bahn, Roboter dreht das Teil um die Nadel
 HOME                     Grundstellung
 ```
 
 ## Messwerte
 
 - Haltekraft und Last je Greiferelement, Auslastung, Doppelgriff-Erkennung
-- Zeitverlauf von Greiferlast und Haltekraft
+- Zeitverlauf der Auslastung (höchstbelastetes Element)
+- Nahtabweichung (Einstich ↔ Sollbahn), Lage der C-Achse
 - Ablagefehler je Lage (Abweichung zur Lage bei starrem Mitführen durch den Greifer), Dehnung, Welligkeit
 - Ereignisprotokoll (Lagentrennung, Ablösen, Verlust, Überdehnung)
 - Messdaten als CSV (Zwischenablage)
@@ -122,7 +147,8 @@ typische Literaturwerte; für belastbare Aussagen eigene KES-/FAST-Messungen ein
 index.html                 Oberfläche
 src/physics/               Simulation (ohne Abhängigkeiten, läuft auch in Node)
   constants.js materials.js cloth.js collision.js colliders.js
-  grippers.js sewing.js robot.js world.js validation.js
+  grippers.js sewing.js robot.js garments.js world.js validation.js
+docs/                      Konzept T-Shirt-Automatisierung
 src/render/                Three.js-Darstellung
 src/ui/                    Bedienung, Diagramm, Modellbeschreibung
 tests/                     Validierung und Szenario-Lauf

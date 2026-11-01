@@ -22,59 +22,169 @@ export function rotY(x, z, yaw) {
 
 let NEXT_ID = 0;
 
+// ---- Geometrie-Hilfen für Zuschnittkonturen ----------------------------------
+function closestOnSegment(px, pz, ax, az, bx, bz) {
+  const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz;
+  const t = L2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / L2)) : 0;
+  return [ax + t * dx, az + t * dz];
+}
+export function closestOnOutline(poly, px, pz) {
+  let best = null, bd = Infinity;
+  for (let k = 0; k < poly.length; k++) {
+    const a = poly[k], b = poly[(k + 1) % poly.length];
+    const q = closestOnSegment(px, pz, a[0], a[1], b[0], b[1]);
+    const d = (q[0] - px) ** 2 + (q[1] - pz) ** 2;
+    if (d < bd) { bd = d; best = q; }
+  }
+  return { q: best, d: Math.sqrt(bd) };
+}
+export function pointInPolygon(poly, x, z) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, zi] = poly[i], [xj, zj] = poly[j];
+    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
 export class Cloth {
-  constructor({ fabric, width, length, spacing, center, yaw = 0, name, tint }) {
+  // outline: Zuschnittkontur in lokalen Koordinaten [m] (x = Schuss, z = Kette), Polygon.
+  // Ohne outline entsteht ein Rechteck width × length.
+  constructor({ fabric, width = 0.3, length = 0.4, spacing, center, yaw = 0, name, tint, outline = null }) {
     this.id = NEXT_ID++;
     this.fabric = fabric;
     this.m = toSI(fabric);
     this.name = name || `Lage ${this.id + 1}`;
     this.tint = tint || fabric.color;
     const h = spacing;
-    const nx = Math.max(2, Math.round(width / h) + 1);
-    const nz = Math.max(2, Math.round(length / h) + 1);
-    this.h = h; this.nx = nx; this.nz = nz;
-    this.width = (nx - 1) * h; this.length = (nz - 1) * h;
-    const n = nx * nz;
+    this.h = h;
+    this.isRect = !outline;
+    if (!outline) {
+      const W = (Math.max(2, Math.round(width / h) + 1) - 1) * h, L = (Math.max(2, Math.round(length / h) + 1) - 1) * h;
+      outline = [[-W / 2, -L / 2], [W / 2, -L / 2], [W / 2, L / 2], [-W / 2, L / 2]];
+    }
+    this.outline = outline;
+    let minx = Infinity, maxx = -Infinity, minz = Infinity, maxz = -Infinity;
+    for (const [x, z] of outline) { minx = Math.min(minx, x); maxx = Math.max(maxx, x); minz = Math.min(minz, z); maxz = Math.max(maxz, z); }
+    const nx = Math.round((maxx - minx) / h + 0.499) + 1, nz = Math.round((maxz - minz) / h + 0.499) + 1;
+    this.nx = nx; this.nz = nz;
+    this.width = maxx - minx; this.length = maxz - minz;
+
+    // 1) Gitterknoten: innen, oder Randknoten (auf die Kontur projiziert)
+    const G = nx * nz, gx = new Float64Array(G), gz = new Float64Array(G);
+    const state = new Int8Array(G); // 0 = aus, 1 = innen, 2 = Rand
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+      const g = j * nx + i, x = minx + i * h, z = minz + j * h;
+      gx[g] = x; gz[g] = z;
+      if (pointInPolygon(outline, x, z) || closestOnOutline(outline, x, z).d < 1e-7) state[g] = 1;
+    }
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+      const g = j * nx + i;
+      if (state[g]) continue;
+      const nb = [[i - 1, j], [i + 1, j], [i, j - 1], [i, j + 1]].some(([a, b]) => a >= 0 && b >= 0 && a < nx && b < nz && state[b * nx + a] === 1);
+      if (!nb) continue;
+      const { q, d } = closestOnOutline(outline, gx[g], gz[g]);
+      if (d > 0.95 * h) continue;
+      gx[g] = q[0]; gz[g] = q[1]; state[g] = 2;
+    }
+    // 2) Dreiecke je Zelle (voll: 2 Dreiecke, 3 Ecken aktiv: 1 Dreieck)
+    const tris = [], cellOf = [];
+    const area2 = (a, b, c) => (gx[b] - gx[a]) * (gz[c] - gz[a]) - (gx[c] - gx[a]) * (gz[b] - gz[a]);
+    const okTri = (a, b, c) => Math.abs(area2(a, b, c)) > 0.08 * h * h;
+    for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) {
+      const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1;
+      const act = [a, b, c, d].filter((g) => state[g]);
+      if (act.length === 4) {
+        const T = (i + j) % 2 === 0 ? [[a, c, b], [b, c, d]] : [[a, c, d], [a, d, b]];
+        if (T.every((t) => okTri(...t))) { for (const t of T) { tris.push(t); cellOf.push(4); } continue; }
+        for (const t of T) if (okTri(...t)) { tris.push(t); cellOf.push(3); }
+      } else if (act.length === 3) {
+        let t = act; // Orientierung wie die übrigen Dreiecke (gegen den Uhrzeigersinn in x/z negativ)
+        if (area2(t[0], t[1], t[2]) > 0) t = [t[0], t[2], t[1]];
+        if (okTri(...t)) { tris.push(t); cellOf.push(3); }
+      }
+    }
+    // 3) nur Knoten, die in Dreiecken vorkommen; neu nummerieren
+    const map = new Int32Array(G).fill(-1);
+    let n = 0;
+    for (const t of tris) for (const g of t) if (map[g] < 0) map[g] = n++;
+    this.gridMap = map;
     this.n = n;
+    this.gi = new Int32Array(n); this.gj = new Int32Array(n); this.rest = new Float64Array(2 * n);
+    this.border = new Uint8Array(n);
+    for (let g = 0; g < G; g++) {
+      const v = map[g];
+      if (v < 0) continue;
+      this.gi[v] = g % nx; this.gj[v] = (g / nx) | 0;
+      this.rest[2 * v] = gx[g]; this.rest[2 * v + 1] = gz[g];
+      this.border[v] = state[g] === 2 ? 1 : 0;
+    }
+    this.tri = Int32Array.from(tris.flatMap((t) => t.map((g) => map[g])));
+    this.nTri = tris.length;
+
     this.pos = new Float64Array(3 * n);
     this.prev = new Float64Array(3 * n);
     this.vel = new Float64Array(3 * n);
     this.mass = new Float64Array(n);
-    this.w = new Float64Array(n);            // inverse Masse (0 = fixiert)
-    this.attached = new Int16Array(n).fill(-1); // Index des haltenden Greiferelements
+    this.w = new Float64Array(n);
+    this.attached = new Int16Array(n).fill(-1);
     this.radius = Math.max(this.m.t * 0.5, 5e-5);
-    this.area = this.width * this.length;
-    this.totalMass = this.m.rho * this.area;
 
-    const share = (i, N) => (i === 0 || i === N - 1 ? 0.5 : 1);
-    for (let j = 0; j < nz; j++) {
-      for (let i = 0; i < nx; i++) {
-        const v = j * nx + i;
-        const lx = i * h - this.width / 2, lz = j * h - this.length / 2;
-        const [rx, rz] = rotY(lx, lz, yaw);
-        this.pos[3 * v] = center[0] + rx;
-        this.pos[3 * v + 1] = center[1];
-        this.pos[3 * v + 2] = center[2] + rz;
-        const m = this.m.rho * h * h * share(i, nx) * share(j, nz);
-        this.mass[v] = m; this.w[v] = 1 / m;
+    // Masse: volle Zellen zu je einem Viertel auf ihre vier Ecken (gleichmäßig wie im
+    // Rechteckgitter), Randdreiecke zu je einem Drittel auf ihre Ecken
+    let area = 0;
+    const R = this.rest, T = this.tri;
+    const triA = (t) => { const a = T[3 * t], b = T[3 * t + 1], c = T[3 * t + 2]; return 0.5 * Math.abs((R[2 * b] - R[2 * a]) * (R[2 * c + 1] - R[2 * a + 1]) - (R[2 * c] - R[2 * a]) * (R[2 * b + 1] - R[2 * a + 1])); };
+    for (let t = 0; t < this.nTri; t++) {
+      if (cellOf[t] === 4) {
+        const A = triA(t) + triA(t + 1);
+        const corners = new Set([T[3 * t], T[3 * t + 1], T[3 * t + 2], T[3 * t + 3], T[3 * t + 4], T[3 * t + 5]]);
+        for (const v of corners) this.mass[v] += (this.m.rho * A) / 4;
+        area += A; t++;
+        continue;
       }
+      const A = triA(t);
+      area += A;
+      for (let q = 0; q < 3; q++) this.mass[T[3 * t + q]] += (this.m.rho * A) / 3;
+    }
+    this.area = area;
+    this.totalMass = this.m.rho * area;
+    for (let v = 0; v < n; v++) {
+      this.w[v] = 1 / this.mass[v];
+      const [rx, rz] = rotY(R[2 * v], R[2 * v + 1], yaw);
+      this.pos[3 * v] = center[0] + rx; this.pos[3 * v + 1] = center[1]; this.pos[3 * v + 2] = center[2] + rz;
     }
     this.prev.set(this.pos);
-    this._buildConstraints(share);
-    this._buildTriangles();
+
+    // Abstand jedes Knotens zum Zuschnittrand (für das Luftpolster beim Ablegen)
+    this.edgeDist = new Float64Array(n);
+    for (let v = 0; v < n; v++) this.edgeDist[v] = closestOnOutline(outline, R[2 * v], R[2 * v + 1]).d;
+
+    // Knoten → Dreiecke (CSR)
+    const cnt = new Int32Array(n + 1);
+    for (let k = 0; k < T.length; k++) cnt[T[k] + 1]++;
+    for (let v = 0; v < n; v++) cnt[v + 1] += cnt[v];
+    const list = new Int32Array(T.length), fill = cnt.slice(0, n);
+    for (let t = 0; t < this.nTri; t++) for (let q = 0; q < 3; q++) list[fill[T[3 * t + q]]++] = t;
+    this.nodeTriStart = cnt; this.nodeTriList = list;
+
+    this._buildConstraints(tris, cellOf);
   }
 
-  idx(i, j) { return j * this.nx + i; }
+  // Knotenindex an Gitterposition (−1, wenn außerhalb des Zuschnitts)
+  idx(i, j) { return i < 0 || j < 0 || i >= this.nx || j >= this.nz ? -1 : this.gridMap[j * this.nx + i]; }
+
+  restDist(a, b) { const R = this.rest; return Math.hypot(R[2 * a] - R[2 * b], R[2 * a + 1] - R[2 * b + 1]); }
 
   // ---- Long Range Attachments (Kim, Chentanez, Müller 2012) -------------------
   // Gewebe sind in der Ebene nahezu undehnbar (Dehnung unter Eigengewicht ~10⁻⁴). Ein
   // Gauss-Seidel-Löser mit wenigen Iterationen konvergiert dafür zu langsam und würde
   // die Lage hängend um ein Vielfaches zu stark längen. Einseitige Fesseln von jedem Knoten
   // zu den nächstgelegenen gehaltenen Knoten begrenzen den Abstand auf die geodätische
-  // Ruhelänge (hier = Abstand im ebenen Ausgangszuschnitt) zuzüglich der elastischen
+  // Ruhelänge (kürzester Weg im ebenen Zuschnitt, Dijkstra) zuzüglich der elastischen
   // Dehnung, die bei der Materialsteifigkeit physikalisch möglich ist.
   updateTethers(K = 4) {
-    const { n, nx, h } = this;
+    const n = this.n;
     const groups = new Map();
     for (let v = 0; v < n; v++) {
       const a = this.attached[v];
@@ -87,24 +197,46 @@ export class Cloth {
     this.tetherK = K;
     this.hasTethers = groups.size > 0;
     if (!this.hasTethers) return;
-    const best = [];
+    // Nachbarschaft (alle Kanten) einmalig aufbauen
+    if (!this.adjStart) {
+      const deg = new Int32Array(n + 1);
+      for (let c = 0; c < this.sI.length; c++) { deg[this.sI[c] + 1]++; deg[this.sJ[c] + 1]++; }
+      for (let v = 0; v < n; v++) deg[v + 1] += deg[v];
+      const adj = new Int32Array(deg[n]), len = new Float64Array(deg[n]), f = deg.slice(0, n);
+      for (let c = 0; c < this.sI.length; c++) {
+        const a = this.sI[c], b = this.sJ[c];
+        adj[f[a]] = b; len[f[a]++] = this.sRest[c];
+        adj[f[b]] = a; len[f[b]++] = this.sRest[c];
+      }
+      this.adjStart = deg; this.adj = adj; this.adjLen = len;
+    }
+    const dists = [], srcs = [];
+    for (const list of groups.values()) {
+      const d = new Float64Array(n).fill(Infinity), src = new Int32Array(n).fill(-1);
+      const heap = [];
+      const push = (v, dv) => { heap.push([dv, v]); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
+      const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
+      for (const a of list) { d[a] = 0; src[a] = a; push(a, 0); }
+      while (heap.length) {
+        const [dv, v] = pop();
+        if (dv > d[v]) continue;
+        for (let e = this.adjStart[v]; e < this.adjStart[v + 1]; e++) {
+          const u = this.adj[e], nd = dv + this.adjLen[e];
+          if (nd < d[u]) { d[u] = nd; src[u] = src[v]; push(u, nd); }
+        }
+      }
+      dists.push(d); srcs.push(src);
+    }
+    const order = dists.map((_, k) => k);
     for (let v = 0; v < n; v++) {
       if (this.attached[v] >= 0) continue;
-      const vi = v % nx, vj = (v / nx) | 0;
-      best.length = 0;
-      for (const list of groups.values()) {
-        let bd = Infinity, bi = -1;
-        for (const a of list) {
-          const di = (a % nx) - vi, dj = ((a / nx) | 0) - vj;
-          const d = di * di + dj * dj;
-          if (d < bd) { bd = d; bi = a; }
-        }
-        best.push([bd, bi]);
-      }
-      best.sort((x, y) => x[0] - y[0]);
-      for (let k = 0; k < Math.min(K, best.length); k++) {
-        this.tetherIdx[v * K + k] = best[k][1];
-        this.tetherRest[v * K + k] = Math.sqrt(best[k][0]) * h;
+      order.sort((x, y) => dists[x][v] - dists[y][v]);
+      for (let k = 0; k < Math.min(K, order.length); k++) {
+        const g = order[k];
+        if (!Number.isFinite(dists[g][v])) break;
+        // geodätische Länge über den Quellknoten (≥ euklidisch)
+        this.tetherIdx[v * K + k] = srcs[g][v];
+        this.tetherRest[v * K + k] = Math.max(dists[g][v], this.restDist(v, srcs[g][v]));
       }
     }
   }
@@ -128,46 +260,60 @@ export class Cloth {
     }
   }
 
-  _buildConstraints(share) {
-    const { nx, nz, h } = this;
+  _buildConstraints(tris, cellOf) {
+    const { h } = this;
     const { Tw, Tf, Gs, Bw, Bf } = this.m;
     const G = Math.max(Gs, 1e-3);
     const TwEff = Math.max(Tw - G, 0.2 * Tw);
     const TfEff = Math.max(Tf - G, 0.2 * Tf);
-    const I = [], J = [], R = [], A = [];
-    // Zug: Schuss (x-Richtung)
-    for (let j = 0; j < nz; j++) for (let i = 0; i < nx - 1; i++) {
-      I.push(this.idx(i, j)); J.push(this.idx(i + 1, j)); R.push(h); A.push(1 / (TfEff * share(j, nz)));
+    const T = this.tri, gi = this.gi, gj = this.gj;
+    // Kanten sammeln: Achskanten zählen angrenzende Zellen (Randanteil), Diagonalen = Scherung
+    const edges = new Map();
+    for (let t = 0; t < this.nTri; t++) {
+      for (let q = 0; q < 3; q++) {
+        const a = T[3 * t + q], b = T[3 * t + (q + 1) % 3];
+        const k = a < b ? a * this.n + b : b * this.n + a;
+        const e = edges.get(k);
+        if (e) e.cnt++; else edges.set(k, { a: Math.min(a, b), b: Math.max(a, b), cnt: 1, full: cellOf[t] === 4 });
+      }
     }
-    // Zug: Kette (z-Richtung)
-    for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx; i++) {
-      I.push(this.idx(i, j)); J.push(this.idx(i, j + 1)); R.push(h); A.push(1 / (TwEff * share(i, nx)));
+    const axis = [], diag = [];
+    for (const e of edges.values()) {
+      const di = Math.abs(gi[e.a] - gi[e.b]), dj = Math.abs(gj[e.a] - gj[e.b]);
+      if (di + dj === 1) axis.push({ ...e, dir: dj ? 1 : 0 }); else diag.push(e);
+    }
+    const I = [], J = [], RL = [], A = [], D = [];
+    this.edgeShare = new Map();
+    for (const e of axis) {
+      const share = e.cnt / 2;
+      I.push(e.a); J.push(e.b); RL.push(this.restDist(e.a, e.b)); D.push(e.dir);
+      A.push(1 / ((e.dir ? TwEff : TfEff) * share));
+      this.edgeShare.set(e.a * this.n + e.b, share);
     }
     this.nStruct = I.length;
-    // Scherung: eine Diagonale je Zelle (die Dreieckskante, Richtung alternierend).
-    // Zwei Diagonalen würden jede Zelle gegen Verwölbung versteifen (4 Punkte, 6 Abstände
-    // = starr) und doppelt gekrümmtes Drapieren verhindern. Energie je Zelle
-    // ½·k_d·(h·√2·γ/2)² = ½·G·γ²·h²  ⇒  k_d = 2·G.
-    const d = h * Math.SQRT2;
-    for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) {
-      if ((i + j) % 2 === 0) { I.push(this.idx(i + 1, j)); J.push(this.idx(i, j + 1)); }
-      else { I.push(this.idx(i, j)); J.push(this.idx(i + 1, j + 1)); }
-      R.push(d); A.push(1 / (2 * G));
-    }
+    // Scherung: Dreiecksdiagonale je Zelle, k = 2G (halbe Zelle: G). Zwei Diagonalen je Zelle
+    // würden jede Zelle gegen Verwölbung versteifen und das Drapieren verhindern.
+    for (const e of diag) { I.push(e.a); J.push(e.b); RL.push(this.restDist(e.a, e.b)); A.push(1 / (2 * G * (e.full ? 1 : 0.5))); }
     this.sI = Int32Array.from(I); this.sJ = Int32Array.from(J);
-    this.sRest = Float64Array.from(R); this.sAlpha = Float64Array.from(A);
-    this.sDir = new Uint8Array(this.nStruct); // 0 = Schuss, 1 = Kette
-    for (let c = (nx - 1) * nz; c < this.nStruct; c++) this.sDir[c] = 1;
+    this.sRest = Float64Array.from(RL); this.sAlpha = Float64Array.from(A);
+    this.sDir = Uint8Array.from(D);
 
-    // Biegung: Knotentripel entlang beider Fadenrichtungen
+    // Biegung: Knotentripel entlang beider Fadenrichtungen (nur gerade, gleichmäßige Ruhelage)
+    const share = (a, b) => this.edgeShare.get(Math.min(a, b) * this.n + Math.max(a, b));
     const a = [], b = [], c = [], al = [];
-    for (let j = 0; j < nz; j++) for (let i = 1; i < nx - 1; i++) {
-      a.push(this.idx(i - 1, j)); b.push(this.idx(i, j)); c.push(this.idx(i + 1, j));
-      al.push((h * h) / (Math.max(Bf, 1e-12) * share(j, nz)));
-    }
-    for (let j = 1; j < nz - 1; j++) for (let i = 0; i < nx; i++) {
-      a.push(this.idx(i, j - 1)); b.push(this.idx(i, j)); c.push(this.idx(i, j + 1));
-      al.push((h * h) / (Math.max(Bw, 1e-12) * share(i, nx)));
+    const R = this.rest;
+    for (let v = 0; v < this.n; v++) {
+      for (const dir of [0, 1]) {
+        const i = gi[v], j = gj[v];
+        const u = dir ? this.idx(i, j - 1) : this.idx(i - 1, j), w = dir ? this.idx(i, j + 1) : this.idx(i + 1, j);
+        if (u < 0 || w < 0) continue;
+        const s1 = share(u, v), s2 = share(v, w);
+        if (!s1 || !s2) continue;
+        const ex = R[2 * u] + R[2 * w] - 2 * R[2 * v], ez = R[2 * u + 1] + R[2 * w + 1] - 2 * R[2 * v + 1];
+        if (Math.hypot(ex, ez) > 0.1 * h) continue;
+        a.push(u); b.push(v); c.push(w);
+        al.push((h * h) / (Math.max(dir ? Bw : Bf, 1e-12) * Math.min(s1, s2)));
+      }
     }
     this.bA = Int32Array.from(a); this.bB = Int32Array.from(b); this.bC = Int32Array.from(c);
     this.bAlpha = Float64Array.from(al);
@@ -178,11 +324,24 @@ export class Cloth {
   // Zug, behindern Biegen/Falten also nicht, und übertragen Zugkräfte in einem
   // Teilschritt über die ganze Lage. Grenze: Dehnung bei der Linienlast limitLoad.
   _buildLimits() {
-    const { nx, nz, h } = this;
     const I = [], J = [], R = [], D = [];
-    for (const span of [1, 2, 4, 8, 16]) {
-      for (let j = 0; j < nz; j++) for (let i = 0; i + span < nx; i++) { I.push(this.idx(i, j)); J.push(this.idx(i + span, j)); R.push(span * h); D.push(0); }
-      for (let j = 0; j + span < nz; j++) for (let i = 0; i < nx; i++) { I.push(this.idx(i, j)); J.push(this.idx(i, j + span)); R.push(span * h); D.push(1); }
+    const hasEdge = (a, b) => this.edgeShare.has(Math.min(a, b) * this.n + Math.max(a, b));
+    for (let v = 0; v < this.n; v++) {
+      for (const dir of [0, 1]) {
+        let prev = v, len = 0, step = 0;
+        for (const span of [1, 2, 4, 8, 16]) {
+          // entlang der Gitterlinie bis span laufen, nur über vorhandene Kanten
+          let ok = true;
+          while (step < span) {
+            const i = this.gi[prev] + (dir ? 0 : 1), j = this.gj[prev] + (dir ? 1 : 0);
+            const nx = this.idx(i, j);
+            if (nx < 0 || !hasEdge(prev, nx)) { ok = false; break; }
+            len += this.restDist(prev, nx); prev = nx; step++;
+          }
+          if (!ok) break;
+          I.push(v); J.push(prev); R.push(len); D.push(dir);
+        }
+      }
     }
     this.lI = Int32Array.from(I); this.lJ = Int32Array.from(J); this.lR = Float64Array.from(R); this.lD = Uint8Array.from(D);
   }
@@ -205,16 +364,7 @@ export class Cloth {
     }
   }
 
-  _buildTriangles() {
-    const { nx, nz } = this;
-    const T = [];
-    for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) {
-      const a = this.idx(i, j), b = this.idx(i + 1, j), c = this.idx(i, j + 1), d = this.idx(i + 1, j + 1);
-      if ((i + j) % 2 === 0) { T.push(a, c, b, b, c, d); } else { T.push(a, c, d, a, d, b); }
-    }
-    this.tri = Int32Array.from(T);
-    this.nTri = T.length / 3;
-  }
+
 
   // Interne Materialkräfte, XPBD-Gauss-Seidel-Durchlauf mit Lagrange-Multiplikatoren.
   // iters = 1 (Echtzeit): Bei einem Durchlauf je Teilschritt wirkt eine Bedingung mit der
@@ -308,15 +458,26 @@ export class Cloth {
     return [x / M, y / M, z / M];
   }
 
-  // Lage in der Ebene: Schwerpunkt (x, z) und Winkel der Kettrichtung.
+  // Lage in der Ebene: Schwerpunkt (x, z) und Winkel der Kettrichtung (Procrustes-Anpassung
+  // des Ausgangszuschnitts an die aktuelle Lage).
   pose2D() {
     const [cx, , cz] = this.centroid();
-    let wx = 0, wz = 0;
-    for (let i = 0; i < this.nx; i++) {
-      const a = this.idx(i, 0) * 3, b = this.idx(i, this.nz - 1) * 3;
-      wx += this.pos[b] - this.pos[a]; wz += this.pos[b + 2] - this.pos[a + 2];
+    let ru = 0, rv = 0, M = 0;
+    for (let v = 0; v < this.n; v++) { ru += this.mass[v] * this.rest[2 * v]; rv += this.mass[v] * this.rest[2 * v + 1]; M += this.mass[v]; }
+    ru /= M; rv /= M;
+    let A = 0, B = 0;
+    for (let v = 0; v < this.n; v++) {
+      const u = this.rest[2 * v] - ru, w = this.rest[2 * v + 1] - rv;
+      const x = this.pos[3 * v] - cx, z = this.pos[3 * v + 2] - cz, m = this.mass[v];
+      A += m * (x * u + z * w); B += m * (x * w - z * u);
     }
-    return { x: cx, z: cz, theta: Math.atan2(wx, wz) };
+    return { x: cx, z: cz, theta: Math.atan2(B, A) };
+  }
+
+  // Materialkoordinate (Ausgangszuschnitt) eines Punkts in Dreieck t mit baryzentrischen Koordinaten
+  restPoint(t, b0, b1, b2) {
+    const T = this.tri, R = this.rest, a = T[3 * t], b = T[3 * t + 1], c = T[3 * t + 2];
+    return [b0 * R[2 * a] + b1 * R[2 * b] + b2 * R[2 * c], b0 * R[2 * a + 1] + b1 * R[2 * b + 1] + b2 * R[2 * c + 1]];
   }
 
   maxStrain() {
@@ -382,4 +543,20 @@ export class Cloth {
     for (let v = 0; v < this.n; v++) if (this.attached[v] >= 0) c++;
     return c;
   }
+}
+
+// Dreieck und baryzentrische Koordinaten eines Punkts im Ausgangszuschnitt (u, v)
+export function locateRest(c, u, v) {
+  const R = c.rest, T = c.tri;
+  for (let t = 0; t < c.nTri; t++) {
+    const a = T[3 * t], b = T[3 * t + 1], d = T[3 * t + 2];
+    const v0x = R[2 * d] - R[2 * a], v0z = R[2 * d + 1] - R[2 * a + 1];
+    const v1x = R[2 * b] - R[2 * a], v1z = R[2 * b + 1] - R[2 * a + 1];
+    const v2x = u - R[2 * a], v2z = v - R[2 * a + 1];
+    const den = v0x * v1z - v1x * v0z;
+    if (Math.abs(den) < 1e-14) continue;
+    const s = (v2x * v1z - v1x * v2z) / den, w = (v0x * v2z - v2x * v0z) / den;
+    if (s >= -1e-9 && w >= -1e-9 && s + w <= 1 + 1e-9) return { tri: t, b0: 1 - s - w, b1: w, b2: s };
+  }
+  return null;
 }

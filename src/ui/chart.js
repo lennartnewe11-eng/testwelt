@@ -26,7 +26,7 @@ export class LoadChart {
     const L = 52, R = 10, T = 8, B = 20;
     const tNow = this.t.length ? this.t[this.t.length - 1] : 0;
     const t0 = Math.max(0, tNow - this.win), t1 = Math.max(this.win, tNow);
-    let ymax = 0.1;
+    let ymax = 10;
     for (let i = 0; i < this.t.length; i++) ymax = Math.max(ymax, this.a[i], this.b[i]);
     const step = niceStep(ymax / 4);
     ymax = Math.ceil(ymax / step) * step;
@@ -37,7 +37,7 @@ export class LoadChart {
     g.textAlign = 'right'; g.textBaseline = 'middle';
     for (let v = 0; v <= ymax + 1e-9; v += step) {
       g.beginPath(); g.moveTo(L, Y(v) + 0.5); g.lineTo(W - R, Y(v) + 0.5); g.stroke();
-      g.fillText(`${+v.toFixed(3)} N`.replace('.', ','), L - 4, Y(v));
+      g.fillText(`${+v.toFixed(1)} %`.replace('.', ','), L - 4, Y(v));
     }
     g.textAlign = 'center'; g.textBaseline = 'top';
     for (let t = Math.ceil(t0 / 5) * 5; t <= t1; t += 5) g.fillText(`${t} s`, X(t), H - B + 4);
@@ -59,7 +59,7 @@ export class LoadChart {
       const x = X(this.t[k]);
       g.strokeStyle = ink3; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(x, T); g.lineTo(x, H - B); g.stroke(); g.setLineDash([]);
       this.tip.style.display = 'block';
-      this.tip.innerHTML = `t ${this.t[k].toFixed(2)} s<br>Last ${this.a[k].toFixed(3)} N<br>Haltekraft ${this.b[k].toFixed(3)} N`;
+      this.tip.innerHTML = `t ${this.t[k].toFixed(2)} s<br>Auslastung ${this.a[k].toFixed(1)} %`;
       this.tip.style.left = `${Math.min(W - 150, Math.max(0, x + 8))}px`;
       this.tip.style.top = '6px';
     }
