@@ -1,0 +1,3736 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nähzelle Materialfluss</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: Werkstattleitstand – Aufbau links, 3D-Zelle mittig, Messwerte rechts; auf schmalen Bildschirmen untereinander */
+:root {
+  --bg: #e9ecea;          /* Hallengrau, leicht grünstichig */
+  --panel: #f8f9f8;
+  --panel-2: #eef1ef;
+  --line: #d3d8d5;
+  --ink: #1b2220;
+  --ink-2: #4c5753;
+  --ink-3: #75807b;
+  --accent: #0b6e69;      /* Petrol, Maschinenlack */
+  --accent-ink: #ffffff;
+  --accent-soft: #d5ebe8;
+  --good: #2e7d32; --warn: #a85d00; --crit: #c62828;
+  --good-soft: #e3f1e4; --warn-soft: #fbecd7; --crit-soft: #fbe2e1;
+  --s1: #2a78d6; --s2: #eb6834;
+  --font-display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121615; --panel: #1a1f1e; --panel-2: #212726; --line: #303836;
+    --ink: #e6ebe9; --ink-2: #aab5b0; --ink-3: #7f8a86;
+    --accent: #22a99f; --accent-ink: #06201e; --accent-soft: #163a37;
+    --good: #5cb860; --warn: #e09a3e; --crit: #ef6461;
+    --good-soft: #1b2e1c; --warn-soft: #33260f; --crit-soft: #3a1918;
+    --s1: #3987e5; --s2: #d95926;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121615; --panel: #1a1f1e; --panel-2: #212726; --line: #303836;
+  --ink: #e6ebe9; --ink-2: #aab5b0; --ink-3: #7f8a86;
+  --accent: #22a99f; --accent-ink: #06201e; --accent-soft: #163a37;
+  --good: #5cb860; --warn: #e09a3e; --crit: #ef6461;
+  --good-soft: #1b2e1c; --warn-soft: #33260f; --crit-soft: #3a1918;
+  --s1: #3987e5; --s2: #d95926;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--font-body); }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+.bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding-block: 8px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: baseline; gap: 10px; margin-right: auto; min-width: 0; }
+.brand h1 { font: 700 19px/1 var(--font-display); letter-spacing: 0.01em; margin: 0; white-space: nowrap; }
+.brand span { color: var(--ink-3); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
+  border: 1px solid var(--line); border-radius: var(--r); background: var(--panel-2); cursor: pointer;
+  font-weight: 500;
+}
+.btn:hover { border-color: var(--ink-3); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.small { height: 26px; padding: 0 8px; font-size: 13px; }
+.btn svg { width: 14px; height: 14px; fill: currentColor; }
+.clock { font: 500 13px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink-2); min-width: 150px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 99px; font: 600 12px var(--font-display); letter-spacing: 0.04em; text-transform: uppercase; background: var(--panel-2); color: var(--ink-2); border: 1px solid var(--line); white-space: nowrap; }
+.chip.good { background: var(--good-soft); color: var(--good); border-color: transparent; }
+.chip.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.chip.crit { background: var(--crit-soft); color: var(--crit); border-color: transparent; }
+.chip.accent { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+
+.layout { display: grid; grid-template-columns: 330px minmax(0, 1fr) 360px; min-height: 0; }
+.panel { background: var(--panel); overflow-y: auto; min-height: 0; padding-block: 12px; padding-inline: 14px; display: flex; flex-direction: column; gap: 14px; }
+.panel.left { border-right: 1px solid var(--line); }
+.panel.right { border-left: 1px solid var(--line); }
+.viewport { position: relative; min-width: 0; min-height: 0; background: var(--bg); }
+.viewport canvas { display: block; width: 100%; height: 100%; }
+.overlay { position: absolute; left: 10px; right: 10px; top: 10px; display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; pointer-events: none; }
+.overlay > * { pointer-events: auto; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--panel); }
+.seg button { border: 0; background: transparent; padding: 5px 10px; cursor: pointer; font: 600 12px var(--font-display); letter-spacing: 0.03em; color: var(--ink-2); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.statusline { position: absolute; left: 10px; bottom: 10px; right: 10px; display: flex; gap: 8px; flex-wrap: wrap; pointer-events: none; }
+.statusline .chip { background: var(--panel); }
+.prog-now { font: 500 12px var(--font-mono); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 3px 8px; color: var(--ink-2); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+h2 { font: 700 13px/1 var(--font-display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 8px; }
+section.block { display: flex; flex-direction: column; gap: 8px; }
+section.block + section.block { border-top: 1px solid var(--line); padding-top: 12px; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: -4px -14px 0; padding: 0 14px; }
+.tabs button { border: 0; background: none; padding: 8px 10px; cursor: pointer; font: 600 14px var(--font-display); letter-spacing: 0.02em; color: var(--ink-3); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+label.row, .row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; }
+.row > span:first-child { color: var(--ink-2); }
+select, input[type="number"], input[type="text"] { height: 30px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel-2); padding: 0 8px; min-width: 0; }
+select { width: 100%; }
+input[type="number"] { width: 92px; text-align: right; font-family: var(--font-mono); font-size: 13px; }
+.slider { display: grid; grid-template-columns: 1fr 70px; gap: 4px 8px; align-items: center; }
+.slider label { grid-column: 1 / -1; display: flex; justify-content: space-between; color: var(--ink-2); }
+.slider label b { font: 500 13px var(--font-mono); color: var(--ink); }
+.slider input[type="range"] { width: 100%; accent-color: var(--accent); }
+.slider input[type="number"] { width: 70px; }
+.kv { width: 100%; border-collapse: collapse; font-size: 13px; }
+.kv td { padding: 3px 0; border-bottom: 1px dashed var(--line); }
+.kv td:first-child { color: var(--ink-2); }
+.kv td:last-child { text-align: right; }
+.kv td.mono { text-align: right; white-space: nowrap; padding-left: 8px; }
+.kv td.unit { color: var(--ink-3); width: 64px; padding-left: 6px; text-align: left; font-size: 12px; }
+.kv input { width: 84px; height: 24px; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.note { color: var(--ink-3); font-size: 12px; margin: 0; }
+details summary { cursor: pointer; color: var(--ink-2); font-weight: 500; }
+.predict { display: grid; gap: 4px; padding: 8px; background: var(--panel-2); border-radius: var(--r); border: 1px solid var(--line); }
+.predict .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+
+.code { position: relative; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel-2); }
+.code textarea { display: block; width: 100%; height: 420px; resize: vertical; border: 0; background: transparent; padding: 8px 8px 8px 40px; font: 12.5px/18px var(--font-mono); white-space: pre; overflow: auto; tab-size: 4; position: relative; z-index: 1; }
+.code .gutter { position: absolute; left: 0; top: 0; bottom: 0; width: 32px; overflow: hidden; border-right: 1px solid var(--line); font: 12.5px/18px var(--font-mono); color: var(--ink-3); text-align: right; padding: 8px 6px 0 0; }
+.code .hl { position: absolute; left: 0; right: 0; height: 18px; background: var(--accent-soft); pointer-events: none; z-index: 0; display: none; }
+.jog { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+
+.kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.kpi { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r); padding: 8px 10px; min-width: 0; }
+.kpi .lbl { font: 600 11px var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.kpi .val { font: 500 20px/1.2 var(--font-mono); font-variant-numeric: tabular-nums; }
+.kpi .sub { font-size: 12px; color: var(--ink-3); }
+.headgrid { display: grid; gap: 6px; }
+.el { border: 1px solid var(--line); border-radius: var(--r); padding: 6px; background: var(--panel-2); min-width: 0; }
+.el .t { display: flex; justify-content: space-between; font: 600 12px var(--font-display); color: var(--ink-2); }
+.el .meter { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 4px; }
+.el .meter i { display: block; height: 100%; background: var(--accent); width: 0; }
+.el.on { border-color: var(--accent); }
+.el.hot .meter i { background: var(--warn); }
+.el.double { border-color: var(--crit); }
+.el .n { font: 500 11px var(--font-mono); color: var(--ink-3); }
+.chart-wrap { position: relative; }
+.chart-wrap canvas { width: 100%; height: 150px; display: block; }
+.legend { display: flex; gap: 12px; font-size: 12px; color: var(--ink-2); flex-wrap: wrap; }
+.legend i { display: inline-block; width: 12px; height: 2px; vertical-align: middle; margin-right: 4px; }
+.tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 4px 8px; font: 12px var(--font-mono); display: none; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+.tablewrap { overflow-x: auto; }
+table.plies { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.plies th { text-align: left; font: 600 11px var(--font-display); letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); padding: 4px 4px; border-bottom: 1px solid var(--line); }
+table.plies td { padding: 4px; border-bottom: 1px dashed var(--line); font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.plies td:first-child { font-family: var(--font-body); }
+.log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; font-size: 12.5px; }
+.log li { display: grid; grid-template-columns: 56px 1fr; gap: 6px; padding: 3px 6px; border-left: 3px solid var(--line); background: var(--panel-2); border-radius: 0 4px 4px 0; }
+.log li.warn { border-left-color: var(--warn); }
+.log li.error { border-left-color: var(--crit); }
+.log li time { font-family: var(--font-mono); color: var(--ink-3); }
+
+dialog { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); max-width: min(920px, calc(100vw - 32px)); width: 100%; padding: 0; }
+dialog::backdrop { background: rgba(10, 14, 13, 0.45); }
+dialog .dh { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+dialog .dh h3 { margin: 0; font: 700 18px var(--font-display); }
+dialog .db { padding: 12px 16px; max-height: 70vh; overflow: auto; }
+dialog .db p { max-width: 70ch; color: var(--ink-2); }
+dialog table { width: 100%; border-collapse: collapse; font-size: 13px; }
+dialog th, dialog td { text-align: left; padding: 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+dialog td.num { font-family: var(--font-mono); text-align: right; white-space: nowrap; }
+
+@media (max-width: 1180px) {
+  .app { height: auto; min-height: 100%; }
+  .layout { grid-template-columns: 300px minmax(0, 1fr); }
+  .viewport { height: 72vh; min-height: 420px; }
+  .panel.left { max-height: 72vh; }
+  .panel.right { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); max-height: none; }
+}
+@media (max-width: 760px) {
+  .app { height: auto; }
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .viewport { height: 58vh; min-height: 320px; order: -1; }
+  .panel.left { max-height: none; }
+  .panel { overflow: visible; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .panel.left { border-right: 0; border-top: 1px solid var(--line); }
+  .brand span { display: none; }
+  .clock { min-width: 0; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div class="app">
+  <header class="bar">
+    <div class="brand"><h1>Nähzelle Materialfluss</h1><span>Physikalische Simulation biegeschlaffer Halbzeuge</span></div>
+    <div class="controls">
+      <button class="btn primary" id="btnRun" type="button"><svg viewBox="0 0 16 16"><path d="M4 2l10 6-10 6z"/></svg><span>Programm starten</span></button>
+      <button class="btn" id="btnPause" type="button" title="Physik anhalten/fortsetzen">Pause</button>
+      <button class="btn" id="btnReset" type="button" title="Welt mit den aktuellen Einstellungen neu aufbauen">Zurücksetzen</button>
+      <select id="timeScale" aria-label="Zeitmaßstab" style="width:auto">
+        <option value="1">Echtzeit 1×</option><option value="0.5">Zeitlupe ½×</option><option value="0.25">Zeitlupe ¼×</option><option value="0.1">Zeitlupe 1/10×</option><option value="4">Max. Tempo</option>
+      </select>
+      <span class="clock" id="clock">t = 0,00 s</span>
+      <span class="chip" id="rtf">–</span>
+      <button class="btn" id="btnValidate" type="button">Physik prüfen</button>
+    </div>
+  </header>
+  <div class="layout">
+    <aside class="panel left" aria-label="Aufbau und Programm">
+      <div class="tabs" role="tablist">
+        <button role="tab" aria-selected="true" data-tab="setup" id="tab-setup">Aufbau</button>
+        <button role="tab" aria-selected="false" data-tab="prog" id="tab-prog">Programm</button>
+        <button role="tab" aria-selected="false" data-tab="info" id="tab-info">Modell</button>
+      </div>
+      <div data-pane="setup" class="pane">
+        <section class="block">
+          <h2>Material</h2>
+          <select id="fabric" aria-label="Material"></select>
+          <p class="note" id="fabricMeta"></p>
+          <details id="matDetails">
+            <summary>Kennwerte bearbeiten</summary>
+            <table class="kv" id="matTable"></table>
+          </details>
+          <table class="kv" id="derived"></table>
+        </section>
+        <section class="block">
+          <h2>Zuschnittstapel</h2>
+          <label class="row"><span>Anzahl Lagen</span><input type="number" id="plies" min="1" max="8" step="1"></label>
+          <label class="row"><span>Breite (Schuss) [cm]</span><input type="number" id="plyW" min="10" max="50" step="1"></label>
+          <label class="row"><span>Länge (Kette) [cm]</span><input type="number" id="plyL" min="10" max="60" step="1"></label>
+          <label class="row"><span>Tischoberfläche</span><select id="tableMat" style="width:170px"></select></label>
+        </section>
+        <section class="block">
+          <h2>Greifer</h2>
+          <select id="gripper" aria-label="Greifertyp"></select>
+          <p class="note" id="gripperNote"></p>
+          <div id="gripperParams" style="display:grid;gap:8px"></div>
+          <label class="row"><span>Raster (Reihen × Spalten)</span><span><input type="number" id="rows" min="1" max="5" style="width:56px"> × <input type="number" id="cols" min="1" max="5" style="width:56px"></span></label>
+          <div class="predict" id="predict"></div>
+        </section>
+        <section class="block">
+          <h2>Nähmaschine</h2>
+          <label class="row"><span>Drehzahl [1/min]</span><input type="number" id="rpm" min="100" max="3000" step="50"></label>
+          <label class="row"><span>Stichlänge [mm]</span><input type="number" id="stitch" min="1" max="6" step="0.5"></label>
+          <label class="row"><span>Nähfußdruck [N]</span><input type="number" id="footForce" min="5" max="120" step="5"></label>
+          <label class="row"><span>Nähfuß</span><select id="footMat" style="width:170px"><option value="stahl">Stahl, poliert</option><option value="ptfe">PTFE-beschichtet</option></select></label>
+        </section>
+        <section class="block">
+          <h2>Numerik</h2>
+          <label class="row"><span>Qualität</span><select id="quality" style="width:170px">
+            <option value="fast">Schnell (2 cm, 10 Teilschritte)</option>
+            <option value="std">Standard (1,25 cm, 16)</option>
+            <option value="fine">Fein (1 cm, 24)</option>
+          </select></label>
+          <label class="row"><span>Selbstkontakt der Lagen</span><input type="checkbox" id="selfColl"></label>
+          <button class="btn primary" id="btnApply" type="button">Übernehmen und neu aufbauen</button>
+        </section>
+      </div>
+      <div data-pane="prog" class="pane" hidden>
+        <section class="block">
+          <h2>Ablaufprogramm</h2>
+          <div class="code"><div class="hl" id="hl"></div><div class="gutter" id="gutter"></div><textarea id="program" spellcheck="false" aria-label="Ablaufprogramm"></textarea></div>
+          <p class="note" id="progErr"></p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn primary" id="btnRun2" type="button">Programm starten</button>
+            <button class="btn" id="btnStop" type="button">Anhalten</button>
+            <button class="btn" id="btnDefault" type="button">Beispielprogramm</button>
+          </div>
+          <details>
+            <summary>Befehle</summary>
+            <table class="kv">
+              <tr><td class="mono">MOVE x y z [c°]</td><td>Zielposition der Greiferfläche [m]</td></tr>
+              <tr><td class="mono">MOVEREL dx dy dz</td><td>relativ verfahren</td></tr>
+              <tr><td class="mono">SPEED v / ACCEL a</td><td>Bahn [m/s], [m/s²]</td></tr>
+              <tr><td class="mono">TOUCH [v]</td><td>absenken bis Kontakt</td></tr>
+              <tr><td class="mono">GRIP ON|OFF [1,2]</td><td>Elemente schalten</td></tr>
+              <tr><td class="mono">WAIT t</td><td>warten [s]</td></tr>
+              <tr><td class="mono">FOOT UP|DOWN</td><td>Nähfuß</td></tr>
+              <tr><td class="mono">TABLEVAC ON|OFF</td><td>Saugtisch im Nähbereich</td></tr>
+              <tr><td class="mono">SEW L [rpm] [mm] [SYNC]</td><td>Naht starten, SYNC: Greifer folgt dem Transporteur</td></tr>
+              <tr><td class="mono">WAITSEW</td><td>auf Nahtende warten</td></tr>
+              <tr><td class="mono">HOME</td><td>Grundstellung</td></tr>
+            </table>
+          </details>
+        </section>
+        <section class="block">
+          <h2>Handbetrieb</h2>
+          <p class="note">Verfährt den Greiferkopf, wenn kein Programm läuft.</p>
+          <div class="jog">
+            <button class="btn small" data-jog="-0.05,0,0" type="button">X −5 cm</button>
+            <button class="btn small" data-jog="0,0.01,0" type="button">Y +1 cm</button>
+            <button class="btn small" data-jog="0.05,0,0" type="button">X +5 cm</button>
+            <button class="btn small" data-jog="0,0,-0.05" type="button">Z −5 cm</button>
+            <button class="btn small" data-jog="0,-0.01,0" type="button">Y −1 cm</button>
+            <button class="btn small" data-jog="0,0,0.05" type="button">Z +5 cm</button>
+            <button class="btn small" id="jogTouch" type="button">Tastfahrt</button>
+            <button class="btn small" id="jogGrip" type="button">Greifer ein/aus</button>
+            <button class="btn small" id="jogHome" type="button">Grundstellung</button>
+          </div>
+        </section>
+      </div>
+      <div data-pane="info" class="pane" hidden id="modelInfo"></div>
+    </aside>
+    <section class="viewport" id="viewport" aria-label="3D-Ansicht der Nähzelle">
+      <div class="overlay">
+        <div class="seg" id="views" aria-label="Kamera">
+          <button data-view="gesamt" aria-pressed="true" type="button">Gesamt</button>
+          <button data-view="stapel" aria-pressed="false" type="button">Stapel</button>
+          <button data-view="naehen" aria-pressed="false" type="button">Nähen</button>
+          <button data-view="oben" aria-pressed="false" type="button">Draufsicht</button>
+        </div>
+        <div class="seg" id="colorModes" aria-label="Einfärbung">
+          <button data-color="material" aria-pressed="true" type="button">Material</button>
+          <button data-color="dehnung" aria-pressed="false" type="button">Dehnung</button>
+          <button data-color="lagen" aria-pressed="false" type="button">Lagen</button>
+        </div>
+        <div class="seg"><button id="btnContacts" aria-pressed="false" type="button">Greifpunkte</button></div>
+      </div>
+      <div class="statusline">
+        <span class="prog-now" id="progNow">Programm bereit</span>
+      </div>
+    </section>
+    <aside class="panel right" aria-label="Messwerte">
+      <section class="block">
+        <h2>Zustand</h2>
+        <div class="kpis">
+          <div class="kpi"><div class="lbl">Gegriffene Lagen</div><div class="val" id="kHeld">0</div><div class="sub" id="kHeldSub">–</div></div>
+          <div class="kpi"><div class="lbl">Max. Auslastung</div><div class="val" id="kUtil">–</div><div class="sub">Last / Haltekraft</div></div>
+          <div class="kpi"><div class="lbl">Ablagefehler</div><div class="val" id="kErr">–</div><div class="sub" id="kErrSub">letzte abgelegte Lage</div></div>
+          <div class="kpi"><div class="lbl">Stiche</div><div class="val" id="kStitch">0</div><div class="sub" id="kStitchSub">Naht –</div></div>
+        </div>
+      </section>
+      <section class="block">
+        <h2>Greiferelemente</h2>
+        <div class="headgrid" id="headgrid"></div>
+      </section>
+      <section class="block">
+        <h2>Greiferkraft, oberste Lage</h2>
+        <div class="legend"><span><i style="background:var(--s1)"></i>Last F<sub>n</sub> (Summe)</span><span><i style="background:var(--s2)"></i>Haltekraft C<sub>n</sub> (Summe)</span></div>
+        <div class="chart-wrap"><canvas id="chart" height="150"></canvas><div class="tip" id="tip"></div></div>
+      </section>
+      <section class="block">
+        <h2>Lagen</h2>
+        <div class="tablewrap"><table class="plies" id="plyTable"></table></div>
+        <p class="note">Ablagefehler: Abweichung der ruhenden Lage von der Lage, die sich bei starrem Mitführen durch den Greifer ergäbe. Dehnung: 99-%-Quantil der Fadenabschnitte.</p>
+      </section>
+      <section class="block">
+        <h2>Ereignisse</h2>
+        <ul class="log" id="log"></ul>
+        <button class="btn small" id="btnCsv" type="button" style="align-self:flex-start">Messdaten als CSV kopieren</button>
+      </section>
+    </aside>
+  </div>
+</div>
+<dialog id="dlg"><div class="dh"><h3 id="dlgTitle">Validierung</h3><button class="btn small" id="dlgClose" type="button">Schließen</button></div><div class="db" id="dlgBody"></div></dialog>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ---- src/physics/constants.js ----
+const __M_physics_constants = (() => {
+// Physikalische Konstanten (SI-Einheiten). Referenzzustand: 20 °C, 101,325 kPa, Meereshöhe.
+const G = 9.80665;                 // Normfallbeschleunigung [m/s²] (CGPM 1901)
+const GRAVITY = [0, -G, 0];        // y-Achse zeigt nach oben
+
+const AIR = {
+  density: 1.204,                         // Luftdichte [kg/m³] bei 20 °C
+  viscosity: 1.813e-5,                    // dynamische Viskosität [Pa·s]
+  pressure: 101325,                       // Umgebungsdruck [Pa]
+  temperature: 293.15,                    // [K]
+  breakdownField: 3.0e6,                  // Durchschlagfeldstärke Luft [V/m]
+};
+
+const EPS0 = 8.8541878128e-12;     // elektrische Feldkonstante [F/m]
+
+// Umrechnungen der in der Textilprüfung üblichen Einheiten (KES-F / FAST) nach SI.
+const UNIT = {
+  // Biegesteifigkeit B: gf·cm²/cm -> N·m (= N·m²/m)
+  gfcm2PerCm: 9.80665e-5,
+  // Schersteifigkeit G: gf/cm/° -> N/m/rad
+  gfPerCmPerDeg: 0.980665 * 180 / Math.PI,
+  // Luftdurchlässigkeit: l/(m²·s) bei 100 Pa -> Darcy-Leitwert m/(s·Pa)
+  lPerM2sAt100Pa: 1e-3 / 100,
+  gPerM2: 1e-3,                           // Flächenmasse g/m² -> kg/m²
+  mm: 1e-3,
+  lPerMin: 1e-3 / 60,                     // Volumenstrom l/min -> m³/s
+};
+
+return { G, GRAVITY, AIR, EPS0, UNIT };
+})();
+
+// ---- src/physics/materials.js ----
+const __M_physics_materials = (() => {
+// Materialdatenbank.
+//
+// Textilkennwerte sind typische Literatur-/Prüfwerte (KES-F, FAST, DIN EN ISO 9237,
+// DIN 53887, ASTM D1388, DIN EN ISO 13934). Gespeichert wird in den in der
+// Textilprüfung üblichen Einheiten; die Umrechnung nach SI erfolgt in toSI().
+// Alle Werte lassen sich im UI durch eigene Messwerte ersetzen.
+//
+//  mass        Flächenmasse                        g/m²
+//  thickness   Dicke (bei 0,5 kPa)                 mm
+//  tensWarp    Zugsteifigkeit Kette (Sekante)      N/m   (Kraft je Breite / Dehnung)
+//  tensWeft    Zugsteifigkeit Schuss               N/m
+//  shear       Schersteifigkeit G (KES)            gf/cm/°
+//  bendWarp    Biegesteifigkeit B Kette (KES)      gf·cm²/cm
+//  bendWeft    Biegesteifigkeit B Schuss (KES)     gf·cm²/cm
+//  muSteelS/K  Haft-/Gleitreibung gegen Stahl      –
+//  muSelfS/K   Haft-/Gleitreibung Stoff auf Stoff  –
+//  airPerm     Luftdurchlässigkeit bei 100 Pa      l/(m²·s)
+//  epsR        rel. Permittivität (65 % r.F.)      –
+//  needleHold  Haltekraft je Nadel (voll eingest.) N
+//  cohesion    Lagenhaftung (Faserverhakung,
+//              Elektrostatik)                      Pa
+//  wetting     Benetzbarkeit/Wasseraufnahme 0…1    –   (Kryogreifer)
+//  breakStrain Bruchdehnung                        %
+
+const { UNIT } = __M_physics_constants;
+const FABRICS = [
+  {
+    id: 'popeline', name: 'Baumwoll-Popeline', composition: '100 % CO', construction: 'Leinwandbindung',
+    pattern: 'plain', color: '#dfe6ee',
+    mass: 120, thickness: 0.25, tensWarp: 6000, tensWeft: 3800, shear: 0.75,
+    bendWarp: 0.07, bendWeft: 0.045, muSteelS: 0.26, muSteelK: 0.21, muSelfS: 0.46, muSelfK: 0.38,
+    airPerm: 60, epsR: 2.0, needleHold: 0.05, cohesion: 0.6, wetting: 0.9, breakStrain: 12,
+  },
+  {
+    id: 'denim', name: 'Denim 12 oz', composition: '98 % CO / 2 % EL', construction: 'Köper 3/1',
+    pattern: 'twill', color: '#3d5a80',
+    mass: 400, thickness: 0.75, tensWarp: 14000, tensWeft: 7000, shear: 2.6,
+    bendWarp: 1.2, bendWeft: 0.6, muSteelS: 0.31, muSteelK: 0.25, muSelfS: 0.56, muSelfK: 0.46,
+    airPerm: 25, epsR: 2.1, needleHold: 0.25, cohesion: 1.0, wetting: 0.8, breakStrain: 18,
+  },
+  {
+    id: 'jersey', name: 'Single Jersey', composition: '95 % CO / 5 % EL', construction: 'Rechts/Links-Maschenware',
+    pattern: 'knit', color: '#e9c46a',
+    mass: 180, thickness: 0.55, tensWarp: 900, tensWeft: 300, shear: 0.35,
+    bendWarp: 0.03, bendWeft: 0.015, muSteelS: 0.30, muSteelK: 0.25, muSelfS: 0.52, muSelfK: 0.42,
+    airPerm: 900, epsR: 2.0, needleHold: 0.04, cohesion: 1.5, wetting: 0.9, breakStrain: 90,
+  },
+  {
+    id: 'satin', name: 'Polyester-Satin', composition: '100 % PES', construction: 'Atlas 5-bindig',
+    pattern: 'satin', color: '#c9a7d8',
+    mass: 90, thickness: 0.15, tensWarp: 6500, tensWeft: 4500, shear: 0.4,
+    bendWarp: 0.03, bendWeft: 0.02, muSteelS: 0.16, muSteelK: 0.12, muSelfS: 0.21, muSelfK: 0.17,
+    airPerm: 15, epsR: 3.0, needleHold: 0.04, cohesion: 0.2, wetting: 0.3, breakStrain: 25,
+  },
+  {
+    id: 'chiffon', name: 'Seiden-Chiffon', composition: '100 % SE', construction: 'Leinwand, Kreppgarn',
+    pattern: 'plain', color: '#f4d6d6',
+    mass: 40, thickness: 0.10, tensWarp: 2000, tensWeft: 1600, shear: 0.15,
+    bendWarp: 0.008, bendWeft: 0.006, muSteelS: 0.25, muSteelK: 0.20, muSelfS: 0.40, muSelfK: 0.34,
+    airPerm: 2500, epsR: 2.5, needleHold: 0.01, cohesion: 0.3, wetting: 0.5, breakStrain: 20,
+  },
+  {
+    id: 'wolle', name: 'Wollanzugstoff', composition: '100 % WO', construction: 'Köper 2/2',
+    pattern: 'twill', color: '#5c5f66',
+    mass: 250, thickness: 0.45, tensWarp: 4500, tensWeft: 3500, shear: 0.6,
+    bendWarp: 0.12, bendWeft: 0.10, muSteelS: 0.28, muSteelK: 0.23, muSelfS: 0.55, muSelfK: 0.46,
+    airPerm: 150, epsR: 2.2, needleHold: 0.12, cohesion: 3.0, wetting: 0.5, breakStrain: 30,
+  },
+  {
+    id: 'vlies', name: 'Einlagevlies (PES)', composition: '100 % PES', construction: 'Vliesstoff, thermisch verfestigt',
+    pattern: 'nonwoven', color: '#f2f2ee',
+    mass: 50, thickness: 0.30, tensWarp: 3300, tensWeft: 2500, shear: 3.0,
+    bendWarp: 0.10, bendWeft: 0.10, muSteelS: 0.40, muSteelK: 0.34, muSelfS: 0.62, muSelfK: 0.52,
+    airPerm: 1500, epsR: 2.6, needleHold: 0.15, cohesion: 4.0, wetting: 0.4, breakStrain: 35,
+  },
+  {
+    id: 'leder', name: 'Nappaleder 1,0 mm', composition: 'Rind, chromgegerbt', construction: 'Narbenleder',
+    pattern: 'leather', color: '#8a4b2a',
+    mass: 700, thickness: 1.0, tensWarp: 9000, tensWeft: 7000, shear: 4.0,
+    bendWarp: 4.0, bendWeft: 3.5, muSteelS: 0.45, muSteelK: 0.38, muSelfS: 0.55, muSelfK: 0.48,
+    airPerm: 1, epsR: 3.5, needleHold: 0.6, cohesion: 0.2, wetting: 0.2, breakStrain: 45,
+  },
+  {
+    id: 'aramid', name: 'Aramidgewebe', composition: '100 % PPTA', construction: 'Leinwandbindung',
+    pattern: 'plain', color: '#e3b23c',
+    mass: 200, thickness: 0.30, tensWarp: 90000, tensWeft: 85000, shear: 1.5,
+    bendWarp: 0.40, bendWeft: 0.40, muSteelS: 0.22, muSteelK: 0.18, muSelfS: 0.35, muSelfK: 0.30,
+    airPerm: 40, epsR: 3.5, needleHold: 0.20, cohesion: 0.5, wetting: 0.4, breakStrain: 4,
+  },
+  {
+    id: 'glas', name: 'Glasfasergewebe', composition: 'E-Glas', construction: 'Köper 2/2',
+    pattern: 'twill', color: '#eef3f3',
+    mass: 300, thickness: 0.28, tensWarp: 110000, tensWeft: 100000, shear: 0.9,
+    bendWarp: 0.8, bendWeft: 0.8, muSteelS: 0.20, muSteelK: 0.16, muSelfS: 0.30, muSelfK: 0.25,
+    airPerm: 80, epsR: 4.5, needleHold: 0.10, cohesion: 0.3, wetting: 0.6, breakStrain: 3,
+  },
+];
+
+// Starre Werkstoffe für Tische, Maschinen- und Greiferteile. Sie verformen sich bei den
+// auftretenden Kräften um Größenordnungen weniger als Textilien (E-Modul GPa vs. kPa–MPa)
+// und werden deshalb als starr modelliert. frictionFactor skaliert die Stoff-Stahl-Reibung.
+const SOLIDS = {
+  stahl:    { name: 'Stahl, poliert',         density: 7850, E: 210e9, poisson: 0.30, frictionFactor: 1.0, color: '#b8bec6' },
+  alu:      { name: 'Aluminium, eloxiert',    density: 2700, E: 70e9,  poisson: 0.33, frictionFactor: 1.05, color: '#a9b1ba' },
+  hpl:      { name: 'HPL-Schichtstoff',       density: 1400, E: 10e9,  poisson: 0.30, frictionFactor: 1.15, color: '#d9d4c7' },
+  ptfe:     { name: 'PTFE-beschichtet',       density: 2200, E: 0.5e9, poisson: 0.46, frictionFactor: 0.45, color: '#ece9e2' },
+  gummi:    { name: 'Gummi (NBR)',            density: 1300, E: 5e6,   poisson: 0.49, frictionFactor: 2.2, color: '#222326' },
+  buche:    { name: 'Buche, lackiert',        density: 720,  E: 14e9,  poisson: 0.35, frictionFactor: 1.25, color: '#c49a6c' },
+  beton:    { name: 'Beton, versiegelt',      density: 2400, E: 30e9,  poisson: 0.20, frictionFactor: 1.6, color: '#8d8f8f' },
+  guss:     { name: 'Grauguss (Maschine)',    density: 7200, E: 110e9, poisson: 0.26, frictionFactor: 1.05, color: '#6f7a72' },
+};
+
+function fabricById(id) {
+  return FABRICS.find((f) => f.id === id) || FABRICS[0];
+}
+
+// Umrechnung in SI-Einheiten für den Solver.
+function toSI(f) {
+  return {
+    ...f,
+    rho: f.mass * UNIT.gPerM2,                       // kg/m²
+    t: f.thickness * UNIT.mm,                        // m
+    Tw: f.tensWarp, Tf: f.tensWeft,                  // N/m
+    Gs: f.shear * UNIT.gfPerCmPerDeg,                // N/m/rad
+    Bw: f.bendWarp * UNIT.gfcm2PerCm,                // N·m
+    Bf: f.bendWeft * UNIT.gfcm2PerCm,                // N·m
+    k: f.airPerm * UNIT.lPerM2sAt100Pa,              // m/(s·Pa)
+  };
+}
+
+// Peirce-Biegelänge c = (B / w)^(1/3), w = Flächengewicht [N/m²] (ASTM D1388).
+function bendingLength(f, dir = 'warp') {
+  const s = toSI(f);
+  const B = dir === 'warp' ? s.Bw : s.Bf;
+  return Math.cbrt(B / (s.rho * 9.80665));
+}
+
+// Felder für den Material-Editor im UI.
+const FABRIC_FIELDS = [
+  ['mass', 'Flächenmasse', 'g/m²'],
+  ['thickness', 'Dicke', 'mm'],
+  ['tensWarp', 'Zugsteifigkeit Kette', 'N/m'],
+  ['tensWeft', 'Zugsteifigkeit Schuss', 'N/m'],
+  ['shear', 'Schersteifigkeit G', 'gf/cm/°'],
+  ['bendWarp', 'Biegesteifigkeit B Kette', 'gf·cm²/cm'],
+  ['bendWeft', 'Biegesteifigkeit B Schuss', 'gf·cm²/cm'],
+  ['muSteelS', 'Haftreibung Stoff/Stahl', 'μ'],
+  ['muSteelK', 'Gleitreibung Stoff/Stahl', 'μ'],
+  ['muSelfS', 'Haftreibung Stoff/Stoff', 'μ'],
+  ['muSelfK', 'Gleitreibung Stoff/Stoff', 'μ'],
+  ['airPerm', 'Luftdurchlässigkeit (100 Pa)', 'l/m²s'],
+  ['epsR', 'Permittivität εr', '–'],
+  ['needleHold', 'Haltekraft je Nadel', 'N'],
+  ['cohesion', 'Lagenhaftung', 'Pa'],
+  ['wetting', 'Benetzbarkeit', '0…1'],
+  ['breakStrain', 'Bruchdehnung', '%'],
+];
+
+return { FABRICS, SOLIDS, fabricById, toSI, bendingLength, FABRIC_FIELDS };
+})();
+
+// ---- src/physics/cloth.js ----
+const __M_physics_cloth = (() => {
+// Textillage als diskretes Kontinuum, gelöst mit XPBD (Extended Position Based Dynamics,
+// Macklin et al. 2016; "Small Steps", Macklin et al. 2019).
+//
+// Diskretisierung: quadratisches Gitter mit Abstand h. Kette (warp) läuft entlang der
+// lokalen z-Achse, Schuss (weft) entlang x. Die Nachgiebigkeiten (Compliance α = 1/k)
+// werden direkt aus den gemessenen Materialkennwerten abgeleitet:
+//
+//   Zug:    Feder zwischen Gitternachbarn repräsentiert einen Streifen der Breite b·h:
+//           k = T · b               (T Zugsteifigkeit [N/m], b Randanteil 0,5 / 1)
+//   Scher:  eine Diagonale je Zelle: k = 2G (G Schersteifigkeit [N/m/rad]);
+//           der Beitrag der Diagonalen zur Zugsteifigkeit wird von T abgezogen.
+//   Biegen: Krümmung κ ≈ |x₀ − 2x₁ + x₂| / h² an jedem inneren Knoten,
+//           Energie ½·B·κ²·(b·h)·h  ⇒  k = B·b / h²   (B Biegesteifigkeit [N·m])
+//   Masse:  m = ρ_A · h² · bₓ · b_z (exakte Gesamtmasse)
+
+const { toSI } = __M_physics_materials;
+function rotY(x, z, yaw) {
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  return [x * c + z * s, -x * s + z * c];
+}
+
+let NEXT_ID = 0;
+
+class Cloth {
+  constructor({ fabric, width, length, spacing, center, yaw = 0, name, tint }) {
+    this.id = NEXT_ID++;
+    this.fabric = fabric;
+    this.m = toSI(fabric);
+    this.name = name || `Lage ${this.id + 1}`;
+    this.tint = tint || fabric.color;
+    const h = spacing;
+    const nx = Math.max(2, Math.round(width / h) + 1);
+    const nz = Math.max(2, Math.round(length / h) + 1);
+    this.h = h; this.nx = nx; this.nz = nz;
+    this.width = (nx - 1) * h; this.length = (nz - 1) * h;
+    const n = nx * nz;
+    this.n = n;
+    this.pos = new Float64Array(3 * n);
+    this.prev = new Float64Array(3 * n);
+    this.vel = new Float64Array(3 * n);
+    this.mass = new Float64Array(n);
+    this.w = new Float64Array(n);            // inverse Masse (0 = fixiert)
+    this.attached = new Int16Array(n).fill(-1); // Index des haltenden Greiferelements
+    this.radius = Math.max(this.m.t * 0.5, 5e-5);
+    this.area = this.width * this.length;
+    this.totalMass = this.m.rho * this.area;
+
+    const share = (i, N) => (i === 0 || i === N - 1 ? 0.5 : 1);
+    for (let j = 0; j < nz; j++) {
+      for (let i = 0; i < nx; i++) {
+        const v = j * nx + i;
+        const lx = i * h - this.width / 2, lz = j * h - this.length / 2;
+        const [rx, rz] = rotY(lx, lz, yaw);
+        this.pos[3 * v] = center[0] + rx;
+        this.pos[3 * v + 1] = center[1];
+        this.pos[3 * v + 2] = center[2] + rz;
+        const m = this.m.rho * h * h * share(i, nx) * share(j, nz);
+        this.mass[v] = m; this.w[v] = 1 / m;
+      }
+    }
+    this.prev.set(this.pos);
+    this._buildConstraints(share);
+    this._buildTriangles();
+  }
+
+  idx(i, j) { return j * this.nx + i; }
+
+  // ---- Long Range Attachments (Kim, Chentanez, Müller 2012) -------------------
+  // Gewebe sind in der Ebene nahezu undehnbar (Dehnung unter Eigengewicht ~10⁻⁴). Ein
+  // Gauss-Seidel-Löser mit wenigen Iterationen konvergiert dafür zu langsam und würde
+  // die Lage hängend um ein Vielfaches zu stark längen. Einseitige Fesseln von jedem Knoten
+  // zu den nächstgelegenen gehaltenen Knoten begrenzen den Abstand auf die geodätische
+  // Ruhelänge (hier = Abstand im ebenen Ausgangszuschnitt) zuzüglich der elastischen
+  // Dehnung, die bei der Materialsteifigkeit physikalisch möglich ist.
+  updateTethers(K = 4) {
+    const { n, nx, h } = this;
+    const groups = new Map();
+    for (let v = 0; v < n; v++) {
+      const a = this.attached[v];
+      if (a < 0) continue;
+      if (!groups.has(a)) groups.set(a, []);
+      groups.get(a).push(v);
+    }
+    if (!this.tetherIdx) { this.tetherIdx = new Int32Array(n * K); this.tetherRest = new Float64Array(n * K); }
+    this.tetherIdx.fill(-1);
+    this.tetherK = K;
+    this.hasTethers = groups.size > 0;
+    if (!this.hasTethers) return;
+    const best = [];
+    for (let v = 0; v < n; v++) {
+      if (this.attached[v] >= 0) continue;
+      const vi = v % nx, vj = (v / nx) | 0;
+      best.length = 0;
+      for (const list of groups.values()) {
+        let bd = Infinity, bi = -1;
+        for (const a of list) {
+          const di = (a % nx) - vi, dj = ((a / nx) | 0) - vj;
+          const d = di * di + dj * dj;
+          if (d < bd) { bd = d; bi = a; }
+        }
+        best.push([bd, bi]);
+      }
+      best.sort((x, y) => x[0] - y[0]);
+      for (let k = 0; k < Math.min(K, best.length); k++) {
+        this.tetherIdx[v * K + k] = best[k][1];
+        this.tetherRest[v * K + k] = Math.sqrt(best[k][0]) * h;
+      }
+    }
+  }
+
+  solveTethers(slack) {
+    if (!this.hasTethers) return;
+    const p = this.pos, K = this.tetherK, T = this.tetherIdx, R = this.tetherRest, w = this.w;
+    for (let v = 0; v < this.n; v++) {
+      if (!w[v]) continue;
+      const i = 3 * v;
+      for (let k = 0; k < K; k++) {
+        const a = T[v * K + k];
+        if (a < 0) break;
+        const j = 3 * a;
+        const dx = p[i] - p[j], dy = p[i + 1] - p[j + 1], dz = p[i + 2] - p[j + 2];
+        const L = Math.sqrt(dx * dx + dy * dy + dz * dz), r = R[v * K + k] * (1 + slack);
+        if (L <= r) continue;
+        const s = (L - r) / L;
+        p[i] -= dx * s; p[i + 1] -= dy * s; p[i + 2] -= dz * s;
+      }
+    }
+  }
+
+  _buildConstraints(share) {
+    const { nx, nz, h } = this;
+    const { Tw, Tf, Gs, Bw, Bf } = this.m;
+    const G = Math.max(Gs, 1e-3);
+    const TwEff = Math.max(Tw - G, 0.2 * Tw);
+    const TfEff = Math.max(Tf - G, 0.2 * Tf);
+    const I = [], J = [], R = [], A = [];
+    // Zug: Schuss (x-Richtung)
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx - 1; i++) {
+      I.push(this.idx(i, j)); J.push(this.idx(i + 1, j)); R.push(h); A.push(1 / (TfEff * share(j, nz)));
+    }
+    // Zug: Kette (z-Richtung)
+    for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx; i++) {
+      I.push(this.idx(i, j)); J.push(this.idx(i, j + 1)); R.push(h); A.push(1 / (TwEff * share(i, nx)));
+    }
+    this.nStruct = I.length;
+    // Scherung: eine Diagonale je Zelle (die Dreieckskante, Richtung alternierend).
+    // Zwei Diagonalen würden jede Zelle gegen Verwölbung versteifen (4 Punkte, 6 Abstände
+    // = starr) und doppelt gekrümmtes Drapieren verhindern. Energie je Zelle
+    // ½·k_d·(h·√2·γ/2)² = ½·G·γ²·h²  ⇒  k_d = 2·G.
+    const d = h * Math.SQRT2;
+    for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) {
+      if ((i + j) % 2 === 0) { I.push(this.idx(i + 1, j)); J.push(this.idx(i, j + 1)); }
+      else { I.push(this.idx(i, j)); J.push(this.idx(i + 1, j + 1)); }
+      R.push(d); A.push(1 / (2 * G));
+    }
+    this.sI = Int32Array.from(I); this.sJ = Int32Array.from(J);
+    this.sRest = Float64Array.from(R); this.sAlpha = Float64Array.from(A);
+    this.sDir = new Uint8Array(this.nStruct); // 0 = Schuss, 1 = Kette
+    for (let c = (nx - 1) * nz; c < this.nStruct; c++) this.sDir[c] = 1;
+
+    // Biegung: Knotentripel entlang beider Fadenrichtungen
+    const a = [], b = [], c = [], al = [];
+    for (let j = 0; j < nz; j++) for (let i = 1; i < nx - 1; i++) {
+      a.push(this.idx(i - 1, j)); b.push(this.idx(i, j)); c.push(this.idx(i + 1, j));
+      al.push((h * h) / (Math.max(Bf, 1e-12) * share(j, nz)));
+    }
+    for (let j = 1; j < nz - 1; j++) for (let i = 0; i < nx; i++) {
+      a.push(this.idx(i, j - 1)); b.push(this.idx(i, j)); c.push(this.idx(i, j + 1));
+      al.push((h * h) / (Math.max(Bw, 1e-12) * share(i, nx)));
+    }
+    this.bA = Int32Array.from(a); this.bB = Int32Array.from(b); this.bC = Int32Array.from(c);
+    this.bAlpha = Float64Array.from(al);
+  }
+
+  // Hierarchische Dehnungsbegrenzung (Provot 1995, Müller 2008): einseitige Bedingungen
+  // über 1, 2, 4, 8 und 16 Gitterabstände entlang Kette und Schuss. Sie wirken nur auf
+  // Zug, behindern Biegen/Falten also nicht, und übertragen Zugkräfte in einem
+  // Teilschritt über die ganze Lage. Grenze: Dehnung bei der Linienlast limitLoad.
+  _buildLimits() {
+    const { nx, nz, h } = this;
+    const I = [], J = [], R = [], D = [];
+    for (const span of [1, 2, 4, 8, 16]) {
+      for (let j = 0; j < nz; j++) for (let i = 0; i + span < nx; i++) { I.push(this.idx(i, j)); J.push(this.idx(i + span, j)); R.push(span * h); D.push(0); }
+      for (let j = 0; j + span < nz; j++) for (let i = 0; i < nx; i++) { I.push(this.idx(i, j)); J.push(this.idx(i, j + span)); R.push(span * h); D.push(1); }
+    }
+    this.lI = Int32Array.from(I); this.lJ = Int32Array.from(J); this.lR = Float64Array.from(R); this.lD = Uint8Array.from(D);
+  }
+
+  solveLimits(limitLoad = 30) {
+    if (!this.lI) this._buildLimits();
+    const p = this.pos, w = this.w;
+    const ef = 1 + Math.max(1e-3, limitLoad / this.m.Tf), ew = 1 + Math.max(1e-3, limitLoad / this.m.Tw);
+    const { lI, lJ, lR, lD } = this;
+    for (let c = 0, N = lI.length; c < N; c++) {
+      const a = lI[c], b = lJ[c], wa = w[a], wb = w[b], ws = wa + wb;
+      if (!ws) continue;
+      const i = 3 * a, j = 3 * b;
+      const dx = p[j] - p[i], dy = p[j + 1] - p[i + 1], dz = p[j + 2] - p[i + 2];
+      const L2 = dx * dx + dy * dy + dz * dz, r = lR[c] * (lD[c] ? ew : ef);
+      if (L2 <= r * r) continue;
+      const L = Math.sqrt(L2), s = (L - r) / (L * ws);
+      p[i] += wa * s * dx; p[i + 1] += wa * s * dy; p[i + 2] += wa * s * dz;
+      p[j] -= wb * s * dx; p[j + 1] -= wb * s * dy; p[j + 2] -= wb * s * dz;
+    }
+  }
+
+  _buildTriangles() {
+    const { nx, nz } = this;
+    const T = [];
+    for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) {
+      const a = this.idx(i, j), b = this.idx(i + 1, j), c = this.idx(i, j + 1), d = this.idx(i + 1, j + 1);
+      if ((i + j) % 2 === 0) { T.push(a, c, b, b, c, d); } else { T.push(a, c, d, a, d, b); }
+    }
+    this.tri = Int32Array.from(T);
+    this.nTri = T.length / 3;
+  }
+
+  // Interne Materialkräfte, XPBD-Gauss-Seidel-Durchlauf mit Lagrange-Multiplikatoren.
+  // iters = 1 (Echtzeit): Bei einem Durchlauf je Teilschritt wirkt eine Bedingung mit der
+  // Nachgiebigkeit α + Σw·Δt² statt α (statischer Fixpunkt). Das wird kompensiert, indem
+  // α̃' = max(0, α̃ − Σw) verwendet wird; damit ist die statische Steifigkeit exakt, solange
+  // die Bedingung weicher als die Massenträgheit im Teilschritt ist (Biegung). Steifere
+  // Bedingungen (Zug) werden starr projiziert und durch die Dehnungsbegrenzung ergänzt.
+  // iters > 1: klassisches XPBD mit λ-Akkumulation (konvergiert gegen die exakte Lösung).
+  resetLambda() {
+    if (!this.sLambda) { this.sLambda = new Float64Array(this.sI.length); this.bLambda = new Float64Array(this.bA.length); }
+    this.sLambda.fill(0); this.bLambda.fill(0);
+  }
+
+  solveInternal(dt, compensate = true) {
+    const p = this.pos, w = this.w, inv = 1 / (dt * dt);
+    const { sI, sJ, sRest, sAlpha, sLambda } = this;
+    for (let c = 0, N = sI.length; c < N; c++) {
+      const i = sI[c] * 3, j = sJ[c] * 3;
+      const wi = w[sI[c]], wj = w[sJ[c]], ws = wi + wj;
+      if (ws === 0) continue;
+      const dx = p[i] - p[j], dy = p[i + 1] - p[j + 1], dz = p[i + 2] - p[j + 2];
+      const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (len < 1e-12) continue;
+      let at = sAlpha[c] * inv;
+      if (compensate) at = Math.max(0, at - ws);
+      const dl = (-(len - sRest[c]) - at * sLambda[c]) / (ws + at);
+      sLambda[c] += dl;
+      const s = dl / len;
+      p[i] += wi * s * dx; p[i + 1] += wi * s * dy; p[i + 2] += wi * s * dz;
+      p[j] -= wj * s * dx; p[j + 1] -= wj * s * dy; p[j + 2] -= wj * s * dz;
+    }
+    const { bA, bB, bC, bAlpha, bLambda } = this;
+    for (let c = 0, N = bA.length; c < N; c++) {
+      const ia = bA[c], ib = bB[c], ic = bC[c];
+      const wa = w[ia], wb = w[ib], wc = w[ic];
+      const ws = wa + 4 * wb + wc;
+      if (ws === 0) continue;
+      const a = ia * 3, b = ib * 3, cc = ic * 3;
+      const ex = p[a] + p[cc] - 2 * p[b], ey = p[a + 1] + p[cc + 1] - 2 * p[b + 1], ez = p[a + 2] + p[cc + 2] - 2 * p[b + 2];
+      const len = Math.sqrt(ex * ex + ey * ey + ez * ez);
+      if (len < 1e-12) continue;
+      let at = bAlpha[c] * inv;
+      if (compensate) at = Math.max(0, at - ws);
+      const dl = (-len - at * bLambda[c]) / (ws + at);
+      bLambda[c] += dl;
+      const s = dl / len;
+      p[a] += wa * s * ex; p[a + 1] += wa * s * ey; p[a + 2] += wa * s * ez;
+      p[cc] += wc * s * ex; p[cc + 1] += wc * s * ey; p[cc + 2] += wc * s * ez;
+      p[b] -= 2 * wb * s * ex; p[b + 1] -= 2 * wb * s * ey; p[b + 2] -= 2 * wb * s * ez;
+    }
+  }
+
+  // Innere Dämpfung (Garnreibung, Hysterese): Dämpfer parallel zu Zug-, Scher- und
+  // Biegeelementen, wirkt nur auf Relativgeschwindigkeiten (keine Starrkörperdämpfung).
+  damp(dt, betaIn = 80, betaBend = 25) {
+    const v = this.vel, p = this.pos, w = this.w;
+    const ci = 1 - Math.exp(-betaIn * dt), cb = 1 - Math.exp(-betaBend * dt);
+    const { sI, sJ } = this;
+    for (let c = 0, N = sI.length; c < N; c++) {
+      const a = sI[c], b = sJ[c], wa = w[a], wb = w[b], ws = wa + wb;
+      if (!ws) continue;
+      const i = 3 * a, j = 3 * b;
+      let nx = p[i] - p[j], ny = p[i + 1] - p[j + 1], nz = p[i + 2] - p[j + 2];
+      const l = Math.sqrt(nx * nx + ny * ny + nz * nz);
+      if (l < 1e-12) continue;
+      nx /= l; ny /= l; nz /= l;
+      const dv = ((v[i] - v[j]) * nx + (v[i + 1] - v[j + 1]) * ny + (v[i + 2] - v[j + 2]) * nz) * ci / ws;
+      v[i] -= wa * dv * nx; v[i + 1] -= wa * dv * ny; v[i + 2] -= wa * dv * nz;
+      v[j] += wb * dv * nx; v[j + 1] += wb * dv * ny; v[j + 2] += wb * dv * nz;
+    }
+    const { bA, bB, bC } = this;
+    for (let c = 0, N = bA.length; c < N; c++) {
+      const a = 3 * bA[c], b = 3 * bB[c], d = 3 * bC[c];
+      const wa = w[bA[c]], wb = w[bB[c]], wd = w[bC[c]], W = wa + 4 * wb + wd;
+      if (!W) continue;
+      for (let k = 0; k < 3; k++) {
+        const r = (v[b + k] - 0.5 * (v[a + k] + v[d + k])) * cb;
+        const f = (2 * r) / W;
+        v[b + k] -= 2 * wb * f; v[a + k] += wa * f; v[d + k] += wd * f;
+      }
+    }
+  }
+
+  // ---- Auswertung ----------------------------------------------------------
+  centroid() {
+    let x = 0, y = 0, z = 0, M = 0;
+    for (let v = 0; v < this.n; v++) {
+      const m = this.mass[v];
+      x += m * this.pos[3 * v]; y += m * this.pos[3 * v + 1]; z += m * this.pos[3 * v + 2]; M += m;
+    }
+    return [x / M, y / M, z / M];
+  }
+
+  // Lage in der Ebene: Schwerpunkt (x, z) und Winkel der Kettrichtung.
+  pose2D() {
+    const [cx, , cz] = this.centroid();
+    let wx = 0, wz = 0;
+    for (let i = 0; i < this.nx; i++) {
+      const a = this.idx(i, 0) * 3, b = this.idx(i, this.nz - 1) * 3;
+      wx += this.pos[b] - this.pos[a]; wz += this.pos[b + 2] - this.pos[a + 2];
+    }
+    return { x: cx, z: cz, theta: Math.atan2(wx, wz) };
+  }
+
+  maxStrain() {
+    let mx = 0;
+    const p = this.pos;
+    for (let c = 0; c < this.nStruct; c++) {
+      const i = this.sI[c] * 3, j = this.sJ[c] * 3;
+      const dx = p[i] - p[j], dy = p[i + 1] - p[j + 1], dz = p[i + 2] - p[j + 2];
+      const e = Math.sqrt(dx * dx + dy * dy + dz * dz) / this.sRest[c] - 1;
+      if (e > mx) mx = e;
+    }
+    return mx;
+  }
+
+  // Dehnungsstatistik der Fadenabschnitte: 99%-Quantil (robust gegen Einzelknoten) und Maximum
+  strainStats() {
+    const N = this.nStruct, p = this.pos;
+    const e = this._strainBuf || (this._strainBuf = new Float64Array(N));
+    let mx = 0;
+    for (let c = 0; c < N; c++) {
+      const i = this.sI[c] * 3, j = this.sJ[c] * 3;
+      const dx = p[i] - p[j], dy = p[i + 1] - p[j + 1], dz = p[i + 2] - p[j + 2];
+      e[c] = Math.sqrt(dx * dx + dy * dy + dz * dz) / this.sRest[c] - 1;
+      if (e[c] > mx) mx = e[c];
+    }
+    const sorted = Float64Array.from(e).sort();
+    return { p99: sorted[Math.floor(0.99 * (N - 1))], p50: sorted[Math.floor(0.5 * (N - 1))], max: mx };
+  }
+
+  // Dehnung je Knoten (max. der angrenzenden Fadenabschnitte) für die Falschfarbendarstellung.
+  nodeStrain(out) {
+    out.fill(0);
+    const p = this.pos;
+    for (let c = 0; c < this.nStruct; c++) {
+      const a = this.sI[c], b = this.sJ[c], i = a * 3, j = b * 3;
+      const dx = p[i] - p[j], dy = p[i + 1] - p[j + 1], dz = p[i + 2] - p[j + 2];
+      const e = Math.sqrt(dx * dx + dy * dy + dz * dz) / this.sRest[c] - 1;
+      if (e > out[a]) out[a] = e;
+      if (e > out[b]) out[b] = e;
+    }
+    return out;
+  }
+
+  meanSpeed() {
+    let s = 0;
+    for (let v = 0; v < this.n; v++) {
+      const x = this.vel[3 * v], y = this.vel[3 * v + 1], z = this.vel[3 * v + 2];
+      s += Math.sqrt(x * x + y * y + z * z);
+    }
+    return s / this.n;
+  }
+
+  // Welligkeit: Standardabweichung der Höhe [m] (aussagekräftig für abgelegte Lagen).
+  waviness() {
+    let s = 0, s2 = 0;
+    for (let v = 0; v < this.n; v++) { const y = this.pos[3 * v + 1]; s += y; s2 += y * y; }
+    const m = s / this.n;
+    return Math.sqrt(Math.max(0, s2 / this.n - m * m));
+  }
+
+  attachedCount() {
+    let c = 0;
+    for (let v = 0; v < this.n; v++) if (this.attached[v] >= 0) c++;
+    return c;
+  }
+}
+
+return { rotY, Cloth };
+})();
+
+// ---- src/physics/colliders.js ----
+const __M_physics_colliders = (() => {
+// Starre (statische oder kinematisch bewegte) Quader-Kollider mit Coulomb-Reibung.
+// Reibung nach PBD (Müller et al. 2007 / Macklin 2014): die tangentiale Relativverschiebung
+// während eines Teilschritts wird bis μ_H·d vollständig aufgehoben (Haften), darüber um μ_G·d
+// reduziert (Gleiten). d ist die Normalkorrektur; d/Δt² = F_N/m, also exakt Coulomb.
+
+const { SOLIDS } = __M_physics_materials;
+function matFromEuler(yaw = 0, pitch = 0, roll = 0) {
+  // R = Ry(yaw) · Rx(pitch) · Rz(roll), zeilenweise gespeichert
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const cr = Math.cos(roll), sr = Math.sin(roll);
+  const Ry = [cy, 0, sy, 0, 1, 0, -sy, 0, cy];
+  const Rx = [1, 0, 0, 0, cp, -sp, 0, sp, cp];
+  const Rz = [cr, -sr, 0, sr, cr, 0, 0, 0, 1];
+  return mul3(mul3(Ry, Rx), Rz);
+}
+function mul3(a, b) {
+  const r = new Array(9);
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+    r[3 * i + j] = a[3 * i] * b[j] + a[3 * i + 1] * b[3 + j] + a[3 * i + 2] * b[6 + j];
+  }
+  return r;
+}
+
+class BoxCollider {
+  constructor({ name = 'Quader', center, half, yaw = 0, pitch = 0, roll = 0, material = 'stahl', kinematic = false, visual = true, color }) {
+    this.name = name;
+    this.c = [...center];
+    this.half = [...half];
+    this.R = matFromEuler(yaw, pitch, roll);
+    this.euler = [yaw, pitch, roll];
+    this.material = material;
+    this.solid = SOLIDS[material];
+    this.kinematic = kinematic;
+    this.enabled = true;
+    this.visual = visual;
+    this.color = color;
+    this.pc = [...this.c];
+    this.pR = [...this.R];
+  }
+
+  setPose(center, yaw = 0) {
+    this.c[0] = center[0]; this.c[1] = center[1]; this.c[2] = center[2];
+    if (yaw !== this.euler[0]) { this.euler[0] = yaw; this.R = matFromEuler(yaw, this.euler[1], this.euler[2]); }
+  }
+
+  beginSubstep() {
+    this.pc[0] = this.c[0]; this.pc[1] = this.c[1]; this.pc[2] = this.c[2];
+    for (let k = 0; k < 9; k++) this.pR[k] = this.R[k];
+  }
+
+  // Liegt Punkt (x,y,z) innerhalb (mit Aufmaß r)?
+  contains(x, y, z, r = 0) {
+    const dx = x - this.c[0], dy = y - this.c[1], dz = z - this.c[2], R = this.R;
+    const qx = R[0] * dx + R[3] * dy + R[6] * dz;
+    const qy = R[1] * dx + R[4] * dy + R[7] * dz;
+    const qz = R[2] * dx + R[5] * dy + R[8] * dz;
+    return Math.abs(qx) < this.half[0] + r && Math.abs(qy) < this.half[1] + r && Math.abs(qz) < this.half[2] + r;
+  }
+
+  // Projiziert alle Partikel einer Lage aus dem Quader heraus und wendet Reibung an.
+  // vac: { region:[x0,x1,z0,z1], pen } – zusätzliche Normalkorrektur je Teilschritt (Saugtisch)
+  collideCloth(cloth, muS, muK, vac = null) {
+    if (!this.enabled) return;
+    const p = cloth.pos, pp = cloth.prev, w = cloth.w, r = cloth.radius;
+    const R = this.R, c = this.c, h = this.half;
+    const hx = h[0] + r, hy = h[1] + r, hz = h[2] + r;
+    // grobe Kugel-Vorauswahl
+    const br = Math.sqrt(hx * hx + hy * hy + hz * hz);
+    for (let v = 0, n = cloth.n; v < n; v++) {
+      if (w[v] === 0) continue;
+      const i = 3 * v;
+      const dx = p[i] - c[0], dy = p[i + 1] - c[1], dz = p[i + 2] - c[2];
+      if (dx * dx + dy * dy + dz * dz > br * br) continue;
+      const qx = R[0] * dx + R[3] * dy + R[6] * dz;
+      const qy = R[1] * dx + R[4] * dy + R[7] * dz;
+      const qz = R[2] * dx + R[5] * dy + R[8] * dz;
+      const px = hx - Math.abs(qx), py = hy - Math.abs(qy), pz = hz - Math.abs(qz);
+      let vacPen = 0;
+      if (vac && qy > 0 && px > 0 && pz > 0 && py > -0.05e-3) {
+        const x = p[i], z = p[i + 2], r = vac.region;
+        if (x > r[0] && x < r[1] && z > r[2] && z < r[3]) vacPen = vac.pen;
+      }
+      if (vacPen && py <= 0) {
+        // angesaugt: Lage liegt auf (Abheben verhindert), Reibung mit Saugkraft
+        p[i + 1] += py;
+      } else if (px <= 0 || py <= 0 || pz <= 0) continue;
+      let nx, ny, nz, pen;
+      if (vacPen) { pen = Math.max(0, py); nx = R[1]; ny = R[4]; nz = R[7]; }
+      else if (py <= px && py <= pz) { pen = py; const s = qy >= 0 ? 1 : -1; nx = R[1] * s; ny = R[4] * s; nz = R[7] * s; }
+      else if (px <= pz) { pen = px; const s = qx >= 0 ? 1 : -1; nx = R[0] * s; ny = R[3] * s; nz = R[6] * s; }
+      else { pen = pz; const s = qz >= 0 ? 1 : -1; nx = R[2] * s; ny = R[5] * s; nz = R[8] * s; }
+      p[i] += nx * pen; p[i + 1] += ny * pen; p[i + 2] += nz * pen;
+
+      // Oberflächenverschiebung des Kolliders am Kontaktpunkt (kinematisch bewegt)
+      let sx = 0, sy = 0, sz = 0;
+      if (this.kinematic) {
+        const pc = this.pc, pR = this.pR;
+        const ax = pp[i] - pc[0], ay = pp[i + 1] - pc[1], az = pp[i + 2] - pc[2];
+        const lx = pR[0] * ax + pR[3] * ay + pR[6] * az;
+        const ly = pR[1] * ax + pR[4] * ay + pR[7] * az;
+        const lz = pR[2] * ax + pR[5] * ay + pR[8] * az;
+        sx = c[0] + R[0] * lx + R[1] * ly + R[2] * lz - pp[i];
+        sy = c[1] + R[3] * lx + R[4] * ly + R[5] * lz - pp[i + 1];
+        sz = c[2] + R[6] * lx + R[7] * ly + R[8] * lz - pp[i + 2];
+      }
+      let rx = p[i] - pp[i] - sx, ry = p[i + 1] - pp[i + 1] - sy, rz = p[i + 2] - pp[i + 2] - sz;
+      const rn = rx * nx + ry * ny + rz * nz;
+      rx -= rn * nx; ry -= rn * ny; rz -= rn * nz;
+      const rt = Math.sqrt(rx * rx + ry * ry + rz * rz);
+      if (rt < 1e-15) continue;
+      const pf = pen + vacPen;
+      const k = rt < muS * pf ? 1 : Math.min(1, (muK * pf) / rt);
+      p[i] -= rx * k; p[i + 1] -= ry * k; p[i + 2] -= rz * k;
+    }
+  }
+
+  // Oberkante unterhalb Punkt (für Tastfahrt), nur für achsparallele Quader exakt.
+  topAt(x, z) {
+    const dx = x - this.c[0], dz = z - this.c[2], R = this.R;
+    const qx = R[0] * dx + R[6] * dz, qz = R[2] * dx + R[8] * dz;
+    if (Math.abs(qx) > this.half[0] || Math.abs(qz) > this.half[2]) return -Infinity;
+    return this.c[1] + this.half[1];
+  }
+}
+
+return { BoxCollider };
+})();
+
+// ---- src/physics/collision.js ----
+const __M_physics_collision = (() => {
+// Kontakt zwischen Textillagen (und Selbstkontakt) als Punkt-Dreieck-Bedingung mit
+// Materialdicke, Coulomb-Reibung (Stoff/Stoff) und Lagenhaftung (Kohäsion).
+// Kandidatensuche einmal pro Bildschritt über ein räumliches Hashgitter, Auflösung in
+// jedem Teilschritt. Die Seite (oben/unten) wird bei der Erkennung festgehalten, damit
+// dünne Lagen auch bei großen Verschiebungen nicht durchtunneln.
+
+const P1 = 73856093, P2 = 19349663, P3 = 83492791;
+function computeAABB(c) {
+  const p = c.pos, b = c.aabb || (c.aabb = new Float64Array(6));
+  let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+  for (let i = 0, N = 3 * c.n; i < N; i += 3) {
+    const x = p[i], y = p[i + 1], z = p[i + 2];
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (z < z0) z0 = z; if (z > z1) z1 = z;
+  }
+  b[0] = x0; b[1] = y0; b[2] = z0; b[3] = x1; b[4] = y1; b[5] = z1;
+}
+function hashCell(x, y, z, mask) { return ((Math.imul(x, P1) ^ Math.imul(y, P2) ^ Math.imul(z, P3)) >>> 0) & mask; }
+
+class ClothContacts {
+  constructor() {
+    this.cap = 1 << 16;
+    this._alloc(this.cap);
+    this.n = 0;
+    this.selfCollision = true;
+    this.cohesionRange = 0.4e-3; // Reichweite der Lagenhaftung [m]
+    this._stamp = 0;
+  }
+
+  _alloc(cap) {
+    const old = this.n ? { a: this.vc, b: this.vi, c: this.tc, d: this.ti, e: this.side } : null;
+    this.vc = new Int16Array(cap); this.vi = new Int32Array(cap);
+    this.tc = new Int16Array(cap); this.ti = new Int32Array(cap);
+    this.side = new Int8Array(cap);
+    if (old) { this.vc.set(old.a); this.vi.set(old.b); this.tc.set(old.c); this.ti.set(old.d); this.side.set(old.e); }
+    this.cap = cap;
+  }
+
+  // Hashgitter über die Dreiecke einer Lage; AABB je Dreieck um die Eigenbewegung m erweitert
+  _buildHash(c, m, inv) {
+    const nT = c.nTri;
+    const size = 1 << Math.ceil(Math.log2(Math.max(256, nT * 4)));
+    const mask = size - 1;
+    const count = new Int32Array(size + 1);
+    const ranges = new Int32Array(nT * 6);
+    const p = c.pos, T = c.tri;
+    let entries = 0;
+    for (let t = 0; t < nT; t++) {
+      const a = T[3 * t] * 3, b = T[3 * t + 1] * 3, d = T[3 * t + 2] * 3, o = t * 6;
+      for (let k = 0; k < 3; k++) {
+        const pa = p[a + k], pb = p[b + k], pd = p[d + k];
+        ranges[o + k] = Math.floor((Math.min(pa, pb, pd) - m) * inv);
+        ranges[o + 3 + k] = Math.floor((Math.max(pa, pb, pd) + m) * inv);
+      }
+      for (let x = ranges[o]; x <= ranges[o + 3]; x++)
+        for (let y = ranges[o + 1]; y <= ranges[o + 4]; y++)
+          for (let z = ranges[o + 2]; z <= ranges[o + 5]; z++) { count[hashCell(x, y, z, mask)]++; entries++; }
+    }
+    for (let i = 1; i <= size; i++) count[i] += count[i - 1];
+    // Dreiecksgeometrie vorberechnen: a, e1, e2, n, d00, d01, d11, 1/den
+    const G = new Float64Array(nT * 16);
+    for (let t = 0; t < nT; t++) {
+      const a = T[3 * t] * 3, b = T[3 * t + 1] * 3, d = T[3 * t + 2] * 3, o = t * 16;
+      const e1x = p[b] - p[a], e1y = p[b + 1] - p[a + 1], e1z = p[b + 2] - p[a + 2];
+      const e2x = p[d] - p[a], e2y = p[d + 1] - p[a + 1], e2z = p[d + 2] - p[a + 2];
+      let nX = e1y * e2z - e1z * e2y, nY = e1z * e2x - e1x * e2z, nZ = e1x * e2y - e1y * e2x;
+      const nl = Math.sqrt(nX * nX + nY * nY + nZ * nZ);
+      const d00 = e1x * e1x + e1y * e1y + e1z * e1z, d01 = e1x * e2x + e1y * e2y + e1z * e2z, d11 = e2x * e2x + e2y * e2y + e2z * e2z;
+      const den = d00 * d11 - d01 * d01;
+      if (nl < 1e-14 || Math.abs(den) < 1e-20) { G[o + 15] = 0; continue; }
+      G[o] = p[a]; G[o + 1] = p[a + 1]; G[o + 2] = p[a + 2];
+      G[o + 3] = e1x; G[o + 4] = e1y; G[o + 5] = e1z; G[o + 6] = e2x; G[o + 7] = e2y; G[o + 8] = e2z;
+      G[o + 9] = nX / nl; G[o + 10] = nY / nl; G[o + 11] = nZ / nl;
+      G[o + 12] = d00; G[o + 13] = d01; G[o + 14] = d11; G[o + 15] = 1 / den;
+    }
+    const E = new Int32Array(entries);
+    for (let t = 0; t < nT; t++) {
+      const o = t * 6;
+      for (let x = ranges[o]; x <= ranges[o + 3]; x++)
+        for (let y = ranges[o + 1]; y <= ranges[o + 4]; y++)
+          for (let z = ranges[o + 2]; z <= ranges[o + 5]; z++) E[--count[hashCell(x, y, z, mask)]] = t;
+    }
+    return { count, E, mask, G, stamp: new Int32Array(nT).fill(-1) };
+  }
+
+  // Kandidatensuche für ein Zeitintervall span. Je Lage wird zwischen Starrkörperbewegung
+  // (mittlere Geschwindigkeit vbulk) und Eigenbewegung (vrel) unterschieden; der Suchradius
+  // eines Lagenpaars ergibt sich aus Eigenbewegungen + Relativgeschwindigkeit der Lagen.
+  detect(cloths, span) {
+    this.n = 0;
+    if (!cloths.length) return;
+    const inv = 1 / cloths[0].h;
+    for (const c of cloths) if (!c.sleeping) computeAABB(c);
+    const mi = cloths.map((c) => (c.sleeping ? 0.2e-3 : Math.min(0.01, (c.vrel || 0) * span * 1.5 + 0.4e-3)));
+    const H = new Array(cloths.length).fill(null);
+    for (let vc = 0; vc < cloths.length; vc++) {
+      const C = cloths[vc], A = C.aabb;
+      for (let tc = 0; tc < cloths.length; tc++) {
+        const D = cloths[tc], B = D.aabb;
+        if (C.sleeping && D.sleeping) continue;
+        if (tc === vc && !this.selfCollision) continue;
+        const vb = C.vbulk && D.vbulk ? Math.hypot(C.vbulk[0] - D.vbulk[0], C.vbulk[1] - D.vbulk[1], C.vbulk[2] - D.vbulk[2]) : 0;
+        const rel = Math.min(0.03, vb * span * 1.5);
+        const mSurf = mi[vc] + mi[tc] + rel;
+        const m = mSurf + C.radius + D.radius;
+        if (A[0] > B[3] + m || A[3] < B[0] - m || A[1] > B[4] + m || A[4] < B[1] - m || A[2] > B[5] + m || A[5] < B[2] - m) continue;
+        if (!H[tc]) H[tc] = this._buildHash(D, mi[tc] + 2 * D.radius, inv);
+        this._query(cloths, vc, tc, H[tc], m, mSurf, mi[vc] + rel, inv);
+      }
+    }
+  }
+
+  _query(cloths, vc, tc, H, margin, mSurf, qr, inv) {
+    const { count, E, mask, stamp, G } = H;
+    const C = cloths[vc], D = cloths[tc], p = C.pos, nx = C.nx, B = D.aabb;
+    const T = D.tri;
+    const self = tc === vc;
+    const rr = C.radius + D.radius;
+    for (let v = 0; v < C.n; v++) {
+      const x = p[3 * v], y = p[3 * v + 1], z = p[3 * v + 2];
+      if (x < B[0] - margin || x > B[3] + margin || y < B[1] - margin || y > B[4] + margin || z < B[2] - margin || z > B[5] + margin) continue;
+      const vi = v % nx, vj = (v / nx) | 0;
+      const sv = ++this._stamp;
+      let bestT = -1, bestQ = -Infinity, bestSide = 1;
+      const x0 = Math.floor((x - qr) * inv), x1 = Math.floor((x + qr) * inv);
+      const y0 = Math.floor((y - qr) * inv), y1 = Math.floor((y + qr) * inv);
+      const z0 = Math.floor((z - qr) * inv), z1 = Math.floor((z + qr) * inv);
+      for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) for (let cz = z0; cz <= z1; cz++) {
+        const hsh = hashCell(cx, cy, cz, mask);
+        for (let e = count[hsh], end = count[hsh + 1]; e < end; e++) {
+          const t = E[e];
+          if (stamp[t] === sv) continue;
+          stamp[t] = sv;
+          const i0 = T[3 * t], i1 = T[3 * t + 1], i2 = T[3 * t + 2];
+          if (self) {
+            if (i0 === v || i1 === v || i2 === v) continue;
+            if (Math.abs((i0 % nx) - vi) <= 2 && Math.abs(((i0 / nx) | 0) - vj) <= 2) continue;
+            if (Math.abs((i1 % nx) - vi) <= 2 && Math.abs(((i1 / nx) | 0) - vj) <= 2) continue;
+            if (Math.abs((i2 % nx) - vi) <= 2 && Math.abs(((i2 / nx) | 0) - vj) <= 2) continue;
+          }
+          const o = t * 16;
+          const iden = G[o + 15];
+          if (iden === 0) continue;
+          const wx = x - G[o], wy = y - G[o + 1], wz = z - G[o + 2];
+          const nX = G[o + 9], nY = G[o + 10], nZ = G[o + 11];
+          const dist = wx * nX + wy * nY + wz * nZ;
+          if (Math.abs(dist) - rr > mSurf) continue;
+          const px = wx - dist * nX, py = wy - dist * nY, pz = wz - dist * nZ;
+          const d20 = px * G[o + 3] + py * G[o + 4] + pz * G[o + 5], d21 = px * G[o + 6] + py * G[o + 7] + pz * G[o + 8];
+          const b1 = (G[o + 14] * d20 - G[o + 13] * d21) * iden, b2 = (G[o + 12] * d21 - G[o + 13] * d20) * iden, b0 = 1 - b1 - b2;
+          const qmin = Math.min(b0, b1, b2);
+          if (qmin < -0.05) continue;
+          if (self) { this._push(vc, v, tc, t, dist >= 0 ? 1 : -1); continue; }
+          // je Punkt und Nachbarlage nur das am besten passende Dreieck
+          const score = qmin - Math.abs(dist) * 100;
+          if (score > bestQ) { bestQ = score; bestT = t; bestSide = dist >= 0 ? 1 : -1; }
+        }
+      }
+      if (bestT >= 0) this._push(vc, v, tc, bestT, bestSide);
+    }
+  }
+
+  _push(vc, v, tc, t, side) {
+    if (this.n >= this.cap) this._alloc(this.cap * 2);
+    const k = this.n++;
+    this.vc[k] = vc; this.vi[k] = v; this.tc[k] = tc; this.ti[k] = t; this.side[k] = side;
+  }
+
+  solve(cloths, dt) {
+    const dt2 = dt * dt;
+    for (let k = 0; k < this.n; k++) {
+      const C = cloths[this.vc[k]], D = cloths[this.tc[k]];
+      const v = this.vi[k], t = this.ti[k], s = this.side[k];
+      const p = C.pos, pp = C.prev, q = D.pos, qp = D.prev;
+      const T = D.tri, i0 = T[3 * t], i1 = T[3 * t + 1], i2 = T[3 * t + 2];
+      const a = i0 * 3, b = i1 * 3, d = i2 * 3, x = v * 3;
+      const e1x = q[b] - q[a], e1y = q[b + 1] - q[a + 1], e1z = q[b + 2] - q[a + 2];
+      const e2x = q[d] - q[a], e2y = q[d + 1] - q[a + 1], e2z = q[d + 2] - q[a + 2];
+      let nX = e1y * e2z - e1z * e2y, nY = e1z * e2x - e1x * e2z, nZ = e1x * e2y - e1y * e2x;
+      const nl = Math.sqrt(nX * nX + nY * nY + nZ * nZ);
+      if (nl < 1e-14) continue;
+      nX = (nX / nl) * s; nY = (nY / nl) * s; nZ = (nZ / nl) * s; // zeigt zur Seite des Punkts
+      const wx = p[x] - q[a], wy = p[x + 1] - q[a + 1], wz = p[x + 2] - q[a + 2];
+      const dist = wx * nX + wy * nY + wz * nZ;
+      const thick = C.radius + D.radius;
+      const coh = Math.min(C.m.cohesion, D.m.cohesion);
+      if (dist >= thick + (coh > 0 ? this.cohesionRange : 0)) continue;
+      const px = wx - dist * nX, py = wy - dist * nY, pz = wz - dist * nZ;
+      const d00 = e1x * e1x + e1y * e1y + e1z * e1z, d01 = e1x * e2x + e1y * e2y + e1z * e2z;
+      const d11 = e2x * e2x + e2y * e2y + e2z * e2z;
+      const d20 = px * e1x + py * e1y + pz * e1z, d21 = px * e2x + py * e2y + pz * e2z;
+      const den = d00 * d11 - d01 * d01;
+      const b1 = (d11 * d20 - d01 * d21) / den, b2 = (d00 * d21 - d01 * d20) / den, b0 = 1 - b1 - b2;
+      if (b0 < -0.08 || b1 < -0.08 || b2 < -0.08) continue;
+      const cs = C.sleeping, ds = D.sleeping;
+      const w = cs ? 0 : C.w[v], w0 = ds ? 0 : D.w[i0], w1 = ds ? 0 : D.w[i1], w2 = ds ? 0 : D.w[i2];
+      const W = w + w0 * b0 * b0 + w1 * b1 * b1 + w2 * b2 * b2;
+      if (W === 0) continue;
+      const Cval = dist - thick;
+      if (Cval < -0.5 * thick) { if (cs) C.wake = true; if (ds) D.wake = true; }
+      let dl;
+      if (Cval < 0) dl = -Cval / W;                       // Durchdringung auflösen
+      else dl = -Math.min(Cval / W, coh * (C.mass[v] / C.m.rho) * dt2); // Haftung (Zug begrenzt)
+      // Korrektur entlang n: Punkt +, Dreieck −
+      p[x] += w * dl * nX; p[x + 1] += w * dl * nY; p[x + 2] += w * dl * nZ;
+      q[a] -= w0 * b0 * dl * nX; q[a + 1] -= w0 * b0 * dl * nY; q[a + 2] -= w0 * b0 * dl * nZ;
+      q[b] -= w1 * b1 * dl * nX; q[b + 1] -= w1 * b1 * dl * nY; q[b + 2] -= w1 * b1 * dl * nZ;
+      q[d] -= w2 * b2 * dl * nX; q[d + 1] -= w2 * b2 * dl * nY; q[d + 2] -= w2 * b2 * dl * nZ;
+      if (Cval >= 0) continue;
+      // Reibung
+      const muS = 0.5 * (C.m.muSelfS + D.m.muSelfS), muK = 0.5 * (C.m.muSelfK + D.m.muSelfK);
+      let rx = (p[x] - pp[x]) - (b0 * (q[a] - qp[a]) + b1 * (q[b] - qp[b]) + b2 * (q[d] - qp[d]));
+      let ry = (p[x + 1] - pp[x + 1]) - (b0 * (q[a + 1] - qp[a + 1]) + b1 * (q[b + 1] - qp[b + 1]) + b2 * (q[d + 1] - qp[d + 1]));
+      let rz = (p[x + 2] - pp[x + 2]) - (b0 * (q[a + 2] - qp[a + 2]) + b1 * (q[b + 2] - qp[b + 2]) + b2 * (q[d + 2] - qp[d + 2]));
+      const rn = rx * nX + ry * nY + rz * nZ;
+      rx -= rn * nX; ry -= rn * nY; rz -= rn * nZ;
+      const rt = Math.sqrt(rx * rx + ry * ry + rz * rz);
+      if (rt < 1e-15) continue;
+      const pen = -Cval;
+      const f = (rt < muS * pen ? 1 : Math.min(1, (muK * pen) / rt)) / W;
+      p[x] -= w * f * rx; p[x + 1] -= w * f * ry; p[x + 2] -= w * f * rz;
+      q[a] += w0 * b0 * f * rx; q[a + 1] += w0 * b0 * f * ry; q[a + 2] += w0 * b0 * f * rz;
+      q[b] += w1 * b1 * f * rx; q[b + 1] += w1 * b1 * f * ry; q[b + 2] += w1 * b1 * f * rz;
+      q[d] += w2 * b2 * f * rx; q[d + 1] += w2 * b2 * f * ry; q[d + 2] += w2 * b2 * f * rz;
+    }
+  }
+}
+
+return { ClothContacts };
+})();
+
+// ---- src/physics/grippers.js ----
+const __M_physics_grippers = (() => {
+// Greifersysteme für biegeschlaffe Halbzeuge.
+//
+// Jedes Greiferelement berechnet aus einem physikalischen Modell die maximale Haltekraft
+// (normal C_n und tangential C_t) für jede Lage, die unter ihm liegt. Gegriffene Partikel
+// werden über eine nachgiebige XPBD-Bindung an das Element gekoppelt. Die tatsächlich
+// übertragene Kraft (Gewicht, Trägheit, Luftwiderstand, Reibung und Haftung zur
+// Nachbarlage) ergibt sich aus der Simulation. Überschreitet sie das Versagenskriterium
+// (F_n/C_n)² + (F_t/C_t)² > 1, löst sich die Lage. Doppelgriffe (2. Lage wird mitgenommen)
+// entstehen dadurch von selbst, wenn das Modell genug Haltekraft auf tiefere Lagen ergibt.
+
+const { EPS0, UNIT } = __M_physics_constants;
+const { rotY } = __M_physics_cloth;
+const { BoxCollider } = __M_physics_colliders;
+const GRIPPER_TYPES = {
+  vakuum: {
+    name: 'Vakuum-Sauggreifer',
+    short: 'Vakuum',
+    params: [
+      ['diameter', 'Saugfläche Ø', 'mm', 20, 5, 80, 1],
+      ['dpMax', 'Max. Unterdruck', 'kPa', 60, 5, 90, 1],
+      ['qMax', 'Saugvermögen', 'l/min', 12, 2, 400, 1],
+    ],
+    tauOn: 0.08, tauOff: 0.05, gap: 3e-3, shape: 'round',
+    note: 'Unterdruck-Leiternetzwerk: Volumenstrom durch die Lagen (Darcy, Luftdurchlässigkeit), seitliche Leckage zwischen den Lagen, Kennlinie des Vakuumerzeugers.',
+  },
+  nadel: {
+    name: 'Nadelgreifer',
+    short: 'Nadel',
+    params: [
+      ['needles', 'Nadelanzahl', '–', 12, 1, 60, 1],
+      ['depth', 'Einstechtiefe', 'mm', 0.3, 0.05, 5, 0.05],
+      ['size', 'Nadelfeld (Kante)', 'mm', 24, 10, 60, 1],
+    ],
+    tauOn: 0.12, tauOff: 0.1, gap: 0.3e-3, shape: 'square',
+    note: 'Haltekraft = Nadelanzahl × Auszugskraft je Nadel × Eingriffsgrad. Alle Lagen innerhalb der Einstechtiefe werden durchstochen.',
+  },
+  ea: {
+    name: 'Elektroadhäsionsgreifer',
+    short: 'Elektroadhäsion',
+    params: [
+      ['voltage', 'Spannung', 'kV', 2, 0.5, 8, 0.1],
+      ['pitch', 'Elektrodenteilung', 'mm', 1.0, 0.5, 6, 0.1],
+      ['size', 'Padkante', 'mm', 50, 15, 120, 1],
+    ],
+    tauOn: 0.25, tauOff: 0.9, gap: 2e-3, shape: 'square',
+    note: 'Maxwell-Spannung p = ½·ε₀·εr·E², Streufeld fällt mit exp(−2π·z/Teilung) ab. Restladung verzögert das Ablegen.',
+  },
+  kryo: {
+    name: 'Kryogreifer (Gefrieren)',
+    short: 'Kryo',
+    params: [
+      ['diameter', 'Gefrierfläche Ø', 'mm', 16, 5, 40, 1],
+      ['sigma', 'Eis-Haftfestigkeit', 'kPa', 30, 5, 200, 1],
+    ],
+    tauOn: 1.4, tauOff: 1.1, gap: 0.8e-3, shape: 'round',
+    note: 'Ein Wassertropfen gefriert im Gewebe. Haftung ∝ Benetzbarkeit; poröse dünne Lagen lassen Wasser in die nächste Lage durch.',
+  },
+};
+
+function defaultParams(type) {
+  const o = {};
+  for (const [k, , , def] of GRIPPER_TYPES[type].params) o[k] = def;
+  return o;
+}
+
+function footprintArea(type, p) {
+  if (type === 'vakuum') return Math.PI * (p.diameter * 0.5e-3) ** 2;
+  if (type === 'kryo') return Math.PI * (p.diameter * 0.5e-3) ** 2;
+  return (p.size * 1e-3) ** 2;
+}
+
+function footprintHalf(type, p) {
+  if (type === 'vakuum' || type === 'kryo') return p.diameter * 0.5e-3;
+  return p.size * 0.5e-3;
+}
+
+// Trifft die Senkrechte durch (x, z) das Dreieck t? Liefert die interpolierte Höhe.
+function triHit(c, t, x, z) {
+  const p = c.pos, T = c.tri;
+  const a = T[3 * t] * 3, b = T[3 * t + 1] * 3, d = T[3 * t + 2] * 3;
+  const v0x = p[d] - p[a], v0z = p[d + 2] - p[a + 2];
+  const v1x = p[b] - p[a], v1z = p[b + 2] - p[a + 2];
+  const v2x = x - p[a], v2z = z - p[a + 2];
+  const den = v0x * v1z - v1x * v0z;
+  if (Math.abs(den) < 1e-14) return null;
+  const u = (v2x * v1z - v1x * v2z) / den, v = (v0x * v2z - v2x * v0z) / den;
+  if (u < -1e-9 || v < -1e-9 || u + v > 1 + 1e-9) return null;
+  return { y: p[a + 1] + u * (p[d + 1] - p[a + 1]) + v * (p[b + 1] - p[a + 1]), u, v };
+}
+
+// Thomas-Algorithmus für tridiagonale Systeme
+function solveTri(a, b, c, d) {
+  const n = b.length, cp = new Array(n), dp = new Array(n), x = new Array(n);
+  cp[0] = c[0] / b[0]; dp[0] = d[0] / b[0];
+  for (let i = 1; i < n; i++) {
+    const m = b[i] - a[i] * cp[i - 1];
+    cp[i] = c[i] / m; dp[i] = (d[i] - a[i] * dp[i - 1]) / m;
+  }
+  x[n - 1] = dp[n - 1];
+  for (let i = n - 2; i >= 0; i--) x[i] = dp[i] - cp[i] * x[i + 1];
+  return x;
+}
+
+// Haltekraftmodell. column: [{ m: SI-Material, depthTop: Abstand Greiferfläche→Lagenoberseite [m] }]
+// covered: Bedeckungsgrad der Greiferfläche durch die oberste Lage (0…1).
+// Rückgabe: [{ Cn, Ct, info }] je Lage, ohne Aktivierungsgrad.
+function capacityModel(type, p, column, covered = 1) {
+  const A = footprintArea(type, p);
+  const out = column.map(() => ({ Cn: 0, Ct: 0 }));
+  if (!column.length) return out;
+
+  if (type === 'vakuum') {
+    const N = column.length;
+    const Qm = (p.qMax * UNIT.lPerMin) / A;      // Pumpenvolumenstrom je Fläche [m/s]
+    const pm = p.dpMax * 1e3;                    // [Pa]
+    const gRim = 2e-7 + (1 - covered) * 0.02;    // Leckage Lippenrand + offene Teilfläche (Blendenströmung, linearisiert) [m/(s·Pa)]
+    const gLat = 2e-2;                           // seitlicher Leitwert der Lagenfuge [m/(s·Pa)]
+    const k = column.map((c) => Math.max(c.m.k, 1e-9));
+    // Unbekannte u0..uN (Unterdruck in Kammer und unter den Lagen)
+    const a = [], b = [], c = [], d = [];
+    a.push(0); b.push(Qm / pm + k[0] + gRim); c.push(-k[0]); d.push(Qm);
+    for (let i = 1; i <= N; i++) {
+      const ki = k[i - 1], kn = i < N ? k[i] : 0;
+      a.push(-ki); b.push(ki + kn + gLat); c.push(i < N ? -kn : 0); d.push(0);
+    }
+    const u = solveTri(a, b, c, d);
+    for (let i = 0; i < N; i++) {
+      const F = Math.max(0, A * (u[i] - u[i + 1]));
+      out[i].Cn = F;
+      out[i].Ct = F * (i === 0 ? 0.8 : column[i].m.muSelfS);
+      out[i].info = { pressure: u[i] };
+    }
+    out.chamber = u[0];
+    out.flow = (Qm * A * (1 - u[0] / pm)) / UNIT.lPerMin;
+    return out;
+  }
+
+  if (type === 'nadel') {
+    const P = p.depth * 1e-3;
+    for (let i = 0; i < column.length; i++) {
+      const { m, depthTop } = column[i];
+      const e = Math.min(1, Math.max(0, (P - depthTop) / m.t));
+      const eng = e <= 0.15 ? 0 : e >= 1 ? 1 : ((e - 0.15) / 0.85) ** 1.5;
+      out[i].Cn = p.needles * m.needleHold * eng * covered;
+      out[i].Ct = 2.5 * out[i].Cn;
+      out[i].info = { engagement: e };
+    }
+    return out;
+  }
+
+  if (type === 'ea') {
+    const pitch = p.pitch * 1e-3;
+    const E0 = (p.voltage * 1e3) / (pitch / 2);
+    for (let i = 0; i < column.length; i++) {
+      const { m, depthTop } = column[i];
+      const z = depthTop + m.t / 2;
+      const pr = 0.5 * EPS0 * m.epsR * E0 * E0 * Math.exp((-2 * Math.PI * z) / pitch);
+      out[i].Cn = pr * A * covered;
+      out[i].Ct = 2.0 * out[i].Cn;
+      out[i].info = { pressure: pr };
+    }
+    out.field = E0;
+    return out;
+  }
+
+  if (type === 'kryo') {
+    let phi = 1;
+    const sigma = p.sigma * 1e3;
+    for (let i = 0; i < column.length; i++) {
+      const { m } = column[i];
+      out[i].Cn = sigma * A * m.wetting * phi * (i === 0 ? covered : 1);
+      out[i].Ct = out[i].Cn;
+      // Anteil des Wassers, der durch diese Lage in die nächste dringt
+      phi *= Math.min(1, m.airPerm / 3000) ** 1.5 * Math.min(1, 0.15e-3 / m.t);
+      if (phi < 1e-4) phi = 0;
+    }
+    return out;
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Greiferkopf mit Raster aus Elementen, kinematisch vom Portal geführt.
+class GripperHead {
+  constructor({ type = 'vakuum', params, rows = 3, cols = 2, pitchX = 0.14, pitchZ = 0.12 }) {
+    this.type = type;
+    this.params = params || defaultParams(type);
+    this.def = GRIPPER_TYPES[type];
+    this.pose = { x: 0, y: 1, z: 0, yaw: 0 };
+    this.elements = [];
+    this.compliance = 2e-5; // Nachgiebigkeit der Bindung Stoff–Greiferfläche [m/N]
+    const half = footprintHalf(type, this.params);
+    let n = 0;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const ox = (c - (cols - 1) / 2) * pitchX, oz = (r - (rows - 1) / 2) * pitchZ;
+      const el = {
+        index: n++, ox, oz, on: false, act: 0, half,
+        att: [],                    // {cloth, v, lx, ly, lz}
+        load: new Map(),            // cloth.id -> [Lx,Ly,Lz] gefiltert
+        acc: new Map(),             // cloth.id -> Summe im Teilschritt
+        cap: new Map(),             // cloth.id -> {Cn, Ct, ply}
+        cooldown: new Map(),        // cloth.id -> Zeit
+        since: new Map(),           // cloth.id -> Zeitpunkt des Greifens
+        frozen: new Map(),          // cloth.id -> Haltekraft beim Greifen (Aktivierung 1)
+        blocked: new Set(),         // in dieser Aktivierung bereits abgelöste Lagen
+        column: [],
+        chamber: 0,
+      };
+      const h = Math.max(half, 0.008);
+      el.collider = new BoxCollider({ name: `Greifer ${n}`, center: [0, 0, 0], half: [h, 0.015, h], material: type === 'vakuum' ? 'gummi' : 'alu', kinematic: true, visual: false });
+      this.elements.push(el);
+    }
+    this.extent = {
+      x: ((cols - 1) * pitchX) / 2 + half + 0.02,
+      z: ((rows - 1) * pitchZ) / 2 + half + 0.02,
+    };
+    this.plate = new BoxCollider({ name: 'Greiferplatte', center: [0, 0, 0], half: [this.extent.x, 0.008, this.extent.z], material: 'alu', kinematic: true, visual: false });
+    this.colliders = [...this.elements.map((e) => e.collider), this.plate];
+    this.events = [];
+  }
+
+  elementCenter(el) {
+    const [rx, rz] = rotY(el.ox, el.oz, this.pose.yaw);
+    return [this.pose.x + rx, this.pose.y, this.pose.z + rz];
+  }
+
+  updateColliders() {
+    for (const el of this.elements) {
+      const c = this.elementCenter(el);
+      el.collider.setPose([c[0], c[1] + el.collider.half[1], c[2]], this.pose.yaw);
+    }
+    this.plate.setPose([this.pose.x, this.pose.y + 0.03 + this.plate.half[1], this.pose.z], this.pose.yaw);
+  }
+
+  setActive(indices, on) {
+    for (const el of this.elements) if (!indices || indices.includes(el.index)) el.on = on;
+  }
+
+  // Abtastpunkte der Greiferfläche im Elementkoordinatensystem
+  _samples(half) {
+    const pts = [[0, 0]];
+    if (this.def.shape === 'round') {
+      for (let k = 0; k < 6; k++) { const a = (k * Math.PI) / 3; pts.push([0.65 * half * Math.cos(a), 0.65 * half * Math.sin(a)]); }
+      for (let k = 0; k < 6; k++) { const a = ((k + 0.5) * Math.PI) / 3; pts.push([0.95 * half * Math.cos(a), 0.95 * half * Math.sin(a)]); }
+    } else {
+      for (const u of [-0.9, -0.3, 0.3, 0.9]) for (const v of [-0.9, -0.3, 0.3, 0.9]) pts.push([u * half, v * half]);
+    }
+    return pts;
+  }
+
+  // Einmal pro Bildschritt: Aktivierung, Lagenspalte, Haltekräfte, neue Bindungen.
+  // Die Bedeckung der Greiferfläche wird über Abtastpunkte auf den Dreiecken der Lage
+  // bestimmt und ist damit unabhängig von der Netzauflösung.
+  updateFrame(dt, cloths, t) {
+    const def = this.def;
+    const yaw = this.pose.yaw, cs = Math.cos(yaw), sn = Math.sin(yaw);
+    for (const el of this.elements) {
+      const tau = el.on ? def.tauOn : def.tauOff;
+      el.act += ((el.on ? 1 : 0) - el.act) * (1 - Math.exp(-dt / tau));
+      if (!el.on) el.blocked.clear();
+      if (!el.on && el.act < 0.02) {
+        if (el.att.length) this._release(el, null);
+        el.column = []; el.cap.clear();
+        continue;
+      }
+      const [cx, fy, cz] = this.elementCenter(el);
+      const half = el.half, round = def.shape === 'round';
+      const maxDepth = 8e-3;
+      const samples = this._samples(half).map(([u, v]) => [cx + u * cs + v * sn, cz - u * sn + v * cs]);
+      const groups = [];
+      for (const c of cloths) {
+        const p = c.pos, h = c.h, R = half + 1.5 * h;
+        const cand = [], cells = new Set();
+        for (let v = 0; v < c.n; v++) {
+          const dx = p[3 * v] - cx, dz = p[3 * v + 2] - cz;
+          if (Math.abs(dx) > R || Math.abs(dz) > R) continue;
+          const depthTop = fy - (p[3 * v + 1] + c.radius);
+          if (depthTop < -3e-3 || depthTop > maxDepth + h) continue;
+          const lx = dx * cs - dz * sn, lz = dx * sn + dz * cs;
+          const inside = round ? lx * lx + lz * lz <= half * half : Math.abs(lx) <= half && Math.abs(lz) <= half;
+          if (inside) cand.push(v);
+          const i = v % c.nx, j = (v / c.nx) | 0;
+          for (let a = i - 1; a <= i; a++) for (let b = j - 1; b <= j; b++)
+            if (a >= 0 && b >= 0 && a < c.nx - 1 && b < c.nz - 1) cells.add(b * (c.nx - 1) + a);
+        }
+        if (!cells.size) continue;
+        let hits = 0, dsum = 0;
+        const extra = new Set();
+        for (const [sx, sz] of samples) {
+          for (const cell of cells) {
+            let found = false;
+            for (let q = 0; q < 2; q++) {
+              const tIdx = 2 * cell + q;
+              const r = triHit(c, tIdx, sx, sz);
+              if (!r) continue;
+              const depthTop = fy - (r.y + c.radius);
+              if (depthTop < -3e-3 || depthTop > maxDepth) continue;
+              hits++; dsum += depthTop; found = true;
+              const T = c.tri;
+              extra.add(T[3 * tIdx]); extra.add(T[3 * tIdx + 1]); extra.add(T[3 * tIdx + 2]);
+              break;
+            }
+            if (found) break;
+          }
+        }
+        if (!hits) continue;
+        // Greiferfläche größer als Netzweite: Knoten in der Fläche; sonst Knoten der getroffenen Dreiecke
+        const verts = cand.length >= 3 ? cand : [...new Set([...cand, ...extra])];
+        groups.push({ c, depth: dsum / hits, coverage: hits / samples.length, verts });
+      }
+      groups.sort((a, b) => a.depth - b.depth);
+      const col = groups.map((g) => ({ m: g.c.m, depthTop: Math.max(0, g.depth) }));
+      const caps = capacityModel(this.type, this.params, col, groups.length ? groups[0].coverage : 0);
+      el.chamber = caps.chamber || 0;
+      el.column = groups.map((g, k) => ({
+        cloth: g.c, ply: k, depth: g.depth, coverage: g.coverage,
+        Cn: caps[k].Cn * el.act * (k === 0 || this.type === 'vakuum' ? 1 : g.coverage),
+        Ct: caps[k].Ct * el.act * (k === 0 || this.type === 'vakuum' ? 1 : g.coverage),
+      }));
+      // Gehaltene Lagen sind relativ zur Greiferfläche fixiert; Bedeckung und Lagenaufbau
+      // ändern sich nicht mehr. Ihre Haltekraft wird beim Greifen bestimmt (× Aktivierung).
+      const held = new Set(el.att.map((a) => a.cloth.id));
+      const next = new Map();
+      for (const e of el.column) next.set(e.cloth.id, e);
+      for (const id of held) {
+        const f = el.frozen.get(id);
+        if (f) next.set(id, { ...(next.get(id) || {}), cloth: f.cloth, ply: f.ply, Cn: f.Cn * el.act, Ct: f.Ct * el.act });
+      }
+      el.cap = next;
+
+      if (!el.on || el.act < 0.5) continue;
+      // Neue Bindungen: nur zusammenhängend von oben, innerhalb des Fangbereichs
+      let above = 0;
+      for (let k = 0; k < groups.length; k++) {
+        const g = groups[k], cap = el.column[k];
+        const cd = el.cooldown.get(g.c.id);
+        const limit = this.type === 'nadel' ? this.params.depth * 1e-3 : k === 0 ? def.gap : above + 0.3e-3;
+        if (g.depth > limit) break;
+        if (cap.Cn < 2e-3 || (cd && t < cd) || el.blocked.has(g.c.id)) break;
+        const ly = -(above + g.c.radius);
+        // Gegenhalter: Liegt die Lage auf einem aktiven Saugtisch, muss die Haltekraft
+        // dessen Niederhaltekraft (Unterdruck × Greiferfläche) übersteigen.
+        const tv = this.tableVac;
+        if (tv && tv.on) {
+          const v0 = g.verts[0], P = g.c.pos;
+          const onTable = P[3 * v0 + 1] - g.c.radius < tv.top + 0.05e-3 && P[3 * v0] > tv.region[0] && P[3 * v0] < tv.region[1] && P[3 * v0 + 2] > tv.region[2] && P[3 * v0 + 2] < tv.region[3];
+          const area = def.shape === 'round' ? Math.PI * half * half : 4 * half * half;
+          if (onTable && cap.Cn <= tv.pressure * area) break;
+        }
+        // eine Lage wird je Aktivierung einmal angesaugt/eingestochen, danach nicht nachgefasst
+        if (el.since.has(g.c.id)) { above += 2 * g.c.radius; continue; }
+        let added = 0;
+        for (const v of g.verts) {
+          if (g.c.attached[v] >= 0) continue;
+          const dx = g.c.pos[3 * v] - cx, dz = g.c.pos[3 * v + 2] - cz;
+          g.c.attached[v] = el.index;
+          el.att.push({ cloth: g.c, v, lx: dx * cs - dz * sn, ly, lz: dx * sn + dz * cs });
+          added++;
+        }
+        if (added && !el.since.has(g.c.id)) {
+          el.since.set(g.c.id, t);
+          el.frozen.set(g.c.id, { cloth: g.c, ply: k, Cn: cap.Cn / Math.max(el.act, 1e-6), Ct: cap.Ct / Math.max(el.act, 1e-6) });
+          el.cap.set(g.c.id, cap);
+        }
+        above += 2 * g.c.radius;
+      }
+    }
+  }
+
+  // Jeder Teilschritt: Bindungen lösen (XPBD), übertragene Kräfte summieren.
+  solve(dt) {
+    const inv = 1 / (dt * dt);
+    const at = this.compliance * inv;
+    const yaw = this.pose.yaw;
+    const cs = Math.cos(yaw), sn = Math.sin(yaw);
+    for (const el of this.elements) {
+      if (!el.att.length) continue;
+      el.acc.clear();
+      const [cx, cy, cz] = this.elementCenter(el);
+      for (const a of el.att) {
+        const c = a.cloth, p = c.pos, i = 3 * a.v, w = c.w[a.v];
+        const tx = cx + a.lx * cs + a.lz * sn, ty = cy + a.ly, tz = cz - a.lx * sn + a.lz * cs;
+        const dx = p[i] - tx, dy = p[i + 1] - ty, dz = p[i + 2] - tz;
+        const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (len < 1e-12 || w === 0) continue;
+        const dl = -len / (w + at);
+        const s = (w * dl) / len;
+        p[i] += s * dx; p[i + 1] += s * dy; p[i + 2] += s * dz;
+        // Kraft auf das Partikel = dl·n/Δt²; Last am Greifer = −Kraft
+        const f = (-dl * inv) / len;
+        let L = el.acc.get(c.id);
+        if (!L) { L = [0, 0, 0]; el.acc.set(c.id, L); }
+        L[0] += f * dx; L[1] += f * dy; L[2] += f * dz;
+      }
+    }
+  }
+
+  // Nach jedem Teilschritt: Last filtern und Versagen prüfen.
+  checkFailure(dt, t) {
+    const k = 1 - Math.exp(-dt / 0.01);
+    for (const el of this.elements) {
+      if (!el.att.length) { el.load.clear(); continue; }
+      for (const [id, L] of el.acc) {
+        let F = el.load.get(id);
+        if (!F) { F = [0, 0, 0]; el.load.set(id, F); }
+        F[0] += (L[0] - F[0]) * k; F[1] += (L[1] - F[1]) * k; F[2] += (L[2] - F[2]) * k;
+        const cap = el.cap.get(id);
+        const Cn = cap ? cap.Cn : 0, Ct = cap ? cap.Ct : 0;
+        const Fn = Math.max(0, -F[1]), Ft = Math.hypot(F[0], F[2]);
+        const u = (Cn > 0 ? (Fn / Cn) ** 2 : Fn > 1e-6 ? 1e9 : 0) + (Ct > 0 ? (Ft / Ct) ** 2 : Ft > 1e-6 ? 1e9 : 0);
+        if (u > 1) {
+          const cloth = el.att.find((a) => a.cloth.id === id)?.cloth;
+          if (!cloth) continue;
+          const regular = !el.on;
+          const ply = el.frozen.get(id)?.ply ?? 0;
+          this._release(el, id);
+          el.cooldown.set(id, t + 0.4);
+          if (el.on) el.blocked.add(id);
+          if (!regular) this.events.push({ t, type: ply === 0 ? 'loss' : 'separate', el: el.index, cloth, Fn, Ft, Cn, Ct });
+        }
+      }
+    }
+  }
+
+  _release(el, clothId) {
+    const keep = [];
+    for (const a of el.att) {
+      if (clothId === null || a.cloth.id === clothId) a.cloth.attached[a.v] = -1;
+      else keep.push(a);
+    }
+    el.att = keep;
+    if (clothId === null) { el.load.clear(); el.since.clear(); el.frozen.clear(); }
+    else { el.load.delete(clothId); el.since.delete(clothId); el.frozen.delete(clothId); }
+  }
+
+  releaseAll() { for (const el of this.elements) { el.on = false; el.act = 0; this._release(el, null); } }
+
+  // Telemetrie je Element: gegriffene Lagen mit Last und Kapazität
+  status() {
+    return this.elements.map((el) => {
+      const held = new Map();
+      for (const a of el.att) held.set(a.cloth.id, (held.get(a.cloth.id) || 0) + 1);
+      const plies = [];
+      for (const e of el.column) {
+        const F = el.load.get(e.cloth.id) || [0, 0, 0];
+        plies.push({ cloth: e.cloth, ply: e.ply, held: held.get(e.cloth.id) || 0, Fn: Math.max(0, -F[1]), Ft: Math.hypot(F[0], F[2]), Cn: e.Cn, Ct: e.Ct });
+      }
+      return { index: el.index, on: el.on, act: el.act, plies, chamber: el.chamber };
+    });
+  }
+}
+
+return { GRIPPER_TYPES, defaultParams, footprintHalf, triHit, capacityModel, GripperHead };
+})();
+
+// ---- src/physics/sewing.js ----
+const __M_physics_sewing = (() => {
+// Industrienähmaschine mit Untertransport (Transporteur), Nähfuß und Nadel.
+//
+// Stofftransport (explizites Reibmodell im Nähfußbereich):
+//  • Normalkraft: Nähfußdruck F_F verteilt auf die Knoten unter dem Fuß.
+//  • Untere Lage: vom Transporteur mitgenommen, solange μ_T·F_N reicht (sonst Schlupf).
+//  • Obere Lagen: Reibkopplung zur Lage darunter (μ Stoff/Stoff), gebremst durch die
+//    Reibung am Nähfuß (μ Stoff/Stahl bzw. PTFE). Daraus entsteht die bekannte
+//    Lagenverschiebung beim Nähen mehrerer Lagen.
+//  • Nadel im Stoff (Phase 0…0,45): alle Lagen an der Einstichstelle fixiert.
+//  • Jeder Einstich erzeugt einen Stich, der die Lagen mechanisch verbindet.
+
+const { BoxCollider } = __M_physics_colliders;
+const { SOLIDS } = __M_physics_materials;
+class SewingMachine {
+  constructor({ needle = [0.62, 0.8, -0.12], feedDir = [0, 0, -1] } = {}) {
+    this.needle = [...needle];       // Einstichpunkt auf Stichplattenhöhe
+    this.feedDir = feedDir;
+    this.rpm = 600;
+    this.stitchLength = 3.0;         // mm
+    this.footForce = 40;             // N
+    this.footMaterial = 'stahl';
+    this.dogMu = 0.9;                // Transporteur (gezahnt) gegen Stoff
+    this.footUp = true;
+    this.footLift = 8e-3;
+    this.half = [0.009, 0.016];      // Nähfuß halbe Breite (x) / Länge (z)
+    this.sewing = false;
+    this.sewTarget = 0;
+    this.stitches = 0;
+    this.phase = 0.6;
+    this.lastPhase = 0.6;
+    this.stitchPoints = [];          // {cloth, tri, b0, b1, b2}
+    this.joins = [];                 // {ca, va, cb, vb, rest}
+    this.needleDepth = 0;            // für Darstellung (0 = oben, 1 = unten)
+    this.pinned = [];
+    this.order = new Map();             // Lagenreihenfolge unter dem Fuß
+    this.foot = new BoxCollider({ name: 'Nähfuß', center: [needle[0], needle[1] + this.footLift + 0.004, needle[2]], half: [this.half[0], 0.004, this.half[1]], material: 'stahl', kinematic: true, visual: false });
+    this.footY = needle[1] + this.footLift;
+  }
+
+  startSew(length, rpm, stitch) {
+    if (rpm) this.rpm = rpm;
+    if (stitch) this.stitchLength = stitch;
+    this.sewTarget = Math.max(1, Math.round((length * 1000) / this.stitchLength));
+    this.stitches = 0;
+    this.sewing = true;
+  }
+
+  get busy() { return this.sewing; }
+
+  update(t, dt) {
+    if (this.sewing) {
+      this.lastPhase = this.phase;
+      this.phase += (this.rpm / 60) * dt;
+      if (this.phase >= 1) {
+        this.phase -= 1;
+        this._pendingStitch = true;
+      }
+    } else if (this.phase < 0.5 || this.phase > 0.95) {
+      // Nadel in Hochstellung fahren
+      this.phase = Math.min(0.6, this.phase + (this.rpm / 60) * dt);
+      if (this.phase > 0.95) this.phase = 0.6;
+    }
+    const ph = this.phase;
+    this.needleDepth = 0.5 + 0.5 * Math.cos(2 * Math.PI * (ph - 0.2));
+    const top = this.footUp ? this.needle[1] + this.footLift : this.footY;
+    this.foot.setPose([this.needle[0], top + this.foot.half[1], this.needle[2]]);
+    this.foot.enabled = this.footUp;
+  }
+
+  feedVelocity() {
+    const ph = this.phase;
+    if (!this.sewing || ph < 0.5 || ph > 0.95) return 0;
+    const u = (ph - 0.5) / 0.45;
+    // Transporteurbahn: s(u) = L·(u − sin(2πu)/2π)  →  v = L·(1 − cos 2πu)/T
+    const L = this.stitchLength * 1e-3;
+    return (L * (1 - Math.cos(2 * Math.PI * u)) * (this.rpm / 60)) / 0.45;
+  }
+
+  // Gruppiert die Knoten unter dem Fuß nach Lagen (von unten nach oben)
+  _zone(cloths) {
+    const [nx0, ny0, nz0] = this.needle;
+    const groups = [];
+    for (const c of cloths) {
+      const p = c.pos, idx = [];
+      let ys = 0;
+      for (let v = 0; v < c.n; v++) {
+        const dx = p[3 * v] - nx0, dz = p[3 * v + 2] - nz0;
+        if (Math.abs(dx) > this.half[0] || Math.abs(dz) > this.half[1]) continue;
+        if (p[3 * v + 1] > ny0 + 0.012) continue;
+        idx.push(v); ys += p[3 * v + 1];
+      }
+      if (idx.length) groups.push({ c, idx, y: ys / idx.length });
+    }
+    // Lagenreihenfolge beim ersten Erfassen festhalten (die Höhenunterschiede liegen im
+    // Bereich der Stoffdicke; eine laufende Neusortierung könnte Lagen vertauschen)
+    for (const g of groups) if (!this.order.has(g.c.id)) this.order.set(g.c.id, g.y);
+    groups.sort((a, b) => this.order.get(a.c.id) - this.order.get(b.c.id));
+    return groups;
+  }
+
+  // Nach dem Teilschritt aufrufen: kinematisch geführte Knoten wieder freigeben
+  unpin() {
+    const P = this.pinned;
+    for (let k = 0; k < P.length; k += 3) P[k].w[P[k + 1]] = P[k + 2];
+    P.length = 0;
+  }
+
+  solve(cloths, dt, t) {
+    // Stiche (bleibende Verbindungen der Lagen)
+    for (const j of this.joins) this._solveJoin(j);
+    if (this.footUp) { this.order.clear(); return; }
+    const groups = this._zone(cloths);
+    if (!groups.length) {
+      this.footY = this.needle[1];
+      if (this._pendingStitch) { this._pendingStitch = false; this.stitches++; this.emptyStitches = (this.emptyStitches || 0) + 1; if (this.stitches >= this.sewTarget) this.sewing = false; }
+      return;
+    }
+    let stack = 0;
+    for (const g of groups) stack += 2 * g.c.radius;
+    this.footY = this.needle[1] + stack;
+
+    const dt2 = dt * dt;
+    const vf = this.feedVelocity();
+    const fx = this.feedDir[0] * vf * dt, fz = this.feedDir[2] * vf * dt;
+    const needleIn = this.sewing && this.phase < 0.45;
+    const muFoot = (SOLIDS[this.footMaterial]?.frictionFactor ?? 1);
+    let below = null, yBase = this.needle[1];
+    for (let k = 0; k < groups.length; k++) {
+      const { c, idx } = groups[k];
+      const p = c.pos, pp = c.prev;
+      const Fn = this.footForce / idx.length;
+      // Nähfuß drückt von oben, Stichplatte stützt von unten
+      const yMin = yBase + c.radius;
+      yBase += 2 * c.radius;
+      const yCap = this.needle[1] + stack - c.radius * (2 * (groups.length - 1 - k) + 1);
+      let mdx = 0, mdz = 0;
+      for (const v of idx) {
+        const i = 3 * v, w = c.w[v];
+        if (w === 0) continue;
+        const lim = (mu) => mu * Fn * dt2 * w;
+        let dx = p[i] - pp[i], dz = p[i + 2] - pp[i + 2];
+        // Sollverschiebung aus der Lage darunter bzw. dem Transporteur
+        let tx, tz, mu;
+        if (k === 0) { tx = fx; tz = fz; mu = this.dogMu; }
+        else { tx = below[0]; tz = below[1]; mu = 0.5 * (c.m.muSelfS + groups[k - 1].c.m.muSelfS); }
+        let cx = tx - dx, cz = tz - dz;
+        let cl = Math.hypot(cx, cz), L = lim(mu);
+        if (cl > L) { cx *= L / cl; cz *= L / cl; }
+        p[i] += cx; p[i + 2] += cz; dx += cx; dz += cz;
+        // oberste Lage: Der Nähfuß bremst mit μ_Fuß·F_N, die Lage darunter treibt mit μ_SS·F_N.
+        // Ist die Bremsreibung größer, bleibt die obere Lage am Fuß hängen (Lagenverschiebung).
+        if (k > 0 && k === groups.length - 1 && c.m.muSteelK * muFoot > mu) {
+          p[i] -= dx; p[i + 2] -= dz; dx = 0; dz = 0;
+        }
+        if (needleIn) { p[i] -= dx; p[i + 2] -= dz; dx = 0; dz = 0; }
+        if (p[i + 1] > yCap) p[i + 1] = yCap;
+        if (p[i + 1] < yMin) p[i + 1] = yMin;
+        mdx += dx; mdz += dz;
+        // Haftreibung erfüllt: Knoten bis zum Ende des Teilschritts kinematisch führen
+        if (Math.hypot(cx, cz) < L * 0.999) { this.pinned.push(c, v, w); c.w[v] = 0; }
+      }
+      below = [mdx / idx.length, mdz / idx.length];
+    }
+
+    if (this._pendingStitch) {
+      this._pendingStitch = false;
+      this._makeStitch(groups);
+      this.stitches++;
+      if (this.stitches >= this.sewTarget) this.sewing = false;
+    }
+  }
+
+  _makeStitch(groups) {
+    // Einstichpunkt in jeder Lage als materieller Punkt (baryzentrisch im Dreieck)
+    const hits = groups.map((g) => ({ c: g.c, hit: locateTriangle(g.c, this.needle[0], this.needle[2]) })).filter((h) => h.hit);
+    if (!hits.length) return;
+    const top = hits[hits.length - 1];
+    this.stitchPoints.push({ cloth: top.c, ...top.hit });
+    // Der Faden verbindet benachbarte Lagen an der Einstichstelle (trägt nur Zug)
+    for (let k = 1; k < hits.length; k++) {
+      const a = hits[k - 1], b = hits[k];
+      this.joins.push({ ca: a.c, ta: a.hit.tri, ba: [a.hit.b0, a.hit.b1, a.hit.b2], cb: b.c, tb: b.hit.tri, bb: [b.hit.b0, b.hit.b1, b.hit.b2], rest: a.c.radius + b.c.radius });
+    }
+  }
+
+  _solveJoin(j) {
+    const A = j.ca, B = j.cb, pa = A.pos, pb = B.pos;
+    const ia = [A.tri[3 * j.ta], A.tri[3 * j.ta + 1], A.tri[3 * j.ta + 2]];
+    const ib = [B.tri[3 * j.tb], B.tri[3 * j.tb + 1], B.tri[3 * j.tb + 2]];
+    let ax = 0, ay = 0, az = 0, bx = 0, by = 0, bz = 0, W = 0;
+    for (let k = 0; k < 3; k++) {
+      const u = 3 * ia[k], v = 3 * ib[k];
+      ax += j.ba[k] * pa[u]; ay += j.ba[k] * pa[u + 1]; az += j.ba[k] * pa[u + 2];
+      bx += j.bb[k] * pb[v]; by += j.bb[k] * pb[v + 1]; bz += j.bb[k] * pb[v + 2];
+      W += A.w[ia[k]] * j.ba[k] ** 2 + B.w[ib[k]] * j.bb[k] ** 2;
+    }
+    const dx = bx - ax, dy = by - ay, dz = bz - az;
+    const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (len <= j.rest || len < 1e-12 || !W) return;
+    const s = (len - j.rest) / (len * W);
+    for (let k = 0; k < 3; k++) {
+      const u = 3 * ia[k], v = 3 * ib[k];
+      const fa = A.w[ia[k]] * j.ba[k] * s, fb = B.w[ib[k]] * j.bb[k] * s;
+      pa[u] += fa * dx; pa[u + 1] += fa * dy; pa[u + 2] += fa * dz;
+      pb[v] -= fb * dx; pb[v + 1] -= fb * dy; pb[v + 2] -= fb * dz;
+    }
+  }
+
+  reset() {
+    this.stitchPoints = []; this.joins = []; this.sewing = false; this.footUp = true; this.phase = 0.6;
+  }
+}
+
+// Sucht das Dreieck einer Lage, das den Punkt (x, z) in Draufsicht enthält.
+function locateTriangle(c, x, z) {
+  const p = c.pos, T = c.tri;
+  for (let t = 0; t < c.nTri; t++) {
+    const a = T[3 * t] * 3, b = T[3 * t + 1] * 3, d = T[3 * t + 2] * 3;
+    const v0x = p[d] - p[a], v0z = p[d + 2] - p[a + 2];
+    const v1x = p[b] - p[a], v1z = p[b + 2] - p[a + 2];
+    const v2x = x - p[a], v2z = z - p[a + 2];
+    const d00 = v0x * v0x + v0z * v0z, d01 = v0x * v1x + v0z * v1z, d02 = v0x * v2x + v0z * v2z;
+    const d11 = v1x * v1x + v1z * v1z, d12 = v1x * v2x + v1z * v2z;
+    const den = d00 * d11 - d01 * d01;
+    if (Math.abs(den) < 1e-14) continue;
+    const u = (d11 * d02 - d01 * d12) / den, v = (d00 * d12 - d01 * d02) / den;
+    if (u >= -1e-6 && v >= -1e-6 && u + v <= 1 + 1e-6) return { tri: t, b0: 1 - u - v, b1: v, b2: u };
+  }
+  return null;
+}
+
+return { SewingMachine, locateTriangle };
+})();
+
+// ---- src/physics/robot.js ----
+const __M_physics_robot = (() => {
+// Kartesischer Portalroboter (X, Y, Z, Drehachse C) mit ruckbegrenzungsfreiem
+// Trapez-Geschwindigkeitsprofil und einer einfachen Ablaufsprache.
+//
+// Befehle (eine Anweisung je Zeile, Kommentare mit # oder ;):
+//   SPEED v            max. Bahngeschwindigkeit [m/s]
+//   ACCEL a            max. Bahnbeschleunigung [m/s²]
+//   MOVE x y z [c°]    absolute Zielposition der Greiferfläche [m], Drehung [°]
+//   MOVEREL dx dy dz [dc°]
+//   TOUCH [v]          senkrecht absenken bis Kontakt (Tastsensor), v [m/s]
+//   GRIP ON|OFF [1,2…] Greiferelemente (alle oder Auswahl)
+//   WAIT t             warten [s]
+//   FOOT UP|DOWN       Nähfuß heben/senken
+//   TABLEVAC ON|OFF    Saugtisch im Nähbereich
+//   SEW L [rpm] [mm] [SYNC]  Naht starten (läuft parallel weiter); SYNC koppelt den
+//                      Greifer an die Transporteurbewegung (synchrones Mitführen)
+//   WAITSEW            warten, bis die Naht fertig ist
+//   HOME               Grundstellung
+
+const ROT_WEIGHT = 0.2; // m je rad für die Bahnlänge
+
+function parseProgram(text) {
+  const lines = text.split(/\r?\n/);
+  const out = [];
+  lines.forEach((raw, i) => {
+    const line = raw.replace(/[#;].*$/, '').trim();
+    if (!line) return;
+    const parts = line.split(/[\s]+/);
+    const cmd = parts[0].toUpperCase();
+    const nums = parts.slice(1).map((s) => s.replace(',', '.'));
+    out.push({ line: i, cmd, args: parts.slice(1), nums: nums.map(Number), raw: line });
+  });
+  return out;
+}
+
+const KNOWN = new Set(['SPEED', 'ACCEL', 'MOVE', 'MOVEREL', 'TOUCH', 'GRIP', 'WAIT', 'FOOT', 'SEW', 'WAITSEW', 'HOME', 'TABLEVAC']);
+
+function validateProgram(prog) {
+  const errs = [];
+  for (const p of prog) {
+    if (!KNOWN.has(p.cmd)) errs.push(`Zeile ${p.line + 1}: unbekannter Befehl „${p.cmd}“`);
+    if ((p.cmd === 'MOVE' || p.cmd === 'MOVEREL') && (p.nums.length < 3 || p.nums.slice(0, 3).some(Number.isNaN)))
+      errs.push(`Zeile ${p.line + 1}: ${p.cmd} braucht drei Zahlen`);
+  }
+  return errs;
+}
+
+class GantryRobot {
+  constructor({ home = { x: 0, y: 1.15, z: 0.05, yaw: 0 }, limits } = {}) {
+    this.home = { ...home };
+    this.pose = { ...home };
+    this.vmax = 0.5; this.amax = 2.0;
+    this.limits = limits || { x: [-0.95, 1.05], y: [0.78, 1.5], z: [-0.4, 0.45] };
+    this.reset();
+  }
+
+  reset() {
+    this.pose = { ...this.home };
+    this.vmax = 0.5; this.amax = 2.0;
+    this.prog = [];
+    this.pc = 0;
+    this.running = false;
+    this.seg = null;
+    this.waitUntil = 0;
+    this.current = null;
+    this.speed = 0;
+    this.follow = false;
+  }
+
+  load(text) {
+    this.prog = parseProgram(text);
+    this.pc = 0; this.seg = null; this.current = null;
+    return validateProgram(this.prog);
+  }
+
+  start() { if (this.pc >= this.prog.length) this.pc = 0; this.running = true; }
+  stop() { this.running = false; }
+
+  _clamp(p) {
+    const L = this.limits;
+    p.x = Math.min(L.x[1], Math.max(L.x[0], p.x));
+    p.y = Math.min(L.y[1], Math.max(L.y[0], p.y));
+    p.z = Math.min(L.z[1], Math.max(L.z[0], p.z));
+    return p;
+  }
+
+  moveTo(target, t) {
+    const a = { ...this.pose }, b = this._clamp({ ...target });
+    const D = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z, (b.yaw - a.yaw) * ROT_WEIGHT);
+    const v = this.vmax, ac = this.amax;
+    let ta, tc, vp;
+    if (D < 1e-9) { this.seg = { a, b, t0: t, T: 0, D, ta: 0, tc: 0, vp: 0 }; return; }
+    if (D > (v * v) / ac) { ta = v / ac; tc = (D - v * ta) / v; vp = v; }
+    else { ta = Math.sqrt(D / ac); tc = 0; vp = ac * ta; }
+    this.seg = { a, b, t0: t, T: 2 * ta + tc, D, ta, tc, vp, ac };
+  }
+
+  _segPose(seg, t) {
+    const tau = Math.min(seg.T, Math.max(0, t - seg.t0));
+    let s, v;
+    const { ta, tc, vp, ac, D } = seg;
+    if (seg.T === 0) { s = 0; v = 0; }
+    else if (tau < ta) { s = 0.5 * ac * tau * tau; v = ac * tau; }
+    else if (tau < ta + tc) { s = 0.5 * ac * ta * ta + vp * (tau - ta); v = vp; }
+    else { const r = seg.T - tau; s = D - 0.5 * ac * r * r; v = ac * r; }
+    const f = seg.D > 0 ? s / seg.D : 1;
+    const { a, b } = seg;
+    return { pose: { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, z: a.z + (b.z - a.z) * f, yaw: a.yaw + (b.yaw - a.yaw) * f }, v };
+  }
+
+  // ctx: { head, machine, contact(): bool, log(msg) }
+  update(t, dt, ctx) {
+    // synchrones Mitführen mit dem Transporteur
+    if (this.follow) {
+      if (ctx.machine.sewing) {
+        const v = ctx.machine.feedVelocity(), d = ctx.machine.feedDir;
+        this.pose = { ...this.pose, x: this.pose.x + d[0] * v * dt, z: this.pose.z + d[2] * v * dt };
+        this.speed = v;
+      } else this.follow = false;
+    }
+    // laufende Bewegung
+    if (this.seg) {
+      if (this.seg.touch) {
+        const step = this.seg.v * dt;
+        if (ctx.contact() || this.pose.y - step < this.limits.y[0] || this.seg.travel > 0.3) {
+          this.seg = null; this.speed = 0;
+        } else { this.pose.y -= step; this.seg.travel += step; this.speed = this.seg.v; }
+      } else {
+        const r = this._segPose(this.seg, t);
+        this.pose = r.pose; this.speed = r.v;
+        if (t - this.seg.t0 >= this.seg.T) { this.pose = { ...this.seg.b }; this.seg = null; this.speed = 0; }
+      }
+      if (this.seg) return;
+    }
+    if (!this.running) return;
+    if (t < this.waitUntil) return;
+    if (this.current && this.current.cmd === 'WAITSEW' && ctx.machine.busy) return;
+    // nächste Anweisung
+    while (this.running && !this.seg && t >= this.waitUntil) {
+      if (this.pc >= this.prog.length) { this.running = false; this.current = null; ctx.log?.('Programm beendet'); return; }
+      const ins = this.prog[this.pc++];
+      this.current = ins;
+      const n = ins.nums;
+      switch (ins.cmd) {
+        case 'SPEED': this.vmax = Math.max(0.001, n[0]); break;
+        case 'ACCEL': this.amax = Math.max(0.01, n[0]); break;
+        case 'MOVE': this.moveTo({ x: n[0], y: n[1], z: n[2], yaw: Number.isFinite(n[3]) ? (n[3] * Math.PI) / 180 : this.pose.yaw }, t); break;
+        case 'MOVEREL': this.moveTo({ x: this.pose.x + n[0], y: this.pose.y + n[1], z: this.pose.z + n[2], yaw: this.pose.yaw + (Number.isFinite(n[3]) ? (n[3] * Math.PI) / 180 : 0) }, t); break;
+        case 'HOME': this.moveTo(this.home, t); break;
+        case 'TOUCH': this.seg = { touch: true, v: Number.isFinite(n[0]) ? n[0] : 0.02, travel: 0 }; break;
+        case 'WAIT': this.waitUntil = t + (n[0] || 0); break;
+        case 'GRIP': {
+          const on = (ins.args[0] || '').toUpperCase() === 'ON';
+          const sel = ins.args[1] ? ins.args.slice(1).join(',').split(',').map((s) => parseInt(s, 10) - 1).filter((x) => x >= 0) : null;
+          ctx.head.setActive(sel, on);
+          ctx.log?.(`Greifer ${on ? 'EIN' : 'AUS'}${sel ? ' (' + sel.map((s) => s + 1).join(',') + ')' : ''}`);
+          break;
+        }
+        case 'FOOT': ctx.machine.footUp = (ins.args[0] || '').toUpperCase() === 'UP'; break;
+        case 'TABLEVAC':
+          if (ctx.machine.tableVac) ctx.machine.tableVac.on = (ins.args[0] || '').toUpperCase() === 'ON';
+          ctx.log?.(`Saugtisch ${ctx.machine.tableVac?.on ? 'EIN' : 'AUS'}`);
+          break;
+        case 'SEW':
+          ctx.machine.startSew(n[0] || 0.1, Number.isFinite(n[1]) ? n[1] : undefined, Number.isFinite(n[2]) ? n[2] : undefined);
+          this.follow = ins.args.some((a) => a.toUpperCase() === 'SYNC');
+          ctx.log?.(`Nähen ${((n[0] || 0.1) * 100).toFixed(1)} cm`);
+          break;
+        case 'WAITSEW': if (ctx.machine.busy) return; break;
+        default: break;
+      }
+    }
+  }
+}
+
+return { ROT_WEIGHT, parseProgram, validateProgram, GantryRobot };
+})();
+
+// ---- src/physics/world.js ----
+const __M_physics_world = (() => {
+// Simulationswelt: Halle, Stapeltisch, Nähtisch mit Industrienähmaschine, Portalroboter
+// mit Greiferkopf und ein Stapel Zuschnitte. Zeitintegration mit festen Teilschritten.
+
+const { G, AIR } = __M_physics_constants;
+const { fabricById } = __M_physics_materials;
+const { Cloth, rotY } = __M_physics_cloth;
+const { BoxCollider } = __M_physics_colliders;
+const { ClothContacts } = __M_physics_collision;
+const { GripperHead, defaultParams } = __M_physics_grippers;
+const { SewingMachine } = __M_physics_sewing;
+const { GantryRobot } = __M_physics_robot;
+const TABLE_TOP = 0.80;
+const STACK_POS = [-0.5, 0.05];
+const NEEDLE = [0.62, TABLE_TOP, -0.12];
+
+const DEFAULT_PROGRAM = `# Pick & Place zweier Zuschnitte und robotergeführte Naht
+# Koordinaten in m (y = Höhe der Greiferfläche), Drehung in °
+
+# 1. Lage vom Stapel nehmen
+SPEED 0.5
+ACCEL 2
+MOVE -0.5 0.95 0.05 0       # über den Stapel
+SPEED 0.12
+MOVE -0.5 0.81 0.05
+TOUCH 0.01                  # Tastfahrt bis Kontakt mit der obersten Lage
+GRIP ON
+WAIT 0.3                    # Haltekraft aufbauen
+SPEED 0.03
+MOVEREL 0 0.04 0            # langsam abheben: mitgesaugte Unterlage fällt ab
+WAIT 0.3
+SPEED 0.5
+MOVE -0.5 0.95 0.05
+MOVE 0.485 0.95 0.12        # Transport zur Nähmaschine
+SPEED 0.12
+MOVE 0.485 0.815 0.12
+TOUCH 0.01
+SPEED 0.05
+MOVEREL 0 0.003 -0.05       # Vorderkante unter den Nähfuß schieben
+GRIP OFF
+TABLEVAC ON                 # Saugtisch hält die untere Lage
+WAIT 0.3
+SPEED 0.3
+MOVEREL 0 0.12 0
+
+# 2. Lage holen und deckungsgleich auflegen
+SPEED 0.5
+MOVE -0.5 0.95 0.05
+SPEED 0.12
+MOVE -0.5 0.81 0.05
+TOUCH 0.01
+GRIP ON
+WAIT 0.3
+SPEED 0.03
+MOVEREL 0 0.04 0
+WAIT 0.3
+SPEED 0.5
+MOVE -0.5 0.95 0.05
+MOVE 0.485 0.95 0.12
+SPEED 0.12
+MOVE 0.485 0.815 0.12
+TOUCH 0.01
+SPEED 0.05
+MOVEREL 0 0.003 -0.05       # über die gehaltene 1. Lage schieben
+
+# robotergeführte Naht: 20 cm, 600 1/min, 3 mm Stichlänge.
+# SYNC koppelt die Z-Achse elektronisch an den Transporteur.
+FOOT DOWN
+TABLEVAC OFF
+WAIT 0.2
+SEW 0.20 600 3 SYNC
+WAITSEW
+FOOT UP
+GRIP OFF
+WAIT 0.4
+SPEED 0.3
+MOVEREL 0 0.12 0
+HOME
+`;
+
+function defaultConfig() {
+  return {
+    fabricId: 'popeline',
+    customFabric: null,
+    plies: 4,
+    plyW: 0.30,
+    plyL: 0.40,
+    spacing: 0.0125,
+    substeps: 16,
+    iterations: 1,
+    limitLoad: 10,       // Linienlast [N/m], ab der die Dehnungsbegrenzung greift
+    gripper: 'vakuum',
+    gripperParams: defaultParams('vakuum'),
+    rows: 3, cols: 3, pitchX: 0.11, pitchZ: 0.14,
+    rpm: 600, stitch: 3, footForce: 40, footMaterial: 'stahl',
+    tableMaterial: 'hpl',
+    tableVacPa: 800,     // wirksamer Unterdruck des Saugtischs [Pa]
+    selfCollision: true,
+    program: DEFAULT_PROGRAM,
+    seed: 7,
+  };
+}
+
+function rng(seed) {
+  let s = seed >>> 0;
+  return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+}
+
+class World {
+  constructor(cfg = defaultConfig()) {
+    this.cfg = cfg;
+    this.build();
+  }
+
+  build() {
+    const c = this.cfg;
+    this.t = 0;
+    this.events = [];
+    this.fabric = c.customFabric || fabricById(c.fabricId);
+    const T = TABLE_TOP;
+    this.colliders = [
+      new BoxCollider({ name: 'Hallenboden', center: [0, -0.05, 0], half: [4, 0.05, 4], material: 'beton', visual: false }),
+      new BoxCollider({ name: 'Stapeltisch', center: [STACK_POS[0], T - 0.02, STACK_POS[1]], half: [0.35, 0.02, 0.3], material: c.tableMaterial }),
+      new BoxCollider({ name: 'Nähtisch', center: [0.55, T - 0.02, 0.05], half: [0.45, 0.02, 0.3], material: c.tableMaterial }),
+      new BoxCollider({ name: 'Stichplatte', center: [NEEDLE[0] + 0.13, T - 0.004, NEEDLE[2]], half: [0.18, 0.004, 0.07], material: 'stahl', color: '#c9cdd2' }),
+      new BoxCollider({ name: 'Nähkopf', center: [NEEDLE[0] + 0.02, T + 0.2, NEEDLE[2]], half: [0.05, 0.08, 0.05], material: 'guss' }),
+      new BoxCollider({ name: 'Arm', center: [NEEDLE[0] + 0.2, T + 0.23, NEEDLE[2]], half: [0.16, 0.04, 0.045], material: 'guss' }),
+      new BoxCollider({ name: 'Ständer', center: [NEEDLE[0] + 0.33, T + 0.12, NEEDLE[2]], half: [0.05, 0.12, 0.055], material: 'guss' }),
+    ];
+    this.colliders[2].vacuum = true; // Nähtisch mit Saugfeld
+    this.staticColliders = this.colliders.slice();
+
+    // Stapel aus Zuschnitten mit realistischer Legetoleranz (±1,5 mm, ±0,5°)
+    const R = rng(c.seed);
+    this.cloths = [];
+    const t = this.fabric.thickness * 1e-3;
+    for (let i = 0; i < c.plies; i++) {
+      const y = T + t * (i + 0.5) + 1e-5;
+      const cloth = new Cloth({
+        fabric: this.fabric, width: c.plyW, length: c.plyL, spacing: c.spacing,
+        center: [STACK_POS[0] + (R() - 0.5) * 0.003, y, STACK_POS[1] + (R() - 0.5) * 0.003],
+        yaw: ((R() - 0.5) * Math.PI) / 180, name: `Lage ${c.plies - i}`,
+      });
+      cloth.stackIndex = c.plies - i; // 1 = oberste
+      this.cloths.push(cloth);
+    }
+    this.cloths.sort((a, b) => a.stackIndex - b.stackIndex);
+    this.cloths.reverse(); // unterste zuerst (Darstellungsreihenfolge egal)
+
+    this.head = new GripperHead({ type: c.gripper, params: { ...defaultParams(c.gripper), ...c.gripperParams }, rows: c.rows, cols: c.cols, pitchX: c.pitchX, pitchZ: c.pitchZ });
+    this.robot = new GantryRobot();
+    this.machine = new SewingMachine({ needle: NEEDLE });
+    // Saugtisch im Nähbereich: hält aufliegende Lagen über Unterdruck (erhöht die Normalkraft)
+    this.tableVac = { on: false, pressure: c.tableVacPa ?? 800, region: [0.345, 0.625, -0.12, 0.25], top: T }; // Saugfeld unter der 1. Lage (Zonensteuerung)
+    this.machine.tableVac = this.tableVac;
+    this.head.tableVac = this.tableVac;
+    Object.assign(this.machine, { rpm: c.rpm, stitchLength: c.stitch, footForce: c.footForce, footMaterial: c.footMaterial });
+    this.contacts = new ClothContacts();
+    this.contacts.selfCollision = c.selfCollision;
+    this.kinematic = [...this.head.colliders, this.machine.foot];
+    this.colliders.push(...this.kinematic);
+    this.head.pose = { ...this.robot.pose };
+    this.head.updateColliders();
+    this.track = new Map(this.cloths.map((cl) => [cl.id, { state: 'Stapel', held: false, error: null, warnedStrain: false }]));
+    this.cycle = { gripY: null, double: false };
+    this.robot.load(c.program);
+    this.stats = { maxSpeed: 0 };
+  }
+
+  log(msg, level = 'info') {
+    this.events.push({ t: this.t, msg, level });
+    if (this.events.length > 300) this.events.shift();
+  }
+
+  // Tastsensor: höchste Oberfläche unter den Greiferelementen (inkl. gehaltener Lagen).
+  // Einmal pro Bildschritt berechnet; die Tastfahrt stoppt, sobald die Greiferfläche sie erreicht.
+  _touchSurface() {
+    const head = this.head;
+    let held = 0;
+    const heldIds = new Set();
+    for (const el of head.elements) for (const a of el.att) heldIds.add(a.cloth.id);
+    for (const cl of this.cloths) if (heldIds.has(cl.id)) held += 2 * cl.radius;
+    let top = -Infinity;
+    for (const el of head.elements) {
+      const [cx, , cz] = head.elementCenter(el);
+      for (const col of this.staticColliders) top = Math.max(top, col.topAt(cx, cz));
+      for (const cl of this.cloths) {
+        if (heldIds.has(cl.id)) continue;
+        const b = cl.aabb;
+        if (b && (cx < b[0] - el.half || cx > b[3] + el.half || cz < b[2] - el.half || cz > b[5] + el.half)) continue;
+        const p = cl.pos, r2 = Math.max(el.half, cl.h * 0.75) ** 2;
+        for (let v = 0; v < cl.n; v++) {
+          const dx = p[3 * v] - cx, dz = p[3 * v + 2] - cz;
+          if (dx * dx + dz * dz > r2) continue;
+          top = Math.max(top, p[3 * v + 1] + cl.radius);
+        }
+      }
+    }
+    return top + held;
+  }
+
+  headContact() { return this.robot.pose.y <= this.touchTop + 0.1e-3; }
+
+  _updateSleep(frameDt) {
+    const head = this.head, m = this.machine;
+    for (const c of this.cloths) {
+      const p = c.pos, b = c.aabb || (c.aabb = new Float64Array(6));
+      b[0] = b[1] = b[2] = Infinity; b[3] = b[4] = b[5] = -Infinity;
+      let vmax = 0, bx = 0, by = 0, bz = 0;
+      const V = c.vel;
+      for (let v = 0; v < c.n; v++) {
+        const i = 3 * v;
+        for (let k = 0; k < 3; k++) { const x = p[i + k]; if (x < b[k]) b[k] = x; if (x > b[3 + k]) b[3 + k] = x; }
+        const s = V[i] * V[i] + V[i + 1] * V[i + 1] + V[i + 2] * V[i + 2];
+        if (s > vmax) vmax = s;
+        bx += V[i]; by += V[i + 1]; bz += V[i + 2];
+      }
+      c.vmax = Math.sqrt(vmax);
+      c.vbulk = [bx / c.n, by / c.n, bz / c.n];
+      let vr = 0;
+      for (let v = 0; v < c.n; v++) {
+        const i = 3 * v;
+        const dx = V[i] - c.vbulk[0], dy = V[i + 1] - c.vbulk[1], dz = V[i + 2] - c.vbulk[2];
+        const s = dx * dx + dy * dy + dz * dz;
+        if (s > vr) vr = s;
+      }
+      c.vrel = Math.sqrt(vr);
+    }
+    const hx = head.extent.x + 0.03, hz = head.extent.z + 0.03, hp = head.pose;
+    const hr = Math.hypot(hx, hz);
+    // die beiden obersten Lagen unter einem tief stehenden Greiferkopf aufwecken
+    const under = this.cloths.filter((c) => { const b = c.aabb; return hp.y - b[4] < 0.03 && hp.x + hr > b[0] && hp.x - hr < b[3] && hp.z + hr > b[2] && hp.z - hr < b[5]; })
+      .sort((a, b) => b.aabb[4] - a.aabb[4]).slice(0, 2);
+    for (const c of this.cloths) {
+      const b = c.aabb;
+      let disturbed = c.wake || c.attachedCount() > 0 || c.vmax > 0.012 || under.includes(c);
+      if (!disturbed && (!m.footUp || m.sewing) && m.needle[0] > b[0] - 0.02 && m.needle[0] < b[3] + 0.02 && m.needle[2] > b[2] - 0.02 && m.needle[2] < b[5] + 0.02) disturbed = true;
+      if (!disturbed) for (const o of this.cloths) {
+        if (o === c || o.sleeping || o.vmax < 0.02) continue;
+        const a = o.aabb;
+        if (a[0] < b[3] + 0.01 && a[3] > b[0] - 0.01 && a[2] < b[5] + 0.01 && a[5] > b[2] - 0.01 && a[1] < b[4] + 0.03 && a[4] > b[1] - 0.03) { disturbed = true; break; }
+      }
+      c.wake = false;
+      if (disturbed) { c.sleeping = false; c.sleepTimer = 0; }
+      else {
+        c.sleepTimer = (c.sleepTimer || 0) + frameDt;
+        if (c.sleepTimer > 0.3 && !c.sleeping) { c.sleeping = true; c.vel.fill(0); }
+      }
+    }
+  }
+
+  // Aerodynamische Kräfte je Dreieck -> Beschleunigung je Knoten (cloth.acc).
+  // Wird alle 4 Teilschritte neu berechnet (Kräfte ändern sich langsam).
+  _drag(cloth, dt) {
+    const p = cloth.pos, v = cloth.vel, w = cloth.w, T = cloth.tri;
+    const acc = cloth.acc || (cloth.acc = new Float64Array(3 * cloth.n));
+    acc.fill(0);
+    const rho = AIR.density, Cd = 1.17, Cf = 0.02, kP = cloth.m.k;
+    for (let t = 0; t < cloth.nTri; t++) {
+      const a = T[3 * t] * 3, b = T[3 * t + 1] * 3, c = T[3 * t + 2] * 3;
+      const e1x = p[b] - p[a], e1y = p[b + 1] - p[a + 1], e1z = p[b + 2] - p[a + 2];
+      const e2x = p[c] - p[a], e2y = p[c + 1] - p[a + 1], e2z = p[c + 2] - p[a + 2];
+      let nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
+      const n2 = Math.sqrt(nx * nx + ny * ny + nz * nz);
+      if (n2 < 1e-14) continue;
+      const A = 0.5 * n2;
+      nx /= n2; ny /= n2; nz /= n2;
+      const vx = (v[a] + v[b] + v[c]) / 3, vy = (v[a + 1] + v[b + 1] + v[c + 1]) / 3, vz = (v[a + 2] + v[b + 2] + v[c + 2]) / 3;
+      const vn = vx * nx + vy * ny + vz * nz;
+      const tx = vx - vn * nx, ty = vy - vn * ny, tz = vz - vn * nz;
+      const vt = Math.sqrt(tx * tx + ty * ty + tz * tz);
+      // Druckwiderstand, reduziert um Durchströmung (Darcy): p = ½ρCd(|vn| − k·p)²
+      const avn = Math.abs(vn);
+      let pr = 0.5 * rho * Cd * avn * avn;
+      for (let it = 0; it < 2; it++) { const ve = Math.max(0, avn - kP * pr); pr = 0.5 * rho * Cd * ve * ve; }
+      const Fn = -Math.sign(vn) * pr * A;
+      const Ft = 0.5 * rho * Cf * A * vt;
+      const fx = (Fn * nx - Ft * tx) / 3, fy = (Fn * ny - Ft * ty) / 3, fz = (Fn * nz - Ft * tz) / 3;
+      for (let q = 0; q < 3; q++) {
+        const i = q === 0 ? a : q === 1 ? b : c;
+        const wi = w[i / 3];
+        if (!wi) continue;
+        let ax = fx * wi, ay = fy * wi, az = fz * wi;
+        // Widerstand darf die Normalgeschwindigkeit innerhalb des Intervalls nicht umkehren
+        const an = Math.abs(ax * nx + ay * ny + az * nz) * dt;
+        if (an > avn && avn > 0) { const s = avn / an; ax *= s; ay *= s; az *= s; }
+        acc[i] += ax; acc[i + 1] += ay; acc[i + 2] += az;
+      }
+    }
+  }
+
+  step(frameDt) {
+    const n = this.cfg.substeps;
+    const dt = frameDt / n;
+    const cloths = this.cloths;
+    this._updateSleep(frameDt);
+    // Kontaktsuche alle k Teilschritte; k so, dass sich keine Lage dazwischen mehr als ~3 mm bewegt
+    let vmax = 0;
+    for (const c of cloths) if (!c.sleeping) vmax = Math.max(vmax, c.vrel);
+    for (const a of cloths) for (const b of cloths) {
+      if (a === b || (a.sleeping && b.sleeping)) continue;
+      const A = a.aabb, B = b.aabb, g = 0.02;
+      if (A[0] > B[3] + g || A[3] < B[0] - g || A[1] > B[4] + g || A[4] < B[1] - g || A[2] > B[5] + g || A[5] < B[2] - g) continue;
+      vmax = Math.max(vmax, Math.hypot(a.vbulk[0] - b.vbulk[0], a.vbulk[1] - b.vbulk[1], a.vbulk[2] - b.vbulk[2]));
+    }
+    const detectEvery = Math.max(Math.min(2, n), Math.min(n, Math.floor(3e-3 / Math.max(1e-9, 1.5 * vmax * dt))));
+    this.stats.detectEvery = detectEvery;
+    this.head.updateFrame(frameDt, cloths, this.t);
+    for (const c of cloths) {
+      const sig = c.attachedCount();
+      if (sig !== c.tetherSig) { c.tetherSig = sig; c.updateTethers(); }
+      // zulässige elastische Dehnung: Eigengewicht + 5 g Trägheitsreserve bei der Zugsteifigkeit
+      c.tetherSlack = Math.min(0.05, (c.m.rho * G * 5 * Math.max(c.width, c.length)) / Math.min(c.m.Tw, c.m.Tf));
+    }
+    this.touchTop = this._touchSurface();
+
+    const ctx = { head: this.head, machine: this.machine, contact: () => this.headContact(), log: (m) => this.log(m) };
+    for (let s = 0; s < n; s++) {
+      if (s % detectEvery === 0) {
+        this.contacts.detect(cloths, Math.min(detectEvery, n - s) * dt);
+      }
+      this.t += dt;
+      for (const k of this.kinematic) k.beginSubstep();
+      const wasOn = this.head.elements.some((e) => e.on);
+      this.robot.update(this.t, dt, ctx);
+      const isOn = this.head.elements.some((e) => e.on);
+      if (!wasOn && isOn) this.cycle = { gripY: this.robot.pose.y, double: false, empty: false };
+      this.head.pose = this.robot.pose;
+      this.head.updateColliders();
+      this.machine.update(this.t, dt);
+
+      for (const c of cloths) {
+        if (c.sleeping) continue;
+        if (s % 4 === 0 || !c.acc) this._drag(c, dt * Math.min(4, n - s));
+        const p = c.pos, pp = c.prev, v = c.vel, w = c.w, acc = c.acc;
+        for (let i = 0, N = c.n; i < N; i++) {
+          const k = 3 * i;
+          pp[k] = p[k]; pp[k + 1] = p[k + 1]; pp[k + 2] = p[k + 2];
+          if (!w[i]) continue;
+          v[k] += acc[k] * dt; v[k + 2] += acc[k + 2] * dt;
+          v[k + 1] += (acc[k + 1] - G) * dt;
+          p[k] += v[k] * dt; p[k + 1] += v[k + 1] * dt; p[k + 2] += v[k + 2] * dt;
+        }
+      }
+      const iters = this.cfg.iterations || 1;
+      for (const c of cloths) {
+        if (c.sleeping) continue;
+        c.resetLambda();
+        for (let it = 0; it < iters; it++) c.solveInternal(dt, iters === 1);
+        c.solveLimits(this.cfg.limitLoad);
+      }
+      this.machine.solve(cloths, dt, this.t);
+      this.head.solve(dt);
+      for (const c of cloths) if (!c.sleeping) c.solveTethers(c.tetherSlack);
+      this.contacts.solve(cloths, dt);
+      for (const col of this.colliders) {
+        if (!col.enabled) continue;
+        const ff = col.solid.frictionFactor;
+        const br = Math.hypot(col.half[0], col.half[1], col.half[2]) + 0.03;
+        for (const c of cloths) {
+          if (c.sleeping) continue;
+          const b = c.aabb;
+          if (col.c[0] + br < b[0] || col.c[0] - br > b[3] || col.c[1] + br < b[1] || col.c[1] - br > b[4] || col.c[2] + br < b[2] || col.c[2] - br > b[5]) continue;
+          // Saugtisch: Unterdruck erhöht die Normalkraft der aufliegenden Lage (Reibschluss)
+          const vac = col.vacuum && this.tableVac.on ? { region: this.tableVac.region, pen: (this.tableVac.pressure / c.m.rho) * dt * dt } : null;
+          col.collideCloth(c, c.m.muSteelS * ff, c.m.muSteelK * ff, vac);
+        }
+      }
+      for (const c of cloths) if (!c.sleeping) c.solveLimits(this.cfg.limitLoad);
+      this.machine.unpin();
+      const inv = 1 / dt;
+      for (const c of cloths) {
+        if (c.sleeping) continue;
+        const p = c.pos, pp = c.prev, v = c.vel;
+        if (!Number.isFinite(p[0] + p[3 * (c.n >> 1) + 1] + p[3 * c.n - 1])) this._recover(c);
+        for (let k = 0, N = 3 * c.n; k < N; k++) {
+          let vk = (p[k] - pp[k]) * inv;
+          if (vk > 20) vk = 20; else if (vk < -20) vk = -20;
+          v[k] = vk;
+        }
+        c.damp(dt);
+      }
+      this.head.checkFailure(dt, this.t);
+    }
+    this._afterFrame();
+  }
+
+  // Sicherheitsnetz: nicht-endliche Werte (numerische Instabilität) zurücksetzen
+  _recover(c) {
+    const p = c.pos, pp = c.prev;
+    for (let k = 0; k < 3 * c.n; k++) if (!Number.isFinite(p[k])) p[k] = Number.isFinite(pp[k]) ? pp[k] : 0;
+    c.vel.fill(0);
+    if (!c.warnedNaN) { c.warnedNaN = true; this.log(`${c.name}: numerische Instabilität abgefangen`, 'error'); }
+  }
+
+  _afterFrame() {
+    for (const e of this.head.events.splice(0)) {
+      const detail = `F_n ${e.Fn.toFixed(3)}/${e.Cn.toFixed(3)} N, F_t ${e.Ft.toFixed(3)}/${e.Ct.toFixed(3)} N`;
+      if (e.type === 'separate') continue; // Unterlage löst sich – Zusammenfassung je Lage folgt
+      this.log(`${e.cloth.name} löst sich von Greifer ${e.el + 1} (${detail})`, 'warn');
+    }
+    const anyOn = this.head.elements.some((e) => e.on);
+    let heldCount = 0;
+    for (const c of this.cloths) {
+      const tr = this.track.get(c.id);
+      const held = c.attachedCount() > 0;
+      if (held) heldCount++;
+      if (held && !tr.held) {
+        tr.held = true; tr.prevState = tr.state;
+        // als Unterlage mitgegriffen (durch die obere Lage hindurch)?
+        tr.sub = this.head.elements.some((el) => el.frozen.get(c.id)?.ply > 0) && !this.head.elements.some((el) => el.frozen.get(c.id)?.ply === 0);
+        if (!tr.sub) { tr.state = 'gegriffen'; tr.error = null; tr.ideal = null; tr.pick = c.pose2D(); tr.gpick = { ...this.head.pose }; }
+      } else if (!held && tr.held) {
+        tr.held = false;
+        if (tr.sub) {
+          tr.state = tr.prevState || 'Stapel';
+          this.log(`${c.name}: mitgesaugte Unterlage hat sich gelöst (Lagentrennung)`);
+        } else if (anyOn) { tr.state = 'verloren'; this.log(`${c.name} verloren`, 'error'); }
+        else {
+          const g0 = tr.gpick, g1 = this.head.pose;
+          const [dx, dz] = rotY(tr.pick.x - g0.x, tr.pick.z - g0.z, -g0.yaw);
+          const [rx, rz] = rotY(dx, dz, g1.yaw);
+          tr.ideal = { x: g1.x + rx, z: g1.z + rz, theta: tr.pick.theta - g0.yaw + g1.yaw };
+          tr.state = 'abgelegt';
+        }
+      }
+      if (!c.sleeping || tr.strain === undefined) {
+        const st = c.strainStats();
+        tr.strain = st.p99; tr.strainMax = st.max;
+      }
+      const strain = tr.strain;
+      if (!tr.warnedStrain && strain > 0.5 * (c.fabric.breakStrain / 100)) {
+        tr.warnedStrain = true;
+        this.log(`${c.name}: Dehnung ${(strain * 100).toFixed(1)} % (> 50 % der Bruchdehnung)`, 'warn');
+      }
+      if (tr.ideal && !tr.error) {
+        const speed = c.meanSpeed();
+        if (speed < 0.004) {
+          const pz = c.pose2D();
+          let dth = pz.theta - tr.ideal.theta;
+          dth = Math.atan2(Math.sin(dth), Math.cos(dth));
+          tr.error = { dx: pz.x - tr.ideal.x, dz: pz.z - tr.ideal.z, dth };
+        }
+      }
+    }
+    if (this.cycle.gripY !== null && !this.cycle.double && heldCount >= 2 && this.robot.pose.y > this.cycle.gripY + 0.06) {
+      this.cycle.double = true;
+      this.log(`Doppelgriff: ${heldCount} Lagen gleichzeitig gegriffen`, 'error');
+    }
+    if (this.cycle.gripY !== null && !this.cycle.empty && heldCount === 0 && this.robot.pose.y > this.cycle.gripY + 0.01) {
+      this.cycle.empty = true;
+      this.log('Greifer angehoben, aber keine Lage gefasst (Haltekraft zu gering oder noch nicht aufgebaut)', 'warn');
+    }
+    if (!anyOn) this.cycle.gripY = null;
+  }
+
+  // Lage, die zuerst unter dem Stapel ausgegeben wird (für UI)
+  plyReport() {
+    return this.cloths.map((c) => {
+      const tr = this.track.get(c.id);
+      const pose = c.pose2D();
+      return { cloth: c, name: c.name, state: tr.state, pose, strain: tr.strain || 0, strainMax: tr.strainMax || 0, error: tr.error, wav: c.waviness(), speed: c.meanSpeed() };
+    }).sort((a, b) => a.cloth.stackIndex - b.cloth.stackIndex);
+  }
+}
+
+return { TABLE_TOP, STACK_POS, NEEDLE, DEFAULT_PROGRAM, defaultConfig, World };
+})();
+
+// ---- src/physics/validation.js ----
+const __M_physics_validation = (() => {
+// Validierung des Solvers gegen analytische Lösungen und Normprüfungen.
+// Läuft im Browser (Schaltfläche „Physik prüfen“) und in Node (npm test).
+
+const { G, AIR } = __M_physics_constants;
+const { fabricById, toSI, bendingLength } = __M_physics_materials;
+const { Cloth } = __M_physics_cloth;
+const { BoxCollider } = __M_physics_colliders;
+const { capacityModel } = __M_physics_grippers;
+const { World, defaultConfig } = __M_physics_world;
+// Minimalwelt ohne Szene: Lage(n) + Kollider + optional Luftwiderstand
+function miniWorld(cloths, colliders = [], { drag = true, substeps = 16 } = {}) {
+  const w = Object.create(World.prototype);
+  w.cfg = { ...defaultConfig(), substeps, plies: cloths.length };
+  w.tableVac = { on: false, pressure: 0, region: [0, 0, 0, 0], top: 0 };
+  w.t = 0; w.events = [];
+  w.cloths = cloths;
+  w.colliders = colliders; w.staticColliders = colliders;
+  w.kinematic = [];
+  w.head = { elements: [], extent: { x: 0, z: 0 }, pose: { x: 0, y: -10, z: 0, yaw: 0 }, colliders: [], updateFrame() {}, solve() {}, checkFailure() {}, updateColliders() {}, events: [] };
+  w.machine = { footUp: true, sewing: false, needle: [99, 0, 99], update() {}, solve() {}, unpin() {}, busy: false };
+  w.robot = { pose: { x: 0, y: -10, z: 0, yaw: 0 }, update() {} };
+  w.contacts = { detect() {}, solve() {}, n: 0 };
+  w.track = new Map(cloths.map((c) => [c.id, { state: '', held: false }]));
+  w.cycle = { gripY: null };
+  w.stats = {};
+  w._afterFrame = () => {};
+  w.touchTop = -Infinity;
+  if (!drag) w._drag = (c) => { c.acc = c.acc || new Float64Array(3 * c.n); };
+  return w;
+}
+
+function run(w, seconds, fdt = 1 / 60, each) {
+  const n = Math.round(seconds / fdt);
+  for (let i = 0; i < n; i++) { w.step(fdt); if (each && each(w) === false) break; }
+}
+
+const pct = (a, b) => (100 * (a - b)) / b;
+
+function runValidation() {
+  const rows = [];
+  const add = (name, sim, ref, unit, tol, note) => {
+    const dev = pct(sim, ref);
+    rows.push({ name, sim, ref, unit, dev, ok: Math.abs(dev) <= tol, tol, note });
+  };
+
+  // 1) Freier Fall ohne Luft: t = √(2h/g)
+  {
+    const c = new Cloth({ fabric: fabricById('denim'), width: 0.02, length: 0.02, spacing: 0.01, center: [0, 2, 0] });
+    const w = miniWorld([c], [], { drag: false });
+    let tHit = null;
+    run(w, 1.0, 1 / 600, (ww) => { if (c.centroid()[1] <= 1.0) { tHit = ww.t; return false; } });
+    add('Freier Fall 1 m (ohne Luft)', tHit, Math.sqrt(2 / G), 's', 1, 'Zeitintegration, g = 9,80665 m/s²');
+  }
+
+  // 2) Sinkgeschwindigkeit einer flach fallenden Lage: v = √(2·ρA·g / (ρL·cd))
+  {
+    const f = fabricById('popeline'), m = toSI(f);
+    const c = new Cloth({ fabric: f, width: 0.2, length: 0.2, spacing: 0.02, center: [0, 10, 0] });
+    const w = miniWorld([c]);
+    // nach ~1 s ist die stationäre Sinkgeschwindigkeit erreicht; später kippt die Lage
+    // (wie reales Papier/Gewebe) seitlich ab und taumelt
+    run(w, 1.0);
+    const vt = -avgVy(c);
+    add('Sinkgeschwindigkeit Popeline (flach)', vt, Math.sqrt((2 * m.rho * G) / (AIR.density * 1.17)), 'm/s', 3, 'v = √(2·ρA·g/(ρL·cd)), cd = 1,17');
+  }
+
+  // 3) Haftreibung auf schiefer Ebene (Stahl): haftet für tan α < μH
+  {
+    const f = fabricById('popeline'), m = toSI(f);
+    const aCrit = Math.atan(m.muSteelS);
+    const res = [];
+    for (const a of [aCrit - (3 * Math.PI) / 180, aCrit + (3 * Math.PI) / 180]) {
+      const plate = new BoxCollider({ name: 'Rampe', center: [0, 1, 0], half: [0.5, 0.01, 0.5], roll: a, material: 'stahl' });
+      const top = 1 + 0.01 / Math.cos(a);
+      const c = new Cloth({ fabric: f, width: 0.1, length: 0.1, spacing: 0.0125, center: [0, top + m.t / 2 + 1e-5, 0] });
+      // Lage in die Ebene drehen (um z)
+      for (let v = 0; v < c.n; v++) {
+        const x = c.pos[3 * v], y = c.pos[3 * v + 1] - top;
+        c.pos[3 * v] = x * Math.cos(a) - y * Math.sin(a);
+        c.pos[3 * v + 1] = top + x * Math.sin(a) + y * Math.cos(a);
+      }
+      c.prev.set(c.pos);
+      const w = miniWorld([c], [plate], { drag: false });
+      const x0 = c.centroid();
+      run(w, 0.25, 1 / 60);
+      const x1 = c.centroid();
+      run(w, 0.5, 1 / 60);
+      const x2 = c.centroid();
+      res.push({ a, d01: Math.hypot(x1[0] - x0[0], x1[1] - x0[1]), d12: Math.hypot(x2[0] - x1[0], x2[1] - x1[1]) });
+    }
+    const [stick, slide] = res;
+    rows.push({ name: `Haften bei α = ${(stick.a * 180 / Math.PI).toFixed(1)}° (< arctan μH = ${(aCrit * 180 / Math.PI).toFixed(1)}°)`, sim: stick.d12 * 1000, ref: 0, unit: 'mm', dev: null, ok: stick.d12 < 0.5e-3, tol: null, note: 'Weg in 0,5 s, Soll ≈ 0' });
+    // Gleiten: s = ½·g·(sin α − μG·cos α)·t² über das Intervall 0,25…0,75 s
+    const acc = G * (Math.sin(slide.a) - m.muSteelK * Math.cos(slide.a));
+    const ref = 0.5 * acc * (0.75 ** 2 - 0.25 ** 2);
+    add(`Gleiten bei α = ${(slide.a * 180 / Math.PI).toFixed(1)}° (Weg 0,25…0,75 s)`, slide.d12 * 1000, ref * 1000, 'mm', 10, 'a = g·(sin α − μG·cos α)');
+  }
+
+  // 4) Biegelänge nach ASTM D1388 (Cantilever, Peirce): Überhang l, Tipwinkel θ
+  //    c = l · (cos(θ/2) / (8·tan θ))^(1/3)
+  for (const id of ['popeline', 'denim', 'leder']) {
+    const f = fabricById(id);
+    const cRef = bendingLength(f, 'warp');
+    const l = 2 * cRef;
+    const h = Math.min(0.006, l / 8);
+    const len = l + 0.05;
+    const c = new Cloth({ fabric: f, width: 2 * h, length: len, spacing: h, center: [0, 1, len / 2 - 0.05] });
+    // Teil auf der Plattform (z < 0) einspannen
+    for (let v = 0; v < c.n; v++) if (c.pos[3 * v + 2] <= 1e-9) c.w[v] = 0;
+    const w = miniWorld([c], [], { drag: true, substeps: 24 });
+    run(w, 4);
+    // Spitze: letzte Reihe, Mittel
+    let ty = 0, tz = 0, k = 0;
+    for (let i = 0; i < c.nx; i++) { const v = c.idx(i, c.nz - 1); ty += c.pos[3 * v + 1]; tz += c.pos[3 * v + 2]; k++; }
+    ty /= k; tz /= k;
+    const theta = Math.atan2(1 - ty, tz);
+    const cSim = l * Math.cbrt(Math.cos(theta / 2) / (8 * Math.tan(theta)));
+    add(`Biegelänge ${f.name} (ASTM D1388)`, cSim * 100, cRef * 100, 'cm', 10, `Überhang ${(l * 100).toFixed(1)} cm, Tipwinkel ${(theta * 180 / Math.PI).toFixed(1)}° (Soll 41,5°)`);
+  }
+
+  // 5) Zugversuch: hängender Streifen mit Endlast (Linienlast unterhalb der Dehnungsbegrenzung)
+  {
+    const f = fabricById('jersey'), m = toSI(f);
+    const q = 3; // N/m Linienlast am unteren Rand
+    const L = 0.2, h = 0.0125;
+    const c = new Cloth({ fabric: f, width: 0.05, length: L, spacing: h, center: [0, 1, 0] });
+    for (let v = 0; v < c.n; v++) { const z = c.pos[3 * v + 2]; c.pos[3 * v + 1] = 1 - (z + L / 2); c.pos[3 * v + 2] = 0; }
+    c.prev.set(c.pos);
+    for (let i = 0; i < c.nx; i++) c.w[c.idx(i, 0)] = 0;
+    const w = miniWorld([c], [], { drag: true });
+    w.cfg.iterations = 200;         // voll konvergiertes XPBD (Materialgesetz prüfen)
+    w.cfg.limitLoad = 1e6;          // ohne Dehnungsbegrenzung
+    // Endlast als Zusatzmasse am unteren Rand: F = q·b
+    const b = c.width;
+    const extraPerNode = (q * b) / G / c.nx;
+    for (let i = 0; i < c.nx; i++) { const v = c.idx(i, c.nz - 1); c.mass[v] += extraPerNode; c.w[v] = 1 / c.mass[v]; }
+    run(w, 3);
+    let y0 = 0, y1 = 0;
+    for (let i = 0; i < c.nx; i++) { y0 += c.pos[3 * c.idx(i, 0) + 1]; y1 += c.pos[3 * c.idx(i, c.nz - 1) + 1]; }
+    const strainSim = (y0 - y1) / c.nx / L - 1;
+    // analytisch: Endlast + halbes Eigengewicht
+    const strainRef = (q + 0.5 * m.rho * G * L) / m.Tw;
+    add('Zugversuch Single Jersey (3 N/m)', strainSim * 100, strainRef * 100, '%', 10, 'ε = F/(T·b), XPBD 200 Iterationen ohne Dehnungsbegrenzung');
+  }
+
+  // 6) Sauggreifer auf luftdichtem Material: F → Δp·A
+  {
+    const m = { ...toSI(fabricById('leder')), k: 1e-12 };
+    const p = { diameter: 20, dpMax: 60, qMax: 25 };
+    const cap = capacityModel('vakuum', p, [{ m, depthTop: 0 }], 1);
+    add('Vakuum, luftdicht: F = Δp·A (Ø 20 mm, 60 kPa)', cap[0].Cn, 60e3 * Math.PI * 0.01 ** 2, 'N', 2, 'Grenzfall des Leiternetzwerks');
+  }
+
+  return rows;
+}
+
+function avgVy(c) {
+  let s = 0;
+  for (let v = 0; v < c.n; v++) s += c.vel[3 * v + 1];
+  return s / c.n;
+}
+
+return { miniWorld, runValidation };
+})();
+
+// ---- src/render/textures.js ----
+const __M_render_textures = (() => {
+// Prozedurale Oberflächentexturen je Bindungsart (Canvas → THREE.CanvasTexture).
+
+function shade(hex, f) {
+  const c = new THREE.Color(hex);
+  const hsl = {}; c.getHSL(hsl);
+  c.setHSL(hsl.h, hsl.s, Math.max(0, Math.min(1, hsl.l * f)));
+  return `#${c.getHexString()}`;
+}
+
+function fabricTexture(pattern, color, size = 256) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size;
+  const g = cv.getContext('2d');
+  g.fillStyle = color; g.fillRect(0, 0, size, size);
+  const dark = shade(color, 0.82), light = shade(color, 1.12);
+  const n = 32, s = size / n;
+  if (pattern === 'plain') {
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      g.fillStyle = (i + j) % 2 ? dark : light;
+      g.fillRect(i * s + 0.5, j * s + 0.5, s - 1, s - 1);
+    }
+  } else if (pattern === 'twill') {
+    g.lineWidth = s * 0.9;
+    g.strokeStyle = dark;
+    for (let k = -n; k < 2 * n; k += 2) { g.beginPath(); g.moveTo(k * s, 0); g.lineTo(k * s + size, size); g.stroke(); }
+    g.strokeStyle = light; g.lineWidth = s * 0.25;
+    for (let k = -n; k < 2 * n; k += 2) { g.beginPath(); g.moveTo(k * s + s, 0); g.lineTo(k * s + s + size, size); g.stroke(); }
+  } else if (pattern === 'satin') {
+    const grd = g.createLinearGradient(0, 0, size, size);
+    grd.addColorStop(0, light); grd.addColorStop(0.5, color); grd.addColorStop(1, light);
+    g.fillStyle = grd; g.fillRect(0, 0, size, size);
+    g.fillStyle = dark;
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j += 5) g.fillRect(i * s, ((j + i * 2) % n) * s, s * 0.8, s * 0.35);
+  } else if (pattern === 'knit') {
+    g.strokeStyle = dark; g.lineWidth = s * 0.35;
+    for (let i = 0; i < n; i += 2) for (let j = 0; j < n; j += 2) {
+      const x = i * s, y = j * s;
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + s, y + 2 * s); g.lineTo(x + 2 * s, y); g.stroke();
+    }
+  } else if (pattern === 'nonwoven') {
+    for (let k = 0; k < 900; k++) {
+      g.strokeStyle = Math.random() < 0.5 ? dark : light; g.lineWidth = 0.7;
+      const x = Math.random() * size, y = Math.random() * size, a = Math.random() * Math.PI, l = 6 + Math.random() * 18;
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
+    }
+  } else if (pattern === 'leather') {
+    for (let k = 0; k < 2200; k++) {
+      g.fillStyle = Math.random() < 0.55 ? dark : light;
+      const x = Math.random() * size, y = Math.random() * size, r = 0.5 + Math.random() * 1.6;
+      g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.fill();
+    }
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+function gridTexture(base = '#9aa09d', line = '#868c89', size = 512) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size;
+  const g = cv.getContext('2d');
+  g.fillStyle = base; g.fillRect(0, 0, size, size);
+  for (let k = 0; k < 3000; k++) {
+    g.fillStyle = `rgba(0,0,0,${Math.random() * 0.05})`;
+    g.fillRect(Math.random() * size, Math.random() * size, 2, 2);
+  }
+  g.strokeStyle = line; g.lineWidth = 2;
+  g.strokeRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+return { fabricTexture, gridTexture };
+})();
+
+// ---- src/render/scene.js ----
+const __M_render_scene = (() => {
+// 3D-Darstellung der Nähzelle mit Three.js.
+
+
+const { fabricTexture, gridTexture } = __M_render_textures;
+const { SOLIDS } = __M_physics_materials;
+const { NEEDLE, TABLE_TOP } = __M_physics_world;
+const VIEWS = {
+  gesamt: { pos: [1.55, 2.0, 2.6], target: [0.05, 0.78, -0.05] },
+  stapel: { pos: [-0.25, 1.3, 0.85], target: [-0.5, 0.8, 0.05] },
+  naehen: { pos: [0.3, 1.15, 0.55], target: [0.55, 0.8, -0.08] },
+  oben: { pos: [0.02, 2.6, 0.06], target: [0.02, 0.8, 0.05] },
+};
+
+class SceneView {
+  constructor(container) {
+    this.container = container;
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    container.appendChild(this.renderer.domElement);
+
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(38, 1, 0.01, 40);
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableDamping = true;
+    this.controls.maxPolarAngle = Math.PI * 0.495;
+    this.setView('gesamt');
+
+    this.scene.add(new THREE.HemisphereLight(0xf2f5ff, 0x3a3d3c, 0.9));
+    const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+    sun.position.set(1.6, 3.2, 1.4);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    const sc = sun.shadow.camera; sc.left = -1.4; sc.right = 1.4; sc.top = 1.2; sc.bottom = -1.2; sc.near = 0.5; sc.far = 7;
+    sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.002;
+    this.scene.add(sun);
+    const fill = new THREE.DirectionalLight(0xdfe8ff, 0.6);
+    fill.position.set(-2, 1.5, -1);
+    this.scene.add(fill);
+
+    this.static = new THREE.Group();
+    this.dynamic = new THREE.Group();
+    this.scene.add(this.static, this.dynamic);
+    this.colorMode = 'material';
+    this.showContacts = false;
+    this._buildHall();
+    this.resize();
+    window.addEventListener('resize', () => this.resize());
+  }
+
+  setTheme(dark) {
+    const bg = dark ? 0x161a19 : 0xe4e8e6;
+    this.scene.background = new THREE.Color(bg);
+    this.scene.fog = new THREE.Fog(bg, 6, 14);
+  }
+
+  setView(name) {
+    this.viewName = name;
+    const v = VIEWS[name] || VIEWS.gesamt;
+    // schmale Ansichten: Kamera entsprechend zurücknehmen
+    const k = Math.max(1, 1.45 / Math.max(0.3, this.camera.aspect || 1.6));
+    const d = v.pos.map((x, i) => v.target[i] + (x - v.target[i]) * k);
+    this.camera.position.set(...d);
+    this.controls.target.set(...v.target);
+    this.controls.update();
+  }
+
+  resize() {
+    const w = this.container.clientWidth || 800, h = this.container.clientHeight || 600;
+    this.renderer.setSize(w, h, false);
+    const prev = this.camera.aspect;
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+    if (this.viewName && Math.abs(prev - this.camera.aspect) > 0.05) this.setView(this.viewName);
+  }
+
+  _mat(color, rough = 0.6, metal = 0.0) {
+    return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal });
+  }
+
+  _box(w, h, d, mat, x, y, z, cast = true) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.set(x, y, z);
+    m.castShadow = cast; m.receiveShadow = true;
+    return m;
+  }
+
+  _buildHall() {
+    const floorTex = gridTexture();
+    floorTex.repeat.set(12, 12);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.92 }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    this.scene.add(floor);
+    // Sicherheitsmarkierung um die Zelle
+    const tape = new THREE.Mesh(new THREE.RingGeometry(1.55, 1.6, 4, 1), new THREE.MeshBasicMaterial({ color: 0xd9a400 }));
+    tape.rotation.x = -Math.PI / 2; tape.rotation.z = Math.PI / 4; tape.position.y = 0.001;
+    tape.scale.set(1.15, 0.75, 1);
+    this.scene.add(tape);
+  }
+
+  // Szene für eine (neue) Welt aufbauen
+  build(world) {
+    this.world = world;
+    for (const g of [this.static, this.dynamic]) {
+      while (g.children.length) { const c = g.children.pop(); c.traverse?.((o) => { o.geometry?.dispose?.(); }); }
+    }
+    const steel = this._mat(0xaab1b8, 0.35, 0.8);
+    const dark = this._mat(0x2b2f31, 0.5, 0.3);
+
+    // Kollider-Körper (Tische, Maschine)
+    for (const col of world.staticColliders) {
+      if (!col.visual) continue;
+      const s = SOLIDS[col.material];
+      const color = col.color || (col.material === 'hpl' ? '#d6d2c6' : col.material === 'guss' ? '#5f6f68' : s.color);
+      const mat = this._mat(color, col.material === 'stahl' ? 0.3 : 0.65, col.material === 'stahl' ? 0.7 : 0.05);
+      const m = this._box(col.half[0] * 2, col.half[1] * 2, col.half[2] * 2, mat, ...col.c);
+      m.rotation.set(col.euler[1], col.euler[0], col.euler[2], 'YXZ');
+      this.static.add(m);
+    }
+    // Tischbeine und Zargen
+    for (const [cx, cz, hx, hz] of [[-0.5, 0.05, 0.35, 0.3], [0.55, 0.05, 0.45, 0.3]]) {
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        this.static.add(this._box(0.04, TABLE_TOP - 0.04, 0.04, steel, cx + sx * (hx - 0.05), (TABLE_TOP - 0.04) / 2, cz + sz * (hz - 0.05)));
+      }
+      this.static.add(this._box(hx * 2 - 0.06, 0.06, 0.02, dark, cx, TABLE_TOP - 0.07, cz + hz - 0.04));
+    }
+    // Nähmaschine: Handrad, Fadenrolle, Nadelstange, Nähfuß
+    const [nx, ny, nz] = NEEDLE;
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.03, 40), this._mat(0x3b4442, 0.4, 0.4));
+    wheel.rotation.z = Math.PI / 2; wheel.position.set(nx + 0.395, ny + 0.2, nz); wheel.castShadow = true;
+    this.static.add(wheel);
+    this.wheel = wheel;
+    const spool = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.05, 24), this._mat(0xb3261e, 0.7));
+    spool.position.set(nx + 0.25, ny + 0.3, nz); spool.castShadow = true;
+    this.static.add(spool);
+    this.needleBar = new THREE.Group();
+    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.09, 12), steel);
+    bar.position.y = 0.06;
+    const needle = new THREE.Mesh(new THREE.CylinderGeometry(0.0006, 0.0006, 0.035, 8), this._mat(0xe8ecef, 0.2, 1));
+    needle.position.y = 0.0;
+    this.needleBar.add(bar, needle);
+    this.static.add(this.needleBar);
+    this.footMesh = new THREE.Group();
+    const foot = this._box(world.machine.half[0] * 2, 0.004, world.machine.half[1] * 2, steel, 0, 0.002, 0);
+    const footBar = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.1, 10), steel);
+    footBar.position.set(0, 0.054, -0.005);
+    this.footMesh.add(foot, footBar);
+    this.static.add(this.footMesh);
+    // Stichloch
+    const hole = new THREE.Mesh(new THREE.CircleGeometry(0.0025, 16), new THREE.MeshBasicMaterial({ color: 0x111111 }));
+    hole.rotation.x = -Math.PI / 2; hole.position.set(nx, ny + 0.0003, nz);
+    this.static.add(hole);
+
+    // Portal
+    const alu = this._mat(0xc4cacf, 0.45, 0.6), yellow = this._mat(0xd9a400, 0.5, 0.2);
+    const H = 1.62;
+    for (const z of [-0.5, 0.6]) {
+      this.static.add(this._box(2.3, 0.08, 0.08, alu, 0.05, H, z));
+      for (const x of [-1.05, 1.15]) this.static.add(this._box(0.08, H, 0.08, alu, x, H / 2, z));
+    }
+    this.bridge = this._box(0.1, 0.1, 1.2, yellow, 0, H + 0.08, 0.05);
+    this.carriage = this._box(0.16, 0.14, 0.16, dark, 0, H + 0.02, 0);
+    this.zAxis = this._box(0.06, 1, 0.06, alu, 0, 1, 0);
+    this.static.add(this.bridge, this.carriage, this.zAxis);
+
+    // Greiferkopf
+    this.headGroup = new THREE.Group();
+    const head = world.head;
+    // Rahmen aus Aluprofilen statt geschlossener Platte (Lage bleibt sichtbar)
+    const rowsZ = [...new Set(head.elements.map((e) => +e.oz.toFixed(4)))];
+    const colsX = [...new Set(head.elements.map((e) => +e.ox.toFixed(4)))];
+    for (const z of rowsZ) this.headGroup.add(this._box(head.extent.x * 2, 0.012, 0.014, alu, 0, 0.036, z));
+    for (const x of colsX) this.headGroup.add(this._box(0.014, 0.012, head.extent.z * 2, alu, x, 0.048, 0));
+    this.headGroup.add(this._box(0.09, 0.02, 0.09, dark, 0, 0.062, 0));
+    this.elementMeshes = [];
+    const accent = new THREE.Color(0x0b8f88);
+    for (const el of head.elements) {
+      const g = new THREE.Group();
+      let body, face;
+      const r = el.half;
+      if (head.type === 'vakuum' || head.type === 'kryo') {
+        body = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.55, r * 0.55, 0.026, 20), steel);
+        body.position.y = 0.017;
+        face = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.85, 0.005, 28), this._mat(head.type === 'kryo' ? 0x9fd3e6 : 0x1b1d1f, 0.8));
+        face.position.y = 0.0025;
+      } else {
+        body = this._box(r * 1.6, 0.024, r * 1.6, steel, 0, 0.018, 0);
+        face = this._box(r * 2, 0.005, r * 2, this._mat(head.type === 'ea' ? 0xc8822a : 0x2b2f31, 0.6, 0.1), 0, 0.0025, 0);
+      }
+      const glow = new THREE.Mesh(new THREE.TorusGeometry(Math.max(r, 0.008) * 1.08, 0.0012, 6, 32), new THREE.MeshBasicMaterial({ color: accent }));
+      glow.rotation.x = Math.PI / 2; glow.position.y = 0.006; glow.visible = false;
+      body.castShadow = face.castShadow = true;
+      g.add(body, face, glow);
+      g.position.set(el.ox, 0, el.oz);
+      this.headGroup.add(g);
+      this.elementMeshes.push({ g, glow, face });
+    }
+    this.dynamic.add(this.headGroup);
+
+    // Stofflagen
+    this.clothMeshes = world.cloths.map((c) => this._clothMesh(c));
+    for (const m of this.clothMeshes) this.dynamic.add(m.mesh);
+
+    // Naht
+    this.seamGeom = new THREE.BufferGeometry();
+    this.seamGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3 * 4000), 3));
+    this.seam = new THREE.LineSegments(this.seamGeom, new THREE.LineBasicMaterial({ color: 0xc0262d }));
+    this.seam.frustumCulled = false;
+    this.dynamic.add(this.seam);
+    // Einstichpunkte zusätzlich als Punkte (Linien sind in WebGL nur 1 px breit)
+    this.stitchPts = new THREE.Points(this.seamGeom, new THREE.PointsMaterial({ color: 0xc0262d, size: 0.0028, sizeAttenuation: true }));
+    this.stitchPts.frustumCulled = false;
+    this.dynamic.add(this.stitchPts);
+
+    // Kontaktpunkte (Greiferbindungen)
+    this.attGeom = new THREE.BufferGeometry();
+    this.attGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3 * 4000), 3));
+    this.attPts = new THREE.Points(this.attGeom, new THREE.PointsMaterial({ color: 0xff3b6b, size: 0.006, depthTest: false }));
+    this.attPts.frustumCulled = false;
+    this.attPts.renderOrder = 10;
+    this.dynamic.add(this.attPts);
+  }
+
+  _clothMesh(c) {
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(3 * c.n), uv = new Float32Array(2 * c.n), col = new Float32Array(3 * c.n);
+    const texScale = 1 / 0.02; // 2 cm je Texturkachel -> Bindung sichtbar
+    for (let j = 0; j < c.nz; j++) for (let i = 0; i < c.nx; i++) {
+      const v = c.idx(i, j);
+      uv[2 * v] = (i * c.h * texScale) / 4; uv[2 * v + 1] = (j * c.h * texScale) / 4;
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geo.setIndex(new THREE.BufferAttribute(new Uint32Array(c.tri), 1));
+    const tint = c.tint;
+    const map = fabricTexture(c.fabric.pattern, tint);
+    const mat = c.fabric.pattern === 'satin'
+      ? new THREE.MeshPhysicalMaterial({ map, roughness: 0.35, sheen: 1, sheenColor: new THREE.Color(0xffffff), sheenRoughness: 0.3, side: THREE.DoubleSide })
+      : new THREE.MeshStandardMaterial({ map, roughness: c.fabric.pattern === 'leather' ? 0.55 : 0.9, side: THREE.DoubleSide });
+    mat.polygonOffset = true; mat.polygonOffsetFactor = -1; mat.polygonOffsetUnits = -1;
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    mesh.frustumCulled = false;
+    return { mesh, geo, mat, map, cloth: c, strain: new Float64Array(c.n) };
+  }
+
+  setColorMode(mode) {
+    this.colorMode = mode;
+    for (const m of this.clothMeshes || []) {
+      const vc = mode !== 'material';
+      m.mat.vertexColors = vc;
+      m.mat.map = vc ? null : m.map;
+      m.mat.color.set(0xffffff);
+      m.mat.needsUpdate = true;
+    }
+  }
+
+  update(world) {
+    const head = world.head, rp = world.robot.pose;
+    // Portal folgt dem Roboter
+    this.bridge.position.x = rp.x;
+    this.carriage.position.set(rp.x, 1.64, rp.z);
+    const zTop = 1.6, zBot = rp.y + 0.046;
+    this.zAxis.position.set(rp.x, (zTop + zBot) / 2, rp.z);
+    this.zAxis.scale.y = Math.max(0.01, zTop - zBot);
+    this.headGroup.position.set(rp.x, rp.y, rp.z);
+    this.headGroup.rotation.y = rp.yaw;
+    head.elements.forEach((el, i) => {
+      const em = this.elementMeshes[i];
+      em.glow.visible = el.act > 0.05;
+      em.glow.material.color.setHSL(0.48, 0.85, 0.25 + 0.3 * el.act);
+      em.glow.material.color.set(el.att.length ? 0x0fb8a9 : 0x0b6e69);
+    });
+    // Nähmaschine
+    const m = world.machine, [nx, ny, nz] = m.needle;
+    this.needleBar.position.set(nx, ny + 0.012 + 0.016 * (1 - m.needleDepth) - 0.006, nz);
+    const footY = m.footUp ? ny + m.footLift : m.footY;
+    this.footMesh.position.set(nx, footY, nz);
+    this.wheel.rotation.x = -m.phase * 2 * Math.PI;
+
+    // Stofflagen
+    const cmode = this.colorMode;
+    const plyColors = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'];
+    for (const cm of this.clothMeshes) {
+      const c = cm.cloth, p = c.pos, a = cm.geo.attributes.position.array;
+      for (let k = 0; k < 3 * c.n; k++) a[k] = p[k];
+      cm.geo.attributes.position.needsUpdate = true;
+      cm.geo.computeVertexNormals();
+      if (cmode !== 'material') {
+        const col = cm.geo.attributes.color.array;
+        if (cmode === 'dehnung') {
+          c.nodeStrain(cm.strain);
+          const lim = world.cfg.limitLoad / Math.min(c.m.Tw, c.m.Tf);
+          for (let v = 0; v < c.n; v++) {
+            const e = Math.max(0, Math.min(1, cm.strain[v] / Math.max(lim, 1e-4)));
+            const cc = new THREE.Color().setHSL(0.62 - 0.62 * e, 0.75, 0.45 + 0.1 * e);
+            col[3 * v] = cc.r; col[3 * v + 1] = cc.g; col[3 * v + 2] = cc.b;
+          }
+        } else {
+          const cc = new THREE.Color(plyColors[(c.stackIndex - 1) % plyColors.length]);
+          for (let v = 0; v < c.n; v++) {
+            const k = c.attached[v] >= 0 ? 1.35 : 1;
+            col[3 * v] = Math.min(1, cc.r * k); col[3 * v + 1] = Math.min(1, cc.g * k); col[3 * v + 2] = Math.min(1, cc.b * k);
+          }
+        }
+        cm.geo.attributes.color.needsUpdate = true;
+      }
+    }
+    // Naht (Stichpunkte auf der obersten Lage)
+    const sp = m.stitchPoints, sa = this.seamGeom.attributes.position.array;
+    let n = 0;
+    for (let k = 1; k < sp.length && n < 3990; k++) {
+      for (const s of [sp[k - 1], sp[k]]) {
+        const c = s.cloth, T = c.tri, P = c.pos;
+        const i0 = T[3 * s.tri] * 3, i1 = T[3 * s.tri + 1] * 3, i2 = T[3 * s.tri + 2] * 3;
+        for (let q = 0; q < 3; q++) sa[3 * n + q] = s.b0 * P[i0 + q] + s.b1 * P[i1 + q] + s.b2 * P[i2 + q] + (q === 1 ? c.radius + 4e-4 : 0);
+        n++;
+      }
+    }
+    this.seamGeom.setDrawRange(0, n);
+    this.seamGeom.attributes.position.needsUpdate = true;
+    // Bindungspunkte
+    const pa = this.attGeom.attributes.position.array;
+    let q = 0;
+    if (this.showContacts) {
+      for (const el of head.elements) for (const at of el.att) {
+        if (q >= 3990) break;
+        const P = at.cloth.pos, v = 3 * at.v;
+        pa[3 * q] = P[v]; pa[3 * q + 1] = P[v + 1]; pa[3 * q + 2] = P[v + 2]; q++;
+      }
+    }
+    this.attGeom.setDrawRange(0, q);
+    this.attGeom.attributes.position.needsUpdate = true;
+
+    this.controls.update();
+    this.renderer.render(this.scene, this.camera);
+  }
+}
+
+return { SceneView };
+})();
+
+// ---- src/ui/chart.js ----
+const __M_ui_chart = (() => {
+// Zeitverlauf Greiferlast und Haltekraft (Canvas, letzte 20 s), mit Fadenkreuz-Tooltip.
+class LoadChart {
+  constructor(canvas, tip, window = 20) {
+    this.cv = canvas; this.tip = tip; this.win = window;
+    this.reset();
+    this.hover = null;
+    canvas.addEventListener('pointermove', (e) => { const r = canvas.getBoundingClientRect(); this.hover = e.clientX - r.left; this.draw(); });
+    canvas.addEventListener('pointerleave', () => { this.hover = null; this.tip.style.display = 'none'; this.draw(); });
+  }
+  reset() { this.t = []; this.a = []; this.b = []; }
+  push(t, a, b) {
+    this.t.push(t); this.a.push(a); this.b.push(b);
+    while (this.t.length && this.t[0] < t - this.win) { this.t.shift(); this.a.shift(); this.b.shift(); }
+  }
+  draw() {
+    const cv = this.cv, dpr = window.devicePixelRatio || 1;
+    const W = cv.clientWidth, H = cv.clientHeight;
+    if (!W) return;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    const g = cv.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, W, H);
+    const css = getComputedStyle(document.documentElement);
+    const ink3 = css.getPropertyValue('--ink-3').trim(), line = css.getPropertyValue('--line').trim();
+    const s1 = css.getPropertyValue('--s1').trim(), s2 = css.getPropertyValue('--s2').trim();
+    const L = 52, R = 10, T = 8, B = 20;
+    const tNow = this.t.length ? this.t[this.t.length - 1] : 0;
+    const t0 = Math.max(0, tNow - this.win), t1 = Math.max(this.win, tNow);
+    let ymax = 0.1;
+    for (let i = 0; i < this.t.length; i++) ymax = Math.max(ymax, this.a[i], this.b[i]);
+    const step = niceStep(ymax / 4);
+    ymax = Math.ceil(ymax / step) * step;
+    const X = (t) => L + ((t - t0) / (t1 - t0)) * (W - L - R);
+    const Y = (v) => T + (1 - v / ymax) * (H - T - B);
+    g.font = '11px "IBM Plex Mono", monospace';
+    g.fillStyle = ink3; g.strokeStyle = line; g.lineWidth = 1;
+    g.textAlign = 'right'; g.textBaseline = 'middle';
+    for (let v = 0; v <= ymax + 1e-9; v += step) {
+      g.beginPath(); g.moveTo(L, Y(v) + 0.5); g.lineTo(W - R, Y(v) + 0.5); g.stroke();
+      g.fillText(`${+v.toFixed(3)} N`.replace('.', ','), L - 4, Y(v));
+    }
+    g.textAlign = 'center'; g.textBaseline = 'top';
+    for (let t = Math.ceil(t0 / 5) * 5; t <= t1; t += 5) g.fillText(`${t} s`, X(t), H - B + 4);
+    const series = (arr, color) => {
+      if (this.t.length < 2) return;
+      g.strokeStyle = color; g.lineWidth = 2; g.lineJoin = 'round';
+      g.beginPath();
+      arr.forEach((v, i) => { const x = X(this.t[i]), y = Y(v); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+      g.stroke();
+      const i = arr.length - 1;
+      g.fillStyle = color; g.beginPath(); g.arc(X(this.t[i]), Y(arr[i]), 3, 0, 2 * Math.PI); g.fill();
+    };
+    series(this.b, s2);
+    series(this.a, s1);
+    if (this.hover !== null && this.t.length) {
+      const th = t0 + ((this.hover - L) / (W - L - R)) * (t1 - t0);
+      let k = 0, bd = Infinity;
+      this.t.forEach((t, i) => { const d = Math.abs(t - th); if (d < bd) { bd = d; k = i; } });
+      const x = X(this.t[k]);
+      g.strokeStyle = ink3; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(x, T); g.lineTo(x, H - B); g.stroke(); g.setLineDash([]);
+      this.tip.style.display = 'block';
+      this.tip.innerHTML = `t ${this.t[k].toFixed(2)} s<br>Last ${this.a[k].toFixed(3)} N<br>Haltekraft ${this.b[k].toFixed(3)} N`;
+      this.tip.style.left = `${Math.min(W - 150, Math.max(0, x + 8))}px`;
+      this.tip.style.top = '6px';
+    }
+  }
+}
+function niceStep(x) {
+  const p = 10 ** Math.floor(Math.log10(Math.max(x, 1e-6))), f = x / p;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
+}
+
+return { LoadChart };
+})();
+
+// ---- src/ui/modelinfo.js ----
+const __M_ui_modelinfo = (() => {
+// Kurzbeschreibung des Physikmodells (Tab „Modell“).
+const MODEL_INFO = `
+<section class="block"><h2>Was simuliert wird</h2>
+<p class="note">Alle Größen in SI-Einheiten, Normfallbeschleunigung g = 9,80665 m/s², Luft bei 20 °C (ρ = 1,204 kg/m³). Die Materialkennwerte stammen aus typischen Prüfwerten (KES-F, FAST, DIN EN ISO 9237) und lassen sich durch eigene Messungen ersetzen.</p></section>
+<section class="block"><h2>Textil</h2>
+<table class="kv">
+<tr><td>Masse</td><td>Flächenmasse ρ<sub>A</sub>, exakt auf Knoten verteilt</td></tr>
+<tr><td>Zug</td><td>Zugsteifigkeit T Kette/Schuss [N/m], anisotrop</td></tr>
+<tr><td>Scherung</td><td>Schersteifigkeit G (KES) [N/m/rad]</td></tr>
+<tr><td>Biegung</td><td>Biegesteifigkeit B (KES) [N·m], geprüft mit ASTM D1388</td></tr>
+<tr><td>Kontakt</td><td>Dicke, Coulomb-Reibung (Haften/Gleiten), Lagenhaftung</td></tr>
+<tr><td>Luft</td><td>Druckwiderstand c<sub>d</sub> = 1,17 je Dreieck, Durchströmung nach Darcy</td></tr>
+</table>
+<p class="note">Löser: XPBD mit festen Teilschritten. Gewebe sind in der Ebene nahezu undehnbar; Zugdehnungen oberhalb einer Linienlast von 10 N/m werden durch eine hierarchische Dehnungsbegrenzung abgefangen. Die angezeigte Dehnung hat daher eine Auflösung von etwa 10 N/m geteilt durch die Zugsteifigkeit.</p></section>
+<section class="block"><h2>Greifer</h2>
+<table class="kv">
+<tr><td>Vakuum</td><td>Leiternetzwerk: Pumpenkennlinie, Durchströmung je Lage, seitliche Leckage zwischen den Lagen</td></tr>
+<tr><td>Nadel</td><td>Nadelanzahl × Auszugskraft × Eingriffsgrad je Lage</td></tr>
+<tr><td>Elektroadhäsion</td><td>Maxwell-Spannung ½·ε₀·ε<sub>r</sub>·E², Abfall exp(−2π·z/Teilung)</td></tr>
+<tr><td>Kryo</td><td>Eis-Haftfestigkeit × Benetzbarkeit, Durchfeuchtung tieferer Lagen</td></tr>
+</table>
+<p class="note">Versagen, wenn (F<sub>n</sub>/C<sub>n</sub>)² + (F<sub>t</sub>/C<sub>t</sub>)² &gt; 1. Die Lasten entstehen aus der Simulation (Gewicht, Trägheit, Luft, Reibung, Lagenhaftung). Auf- und Abbau der Haltekraft mit Zeitkonstanten je Greiferprinzip.</p></section>
+<section class="block"><h2>Nähmaschine</h2>
+<p class="note">Untertransport mit Transporteur (Reibschluss bis μ·F<sub>Fuß</sub>), Nähfuß bremst die obere Lage, Nadel fixiert die Lagen während des Einstichs. Jeder Stich verbindet die Lagen über einen nur zugtragenden Faden. Daraus entstehen Lagenverschiebung und Verdrehen am Werkstück.</p></section>
+<section class="block"><h2>Grenzen</h2>
+<p class="note">Keine Strömungssimulation (CFD), keine Temperatur- und Feuchteabhängigkeit, Maschinenteile und Tische sind starr. Netzauflösung 1–2 cm: Effekte kleiner als die Maschenweite (Einzelfäden, Kanten-Ausfransen) werden nicht abgebildet.</p></section>`;
+
+return { MODEL_INFO };
+})();
+
+// ---- src/ui/app.js ----
+const __M_ui_app = (() => {
+// Bedienoberfläche: verbindet Simulation, 3D-Ansicht und Messwerte.
+const { World, defaultConfig, DEFAULT_PROGRAM } = __M_physics_world;
+const { FABRICS, FABRIC_FIELDS, SOLIDS, fabricById, toSI, bendingLength } = __M_physics_materials;
+const { GRIPPER_TYPES, defaultParams, capacityModel } = __M_physics_grippers;
+const { validateProgram, parseProgram } = __M_physics_robot;
+const { runValidation } = __M_physics_validation;
+const { G, AIR } = __M_physics_constants;
+const { SceneView } = __M_render_scene;
+const { LoadChart } = __M_ui_chart;
+const { MODEL_INFO } = __M_ui_modelinfo;
+const $ = (id) => document.getElementById(id);
+const fmt = (x, d = 2) => (Number.isFinite(x) ? x.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d }) : '–');
+const QUALITY = { fast: { spacing: 0.02, substeps: 10 }, std: { spacing: 0.0125, substeps: 16 }, fine: { spacing: 0.01, substeps: 24 } };
+
+const cfg = defaultConfig();
+cfg.quality = 'std';
+let world, view, chart;
+let running = true;           // Physik läuft (auch ohne Programm)
+let timeScale = 1;
+let acc = 0, last = performance.now(), rtf = 1, lastUi = 0;
+const csvRows = [];
+
+// ---------------------------------------------------------------- Aufbau ----
+function currentFabric() { return cfg.customFabric || fabricById(cfg.fabricId); }
+
+function buildSetupUI() {
+  const sel = $('fabric');
+  sel.innerHTML = FABRICS.map((f) => `<option value="${f.id}">${f.name}</option>`).join('');
+  sel.value = cfg.fabricId;
+  sel.onchange = () => { cfg.fabricId = sel.value; cfg.customFabric = null; renderMaterial(); renderPredict(); };
+  $('tableMat').innerHTML = ['hpl', 'stahl', 'ptfe', 'buche', 'gummi'].map((k) => `<option value="${k}">${SOLIDS[k].name}</option>`).join('');
+  $('tableMat').value = cfg.tableMaterial;
+  const g = $('gripper');
+  g.innerHTML = Object.entries(GRIPPER_TYPES).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
+  g.value = cfg.gripper;
+  g.onchange = () => { cfg.gripper = g.value; cfg.gripperParams = defaultParams(g.value); renderGripper(); renderPredict(); };
+  for (const [id, key, scale] of [['plies', 'plies', 1], ['plyW', 'plyW', 100], ['plyL', 'plyL', 100], ['rows', 'rows', 1], ['cols', 'cols', 1], ['rpm', 'rpm', 1], ['stitch', 'stitch', 1], ['footForce', 'footForce', 1]]) {
+    $(id).value = +(cfg[key] * scale).toFixed(3);
+    $(id).onchange = () => { cfg[key] = +$(id).value / scale; renderPredict(); };
+  }
+  $('footMat').value = cfg.footMaterial;
+  $('quality').value = cfg.quality;
+  $('selfColl').checked = cfg.selfCollision;
+  renderMaterial();
+  renderGripper();
+  renderPredict();
+}
+
+function renderMaterial() {
+  const f = currentFabric();
+  $('fabricMeta').textContent = `${f.composition} · ${f.construction}`;
+  $('matTable').innerHTML = FABRIC_FIELDS.map(([k, label, unit]) => `<tr><td>${label}</td><td><input type="number" step="any" data-key="${k}" value="${f[k]}" aria-label="${label}"></td><td class="unit">${unit}</td></tr>`).join('');
+  $('matTable').querySelectorAll('input').forEach((inp) => {
+    inp.onchange = () => {
+      const base = currentFabric();
+      cfg.customFabric = { ...base, [inp.dataset.key]: +inp.value, name: base.name.replace(/ \(angepasst\)$/, '') + ' (angepasst)' };
+      renderDerived(); renderPredict();
+    };
+  });
+  renderDerived();
+}
+
+function renderDerived() {
+  const f = currentFabric(), m = toSI(f);
+  const vt = Math.sqrt((2 * m.rho * G) / (AIR.density * 1.17));
+  const mass = m.rho * cfg.plyW * cfg.plyL * 1000;
+  $('derived').innerHTML = [
+    ['Biegelänge Kette / Schuss', `${fmt(bendingLength(f, 'warp') * 100, 1)} / ${fmt(bendingLength(f, 'weft') * 100, 1)}`, 'cm'],
+    ['Masse je Zuschnitt', fmt(mass, 1), 'g'],
+    ['Sinkgeschwindigkeit flach', fmt(vt, 2), 'm/s'],
+    ['Dehnung bei 10 N/m (K / S)', `${fmt((10 / m.Tw) * 100, 2)} / ${fmt((10 / m.Tf) * 100, 2)}`, '%'],
+  ].map(([a, b, u]) => `<tr><td>${a}</td><td class="mono">${b}</td><td class="unit">${u}</td></tr>`).join('');
+}
+
+function renderGripper() {
+  const def = GRIPPER_TYPES[cfg.gripper];
+  $('gripperNote').textContent = def.note;
+  const box = $('gripperParams');
+  box.innerHTML = def.params.map(([k, label, unit, , min, max, step]) => `
+    <div class="slider"><label for="gp-${k}">${label} <b><span id="gpv-${k}">${cfg.gripperParams[k]}</span> ${unit}</b></label>
+    <input type="range" id="gp-${k}" min="${min}" max="${max}" step="${step}" value="${cfg.gripperParams[k]}">
+    <input type="number" id="gpn-${k}" min="${min}" max="${max}" step="${step}" value="${cfg.gripperParams[k]}" aria-label="${label}"></div>`).join('');
+  for (const [k] of def.params) {
+    const set = (v) => { cfg.gripperParams[k] = +v; $(`gp-${k}`).value = v; $(`gpn-${k}`).value = v; $(`gpv-${k}`).textContent = v; renderPredict(); };
+    $(`gp-${k}`).oninput = (e) => set(e.target.value);
+    $(`gpn-${k}`).onchange = (e) => set(e.target.value);
+  }
+}
+
+// Vorhersage aus dem Haltekraftmodell (ohne Dynamik): reicht die Kraft für Lage 1, nicht für Lage 2?
+function renderPredict() {
+  const f = currentFabric(), m = toSI(f);
+  const col = [0, 1, 2].map((k) => ({ m, depthTop: k * m.t }));
+  const p = { ...defaultParams(cfg.gripper), ...cfg.gripperParams };
+  const caps = capacityModel(cfg.gripper, p, col, 1);
+  const nEl = cfg.rows * cfg.cols;
+  const weight = (m.rho * G * cfg.plyW * cfg.plyL) / nEl;            // Gewicht je Element
+  const cling = (m.cohesion * cfg.plyW * cfg.plyL) / nEl;            // Lagenhaftung je Element
+  const need = weight + cling;
+  let chip;
+  if (caps[0].Cn < 1.5 * need) chip = '<span class="chip crit">Haltekraft zu gering</span>';
+  else if (caps[1].Cn > need) chip = '<span class="chip warn">Doppelgriff-Risiko</span>';
+  else chip = '<span class="chip good">Einzelgriff erwartet</span>';
+  $('predict').innerHTML = `<div class="head"><strong>Statische Abschätzung je Element</strong>${chip}</div>
+    <table class="kv">
+      <tr><td>Haltekraft Lage 1 / 2 / 3</td><td class="mono">${caps.map((c) => fmt(c.Cn, 3)).join(' / ')}</td><td class="unit">N</td></tr>
+      <tr><td>Bedarf (Gewicht + Lagenhaftung)</td><td class="mono">${fmt(weight, 3)} + ${fmt(cling, 3)}</td><td class="unit">N</td></tr>
+      ${caps.chamber ? `<tr><td>Unterdruck in der Saugkammer</td><td class="mono">${fmt(caps.chamber / 1000, 1)}</td><td class="unit">kPa</td></tr>` : ''}
+    </table><p class="note">Dynamische Lasten (Beschleunigung, Luft, Abschälen) zeigt die Simulation.</p>`;
+}
+
+function readSetup() {
+  cfg.tableMaterial = $('tableMat').value;
+  cfg.footMaterial = $('footMat').value;
+  cfg.quality = $('quality').value;
+  Object.assign(cfg, QUALITY[cfg.quality]);
+  cfg.selfCollision = $('selfColl').checked;
+  cfg.program = $('program').value;
+}
+
+// ---------------------------------------------------------------- Programm --
+function renderGutter() {
+  const n = $('program').value.split('\n').length;
+  $('gutter').innerHTML = Array.from({ length: n }, (_, i) => i + 1).join('<br>');
+  $('gutter').scrollTop = $('program').scrollTop;
+  const errs = validateProgram(parseProgram($('program').value));
+  $('progErr').textContent = errs.join(' · ');
+  $('progErr').style.color = errs.length ? 'var(--crit)' : '';
+}
+function highlightLine(line) {
+  const hl = $('hl'), ta = $('program');
+  if (line === null || line === undefined) { hl.style.display = 'none'; return; }
+  hl.style.display = 'block';
+  hl.style.top = `${8 + line * 18 - ta.scrollTop}px`;
+}
+
+function startProgram() {
+  cfg.program = $('program').value;
+  const errs = world.robot.load(cfg.program);
+  if (errs.length) { $('progErr').textContent = errs.join(' · '); return; }
+  world.robot.start();
+  running = true;
+  $('btnPause').textContent = 'Pause';
+}
+
+// ---------------------------------------------------------------- Welt ------
+function rebuild() {
+  readSetup();
+  world = new World(cfg);
+  view.build(world);
+  view.setColorMode(view.colorMode);
+  chart.reset();
+  csvRows.length = 0;
+  $('log').innerHTML = '';
+  lastLog = 0;
+  buildHeadGrid();
+  renderUi(true);
+}
+
+function buildHeadGrid() {
+  const hg = $('headgrid');
+  hg.style.gridTemplateColumns = `repeat(${cfg.cols}, minmax(0, 1fr))`;
+  // Draufsicht: z wächst zum Bediener; Reihen von hinten (oben) nach vorne
+  hg.innerHTML = world.head.elements.map((el) => `<div class="el" id="el-${el.index}"><div class="t"><span>G${el.index + 1}</span><span class="n" id="eln-${el.index}">aus</span></div><div class="meter"><i id="elm-${el.index}"></i></div><div class="n" id="elf-${el.index}">–</div></div>`).join('');
+}
+
+let lastLog = 0;
+function renderUi(force = false) {
+  const now = performance.now();
+  if (!force && now - lastUi < 120) return;
+  lastUi = now;
+  const w = world;
+  $('clock').textContent = `t = ${fmt(w.t, 2)} s`;
+  const r = $('rtf');
+  r.textContent = `${fmt(rtf, 2)}× Echtzeit`;
+  r.className = 'chip ' + (rtf > 0.9 * Math.min(1, timeScale) ? 'good' : rtf > 0.4 * Math.min(1, timeScale) ? 'accent' : 'warn');
+  const cur = w.robot.current;
+  $('progNow').textContent = w.robot.running ? `Zeile ${cur ? cur.line + 1 : '–'}: ${cur ? cur.raw : ''}` : (w.machine.busy ? 'Nähen …' : 'Programm bereit');
+  highlightLine(w.robot.running && cur ? cur.line : null);
+
+  // Greiferelemente
+  const st = w.head.status();
+  let maxU = 0;
+  const heldIds = new Set();
+  for (const s of st) {
+    const held = s.plies.filter((p) => p.held > 0);
+    held.forEach((p) => heldIds.add(p.cloth.id));
+    let u = 0;
+    for (const p of held) u = Math.max(u, p.Cn > 0 ? Math.hypot(p.Fn / p.Cn, p.Ft / Math.max(p.Ct, 1e-9)) : 0);
+    maxU = Math.max(maxU, u);
+    const el = $(`el-${s.index}`);
+    if (!el) continue;
+    el.className = 'el' + (s.on ? ' on' : '') + (u > 0.8 ? ' hot' : '') + (held.length > 1 ? ' double' : '');
+    $(`eln-${s.index}`).textContent = s.on ? (held.length ? `${held.length} Lage${held.length > 1 ? 'n' : ''}` : 'ein') : s.act > 0.02 ? 'löst' : 'aus';
+    $(`elm-${s.index}`).style.width = `${Math.min(100, u * 100)}%`;
+    const top = held[0];
+    $(`elf-${s.index}`).textContent = top ? `${fmt(top.Fn, 3)} / ${fmt(top.Cn, 3)} N` : (w.head.type === 'vakuum' && s.on ? `${fmt(s.chamber / 1000, 1)} kPa` : '–');
+  }
+  $('kHeld').textContent = heldIds.size;
+  $('kHeldSub').innerHTML = heldIds.size > 1 ? '<span class="chip crit">Doppelgriff</span>' : heldIds.size === 1 ? '<span class="chip good">Einzelgriff</span>' : 'keine';
+  $('kUtil').textContent = heldIds.size ? `${fmt(maxU * 100, 0)} %` : '–';
+
+  // Lagen
+  const rep = w.plyReport();
+  let lastPlaced = null;
+  $('plyTable').innerHTML = '<tr><th>Lage</th><th>Zustand</th><th>Δx</th><th>Δz</th><th>Δθ</th><th>Dehnung</th><th>σ<sub>y</sub></th></tr>' + rep.map((p) => {
+    const cls = p.state === 'verloren' ? 'crit' : p.state === 'gegriffen' ? 'accent' : p.state === 'abgelegt' ? 'good' : '';
+    const e = p.error;
+    if (e && p.state === 'abgelegt') lastPlaced = p;
+    const lim = w.cfg.limitLoad / Math.min(p.cloth.m.Tw, p.cloth.m.Tf);
+    const atLim = p.strain > 0.95 * lim;
+    return `<tr><td>${p.name}</td><td><span class="chip ${cls}">${p.state}</span></td>
+      <td>${e ? fmt(e.dx * 1000, 1) : '–'}</td><td>${e ? fmt(e.dz * 1000, 1) : '–'}</td><td>${e ? fmt((e.dth * 180) / Math.PI, 1) + '°' : '–'}</td>
+      <td title="${atLim ? 'an der Dehnungsbegrenzung (Linienlast ≥ ' + w.cfg.limitLoad + ' N/m oder numerische Auflösung)' : ''}">${fmt(p.strain * 100, 2)} %</td><td>${fmt(p.wav * 1000, 1)}</td></tr>`;
+  }).join('');
+  $('kErr').textContent = lastPlaced ? `${fmt(Math.hypot(lastPlaced.error.dx, lastPlaced.error.dz) * 1000, 1)} mm` : '–';
+  $('kErrSub').textContent = lastPlaced ? `${lastPlaced.name}, Δθ ${fmt((lastPlaced.error.dth * 180) / Math.PI, 1)}°` : 'letzte abgelegte Lage';
+  $('kStitch').textContent = w.machine.stitchPoints.length;
+  $('kStitchSub').textContent = w.machine.busy ? `läuft, ${w.machine.stitches}/${w.machine.sewTarget}` : w.machine.stitchPoints.length ? `${fmt((w.machine.stitchPoints.length * w.machine.stitchLength) / 10, 1)} cm genäht` : 'Naht –';
+
+  // Ereignisse
+  if (w.events.length < lastLog) lastLog = 0;
+  const log = $('log');
+  for (; lastLog < w.events.length; lastLog++) {
+    const e = w.events[lastLog];
+    const li = document.createElement('li');
+    li.className = e.level;
+    li.innerHTML = `<time>${fmt(e.t, 2)} s</time><span></span>`;
+    li.lastChild.textContent = e.msg;
+    log.prepend(li);
+  }
+  chart.draw();
+}
+
+function sample() {
+  const w = world;
+  // Summen über alle Elemente für die oberste gehaltene Lage
+  let Fn = 0, Cn = 0;
+  for (const s of w.head.status()) {
+    const top = s.plies.find((p) => p.held > 0);
+    if (top) { Fn += top.Fn; Cn += top.Cn; }
+  }
+  chart.push(w.t, Fn, Cn);
+  if (csvRows.length < 200000) {
+    const rp = w.robot.pose;
+    const plies = w.plyReport().map((p) => `${p.state};${p.pose.x.toFixed(5)};${p.pose.z.toFixed(5)};${(p.pose.theta * 180 / Math.PI).toFixed(3)};${(p.strain * 100).toFixed(4)}`).join(';');
+    csvRows.push(`${w.t.toFixed(4)};${rp.x.toFixed(5)};${rp.y.toFixed(5)};${rp.z.toFixed(5)};${Fn.toFixed(5)};${Cn.toFixed(5)};${plies}`);
+  }
+}
+
+// ---------------------------------------------------------------- Schleife --
+const FRAME = 1 / 60;
+let sampleAcc = 0;
+function loop(now) {
+  const real = Math.min(0.1, (now - last) / 1000);
+  last = now;
+  if (running) {
+    const t0 = performance.now();
+    acc += timeScale >= 4 ? 1e9 : real * timeScale;
+    let steps = 0, simAdv = 0;
+    const budget = timeScale >= 4 ? 40 : 28; // ms Rechenzeit je Bild
+    while (acc >= FRAME && performance.now() - t0 < budget) {
+      world.step(FRAME);
+      acc -= FRAME; steps++; simAdv += FRAME;
+      sampleAcc += FRAME;
+      if (sampleAcc >= 0.05) { sampleAcc = 0; sample(); }
+    }
+    if (acc > 4 * FRAME) acc = 0; // Rückstand verwerfen (Rechenleistung reicht nicht)
+    if (real > 0) rtf = rtf * 0.9 + 0.1 * (simAdv / real);
+  } else rtf = 0;
+  view.update(world);
+  renderUi();
+  requestAnimationFrame(loop);
+}
+
+// ---------------------------------------------------------------- Dialoge ---
+function showValidation() {
+  const dlg = $('dlg');
+  $('dlgTitle').textContent = 'Validierung des Physikmodells';
+  $('dlgBody').innerHTML = '<p>Die Tests laufen (ca. 5–10 s) …</p>';
+  dlg.showModal();
+  setTimeout(() => {
+    const rows = runValidation();
+    const ok = rows.filter((r) => r.ok).length;
+    $('dlgBody').innerHTML = `<p>${ok} von ${rows.length} Prüfungen liegen innerhalb der Toleranz. Jede Prüfung vergleicht den Solver mit einer analytischen Lösung oder einer Normprüfung.</p>
+    <div class="tablewrap"><table><tr><th>Prüfung</th><th>Simulation</th><th>Referenz</th><th>Abw.</th><th></th></tr>
+    ${rows.map((r) => `<tr><td>${r.name}<br><span class="note">${r.note || ''}</span></td><td class="num">${fmt(r.sim, 3)} ${r.unit}</td><td class="num">${fmt(r.ref, 3)} ${r.unit}</td><td class="num">${r.dev === null ? '–' : fmt(r.dev, 1) + ' %'}</td><td><span class="chip ${r.ok ? 'good' : 'crit'}">${r.ok ? 'OK' : 'Abweichung'}</span></td></tr>`).join('')}
+    </table></div>`;
+  }, 50);
+}
+
+// ---------------------------------------------------------------- Start -----
+function init() {
+  view = new SceneView($('viewport'));
+  const mq = window.matchMedia('(prefers-color-scheme: dark)');
+  const applyTheme = () => {
+    const t = document.documentElement.dataset.theme;
+    view.setTheme(t ? t === 'dark' : mq.matches);
+  };
+  applyTheme();
+  mq.addEventListener?.('change', applyTheme);
+  new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  chart = new LoadChart($('chart'), $('tip'));
+  $('program').value = cfg.program;
+  renderGutter();
+  $('program').addEventListener('input', renderGutter);
+  $('program').addEventListener('scroll', () => { $('gutter').scrollTop = $('program').scrollTop; });
+  $('modelInfo').innerHTML = MODEL_INFO;
+  buildSetupUI();
+
+  document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('.tabs button').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
+    document.querySelectorAll('.pane').forEach((p) => { p.hidden = p.dataset.pane !== b.dataset.tab; });
+  }));
+  $('views').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    $('views').querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    view.setView(b.dataset.view);
+  });
+  $('colorModes').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    $('colorModes').querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    view.setColorMode(b.dataset.color);
+  });
+  $('btnContacts').onclick = () => { view.showContacts = !view.showContacts; $('btnContacts').setAttribute('aria-pressed', String(view.showContacts)); };
+  $('btnRun').onclick = startProgram;
+  $('btnRun2').onclick = startProgram;
+  $('btnStop').onclick = () => world.robot.stop();
+  $('btnPause').onclick = () => { running = !running; $('btnPause').textContent = running ? 'Pause' : 'Weiter'; };
+  $('btnReset').onclick = rebuild;
+  $('btnApply').onclick = rebuild;
+  $('btnDefault').onclick = () => { $('program').value = DEFAULT_PROGRAM; renderGutter(); };
+  $('timeScale').onchange = (e) => { timeScale = +e.target.value; };
+  $('btnValidate').onclick = showValidation;
+  $('dlgClose').onclick = () => $('dlg').close();
+  document.querySelectorAll('[data-jog]').forEach((b) => b.addEventListener('click', () => {
+    if (world.robot.running) return;
+    const [dx, dy, dz] = b.dataset.jog.split(',').map(Number);
+    const p = world.robot.pose;
+    world.robot.vmax = 0.2; world.robot.amax = 1;
+    world.robot.moveTo({ x: p.x + dx, y: p.y + dy, z: p.z + dz, yaw: p.yaw }, world.t);
+  }));
+  $('jogTouch').onclick = () => { if (!world.robot.running) world.robot.seg = { touch: true, v: 0.01, travel: 0 }; };
+  $('jogGrip').onclick = () => { const on = !world.head.elements.some((e) => e.on); world.head.setActive(null, on); world.log(`Greifer ${on ? 'EIN' : 'AUS'} (Hand)`); };
+  $('jogHome').onclick = () => { if (!world.robot.running) { world.robot.vmax = 0.3; world.robot.moveTo(world.robot.home, world.t); } };
+  $('btnCsv').onclick = async () => {
+    const head = 't_s;robot_x;robot_y;robot_z;Fn_N;Cn_N;' + world.plyReport().map((p) => `${p.name}_zustand;${p.name}_x;${p.name}_z;${p.name}_theta_grad;${p.name}_dehnung_proz`).join(';');
+    const text = [head, ...csvRows].join('\n');
+    try { await navigator.clipboard.writeText(text); $('btnCsv').textContent = `${csvRows.length} Zeilen kopiert`; }
+    catch { $('btnCsv').textContent = 'Kopieren nicht erlaubt'; }
+    setTimeout(() => { $('btnCsv').textContent = 'Messdaten als CSV kopieren'; }, 2500);
+  };
+
+  rebuild();
+  // Beispiel sofort starten, damit die Zelle beim Öffnen arbeitet
+  startProgram();
+  requestAnimationFrame(loop);
+}
+
+init();
+window.__sim = { get world() { return world; }, get view() { return view; }, rebuild, startProgram };
+
+return {  };
+})();
+
+</script>
+</body>
+</html>

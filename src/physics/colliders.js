@@ -60,7 +60,8 @@ export class BoxCollider {
   }
 
   // Projiziert alle Partikel einer Lage aus dem Quader heraus und wendet Reibung an.
-  collideCloth(cloth, muS, muK) {
+  // vac: { region:[x0,x1,z0,z1], pen } – zusätzliche Normalkorrektur je Teilschritt (Saugtisch)
+  collideCloth(cloth, muS, muK, vac = null) {
     if (!this.enabled) return;
     const p = cloth.pos, pp = cloth.prev, w = cloth.w, r = cloth.radius;
     const R = this.R, c = this.c, h = this.half;
@@ -76,9 +77,18 @@ export class BoxCollider {
       const qy = R[1] * dx + R[4] * dy + R[7] * dz;
       const qz = R[2] * dx + R[5] * dy + R[8] * dz;
       const px = hx - Math.abs(qx), py = hy - Math.abs(qy), pz = hz - Math.abs(qz);
-      if (px <= 0 || py <= 0 || pz <= 0) continue;
+      let vacPen = 0;
+      if (vac && qy > 0 && px > 0 && pz > 0 && py > -0.05e-3) {
+        const x = p[i], z = p[i + 2], r = vac.region;
+        if (x > r[0] && x < r[1] && z > r[2] && z < r[3]) vacPen = vac.pen;
+      }
+      if (vacPen && py <= 0) {
+        // angesaugt: Lage liegt auf (Abheben verhindert), Reibung mit Saugkraft
+        p[i + 1] += py;
+      } else if (px <= 0 || py <= 0 || pz <= 0) continue;
       let nx, ny, nz, pen;
-      if (py <= px && py <= pz) { pen = py; const s = qy >= 0 ? 1 : -1; nx = R[1] * s; ny = R[4] * s; nz = R[7] * s; }
+      if (vacPen) { pen = Math.max(0, py); nx = R[1]; ny = R[4]; nz = R[7]; }
+      else if (py <= px && py <= pz) { pen = py; const s = qy >= 0 ? 1 : -1; nx = R[1] * s; ny = R[4] * s; nz = R[7] * s; }
       else if (px <= pz) { pen = px; const s = qx >= 0 ? 1 : -1; nx = R[0] * s; ny = R[3] * s; nz = R[6] * s; }
       else { pen = pz; const s = qz >= 0 ? 1 : -1; nx = R[2] * s; ny = R[5] * s; nz = R[8] * s; }
       p[i] += nx * pen; p[i + 1] += ny * pen; p[i + 2] += nz * pen;
@@ -100,7 +110,8 @@ export class BoxCollider {
       rx -= rn * nx; ry -= rn * ny; rz -= rn * nz;
       const rt = Math.sqrt(rx * rx + ry * ry + rz * rz);
       if (rt < 1e-15) continue;
-      const k = rt < muS * pen ? 1 : Math.min(1, (muK * pen) / rt);
+      const pf = pen + vacPen;
+      const k = rt < muS * pf ? 1 : Math.min(1, (muK * pf) / rt);
       p[i] -= rx * k; p[i + 1] -= ry * k; p[i + 2] -= rz * k;
     }
   }

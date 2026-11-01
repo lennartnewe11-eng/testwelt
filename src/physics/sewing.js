@@ -32,6 +32,8 @@ export class SewingMachine {
     this.stitchPoints = [];          // {cloth, tri, b0, b1, b2}
     this.joins = [];                 // {ca, va, cb, vb, rest}
     this.needleDepth = 0;            // für Darstellung (0 = oben, 1 = unten)
+    this.pinned = [];
+    this.order = new Map();             // Lagenreihenfolge unter dem Fuß
     this.foot = new BoxCollider({ name: 'Nähfuß', center: [needle[0], needle[1] + this.footLift + 0.004, needle[2]], half: [this.half[0], 0.004, this.half[1]], material: 'stahl', kinematic: true, visual: false });
     this.footY = needle[1] + this.footLift;
   }
@@ -90,14 +92,24 @@ export class SewingMachine {
       }
       if (idx.length) groups.push({ c, idx, y: ys / idx.length });
     }
-    groups.sort((a, b) => a.y - b.y);
+    // Lagenreihenfolge beim ersten Erfassen festhalten (die Höhenunterschiede liegen im
+    // Bereich der Stoffdicke; eine laufende Neusortierung könnte Lagen vertauschen)
+    for (const g of groups) if (!this.order.has(g.c.id)) this.order.set(g.c.id, g.y);
+    groups.sort((a, b) => this.order.get(a.c.id) - this.order.get(b.c.id));
     return groups;
+  }
+
+  // Nach dem Teilschritt aufrufen: kinematisch geführte Knoten wieder freigeben
+  unpin() {
+    const P = this.pinned;
+    for (let k = 0; k < P.length; k += 3) P[k].w[P[k + 1]] = P[k + 2];
+    P.length = 0;
   }
 
   solve(cloths, dt, t) {
     // Stiche (bleibende Verbindungen der Lagen)
     for (const j of this.joins) this._solveJoin(j);
-    if (this.footUp) return;
+    if (this.footUp) { this.order.clear(); return; }
     const groups = this._zone(cloths);
     if (!groups.length) {
       this.footY = this.needle[1];
@@ -106,7 +118,7 @@ export class SewingMachine {
     }
     let stack = 0;
     for (const g of groups) stack += 2 * g.c.radius;
-    this.footY = this.needle[1] + stack * 0.85; // Stoff unter Fußdruck leicht komprimiert
+    this.footY = this.needle[1] + stack;
 
     const dt2 = dt * dt;
     const vf = this.feedVelocity();
@@ -118,9 +130,10 @@ export class SewingMachine {
       const { c, idx } = groups[k];
       const p = c.pos, pp = c.prev;
       const Fn = this.footForce / idx.length;
-      const comp = (2 * c.radius) * 0.85;
-      const yTarget = yBase + comp / 2;
-      yBase += comp;
+      // Nähfuß drückt von oben, Stichplatte stützt von unten
+      const yMin = yBase + c.radius;
+      yBase += 2 * c.radius;
+      const yCap = this.needle[1] + stack - c.radius * (2 * (groups.length - 1 - k) + 1);
       let mdx = 0, mdz = 0;
       for (const v of idx) {
         const i = 3 * v, w = c.w[v];
@@ -135,18 +148,17 @@ export class SewingMachine {
         let cl = Math.hypot(cx, cz), L = lim(mu);
         if (cl > L) { cx *= L / cl; cz *= L / cl; }
         p[i] += cx; p[i + 2] += cz; dx += cx; dz += cz;
-        // oberste Lage: Reibung am (stehenden) Nähfuß
-        if (k === groups.length - 1) {
-          const Lf = lim(c.m.muSteelK * muFoot);
-          cl = Math.hypot(dx, dz);
-          if (cl > 1e-15) {
-            const s = Math.min(1, Lf / cl);
-            p[i] -= dx * s; p[i + 2] -= dz * s; dx -= dx * s; dz -= dz * s;
-          }
+        // oberste Lage: Der Nähfuß bremst mit μ_Fuß·F_N, die Lage darunter treibt mit μ_SS·F_N.
+        // Ist die Bremsreibung größer, bleibt die obere Lage am Fuß hängen (Lagenverschiebung).
+        if (k > 0 && k === groups.length - 1 && c.m.muSteelK * muFoot > mu) {
+          p[i] -= dx; p[i + 2] -= dz; dx = 0; dz = 0;
         }
         if (needleIn) { p[i] -= dx; p[i + 2] -= dz; dx = 0; dz = 0; }
-        p[i + 1] = yTarget;
+        if (p[i + 1] > yCap) p[i + 1] = yCap;
+        if (p[i + 1] < yMin) p[i + 1] = yMin;
         mdx += dx; mdz += dz;
+        // Haftreibung erfüllt: Knoten bis zum Ende des Teilschritts kinematisch führen
+        if (Math.hypot(cx, cz) < L * 0.999) { this.pinned.push(c, v, w); c.w[v] = 0; }
       }
       below = [mdx / idx.length, mdz / idx.length];
     }

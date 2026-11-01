@@ -12,12 +12,13 @@ import { World, defaultConfig } from './world.js';
 export function miniWorld(cloths, colliders = [], { drag = true, substeps = 16 } = {}) {
   const w = Object.create(World.prototype);
   w.cfg = { ...defaultConfig(), substeps, plies: cloths.length };
+  w.tableVac = { on: false, pressure: 0, region: [0, 0, 0, 0], top: 0 };
   w.t = 0; w.events = [];
   w.cloths = cloths;
   w.colliders = colliders; w.staticColliders = colliders;
   w.kinematic = [];
   w.head = { elements: [], extent: { x: 0, z: 0 }, pose: { x: 0, y: -10, z: 0, yaw: 0 }, colliders: [], updateFrame() {}, solve() {}, checkFailure() {}, updateColliders() {}, events: [] };
-  w.machine = { footUp: true, sewing: false, needle: [99, 0, 99], update() {}, solve() {}, busy: false };
+  w.machine = { footUp: true, sewing: false, needle: [99, 0, 99], update() {}, solve() {}, unpin() {}, busy: false };
   w.robot = { pose: { x: 0, y: -10, z: 0, yaw: 0 }, update() {} };
   w.contacts = { detect() {}, solve() {}, n: 0 };
   w.track = new Map(cloths.map((c) => [c.id, { state: '', held: false }]));

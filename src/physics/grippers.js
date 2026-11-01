@@ -19,7 +19,7 @@ export const GRIPPER_TYPES = {
     params: [
       ['diameter', 'Saugfläche Ø', 'mm', 20, 5, 80, 1],
       ['dpMax', 'Max. Unterdruck', 'kPa', 60, 5, 90, 1],
-      ['qMax', 'Saugvermögen', 'l/min', 25, 2, 400, 1],
+      ['qMax', 'Saugvermögen', 'l/min', 12, 2, 400, 1],
     ],
     tauOn: 0.08, tauOff: 0.05, gap: 3e-3, shape: 'round',
     note: 'Unterdruck-Leiternetzwerk: Volumenstrom durch die Lagen (Darcy, Luftdurchlässigkeit), seitliche Leckage zwischen den Lagen, Kennlinie des Vakuumerzeugers.',
@@ -339,6 +339,15 @@ export class GripperHead {
         if (g.depth > limit) break;
         if (cap.Cn < 2e-3 || (cd && t < cd) || el.blocked.has(g.c.id)) break;
         const ly = -(above + g.c.radius);
+        // Gegenhalter: Liegt die Lage auf einem aktiven Saugtisch, muss die Haltekraft
+        // dessen Niederhaltekraft (Unterdruck × Greiferfläche) übersteigen.
+        const tv = this.tableVac;
+        if (tv && tv.on) {
+          const v0 = g.verts[0], P = g.c.pos;
+          const onTable = P[3 * v0 + 1] - g.c.radius < tv.top + 0.05e-3 && P[3 * v0] > tv.region[0] && P[3 * v0] < tv.region[1] && P[3 * v0 + 2] > tv.region[2] && P[3 * v0 + 2] < tv.region[3];
+          const area = def.shape === 'round' ? Math.PI * half * half : 4 * half * half;
+          if (onTable && cap.Cn <= tv.pressure * area) break;
+        }
         // eine Lage wird je Aktivierung einmal angesaugt/eingestochen, danach nicht nachgefasst
         if (el.since.has(g.c.id)) { above += 2 * g.c.radius; continue; }
         let added = 0;
@@ -403,7 +412,7 @@ export class GripperHead {
         if (u > 1) {
           const cloth = el.att.find((a) => a.cloth.id === id)?.cloth;
           if (!cloth) continue;
-          const regular = !el.on || el.act < 0.9;
+          const regular = !el.on;
           const ply = el.frozen.get(id)?.ply ?? 0;
           this._release(el, id);
           el.cooldown.set(id, t + 0.4);

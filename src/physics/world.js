@@ -14,8 +14,10 @@ export const TABLE_TOP = 0.80;
 export const STACK_POS = [-0.5, 0.05];
 export const NEEDLE = [0.62, TABLE_TOP, -0.12];
 
-export const DEFAULT_PROGRAM = `# Pick & Place zweier Zuschnitte und Naht an der Nähmaschine
+export const DEFAULT_PROGRAM = `# Pick & Place zweier Zuschnitte und robotergeführte Naht
 # Koordinaten in m (y = Höhe der Greiferfläche), Drehung in °
+
+# 1. Lage vom Stapel nehmen
 SPEED 0.5
 ACCEL 2
 MOVE -0.5 0.95 0.05 0       # über den Stapel
@@ -25,21 +27,23 @@ TOUCH 0.01                  # Tastfahrt bis Kontakt mit der obersten Lage
 GRIP ON
 WAIT 0.3                    # Haltekraft aufbauen
 SPEED 0.03
-MOVEREL 0 0.02 0            # langsam abheben (Lagentrennung)
+MOVEREL 0 0.04 0            # langsam abheben: mitgesaugte Unterlage fällt ab
+WAIT 0.3
 SPEED 0.5
 MOVE -0.5 0.95 0.05
-MOVE 0.48 0.95 0.12         # Transport zur Nähmaschine
+MOVE 0.485 0.95 0.12        # Transport zur Nähmaschine
 SPEED 0.12
-MOVE 0.48 0.815 0.12
+MOVE 0.485 0.815 0.12
 TOUCH 0.01
 SPEED 0.05
 MOVEREL 0 0.003 -0.05       # Vorderkante unter den Nähfuß schieben
 GRIP OFF
-WAIT 0.4
+TABLEVAC ON                 # Saugtisch hält die untere Lage
+WAIT 0.3
 SPEED 0.3
 MOVEREL 0 0.12 0
 
-# zweite Lage deckungsgleich auflegen
+# 2. Lage holen und deckungsgleich auflegen
 SPEED 0.5
 MOVE -0.5 0.95 0.05
 SPEED 0.12
@@ -48,24 +52,23 @@ TOUCH 0.01
 GRIP ON
 WAIT 0.3
 SPEED 0.03
-MOVEREL 0 0.02 0
+MOVEREL 0 0.04 0
+WAIT 0.3
 SPEED 0.5
 MOVE -0.5 0.95 0.05
-MOVE 0.48 0.95 0.12
+MOVE 0.485 0.95 0.12
 SPEED 0.12
-MOVE 0.48 0.815 0.12
+MOVE 0.485 0.815 0.12
 TOUCH 0.01
 SPEED 0.05
-MOVEREL 0 0.003 -0.05       # ebenfalls unter den Nähfuß schieben
+MOVEREL 0 0.003 -0.05       # über die gehaltene 1. Lage schieben
 
 # robotergeführte Naht: 20 cm, 600 1/min, 3 mm Stichlänge.
-# Der Greifer hält die obere Lage und fährt mit der mittleren
-# Transportgeschwindigkeit (3 mm × 600/min = 30 mm/s) mit.
+# SYNC koppelt die Z-Achse elektronisch an den Transporteur.
 FOOT DOWN
+TABLEVAC OFF
 WAIT 0.2
-SEW 0.20 600 3
-SPEED 0.03
-MOVEREL 0 0 -0.20
+SEW 0.20 600 3 SYNC
 WAITSEW
 FOOT UP
 GRIP OFF
@@ -88,9 +91,10 @@ export function defaultConfig() {
     limitLoad: 10,       // Linienlast [N/m], ab der die Dehnungsbegrenzung greift
     gripper: 'vakuum',
     gripperParams: defaultParams('vakuum'),
-    rows: 3, cols: 2, pitchX: 0.14, pitchZ: 0.12,
+    rows: 3, cols: 3, pitchX: 0.11, pitchZ: 0.14,
     rpm: 600, stitch: 3, footForce: 40, footMaterial: 'stahl',
     tableMaterial: 'hpl',
+    tableVacPa: 800,     // wirksamer Unterdruck des Saugtischs [Pa]
     selfCollision: true,
     program: DEFAULT_PROGRAM,
     seed: 7,
@@ -123,6 +127,7 @@ export class World {
       new BoxCollider({ name: 'Arm', center: [NEEDLE[0] + 0.2, T + 0.23, NEEDLE[2]], half: [0.16, 0.04, 0.045], material: 'guss' }),
       new BoxCollider({ name: 'Ständer', center: [NEEDLE[0] + 0.33, T + 0.12, NEEDLE[2]], half: [0.05, 0.12, 0.055], material: 'guss' }),
     ];
+    this.colliders[2].vacuum = true; // Nähtisch mit Saugfeld
     this.staticColliders = this.colliders.slice();
 
     // Stapel aus Zuschnitten mit realistischer Legetoleranz (±1,5 mm, ±0,5°)
@@ -145,6 +150,10 @@ export class World {
     this.head = new GripperHead({ type: c.gripper, params: { ...defaultParams(c.gripper), ...c.gripperParams }, rows: c.rows, cols: c.cols, pitchX: c.pitchX, pitchZ: c.pitchZ });
     this.robot = new GantryRobot();
     this.machine = new SewingMachine({ needle: NEEDLE });
+    // Saugtisch im Nähbereich: hält aufliegende Lagen über Unterdruck (erhöht die Normalkraft)
+    this.tableVac = { on: false, pressure: c.tableVacPa ?? 800, region: [0.345, 0.625, -0.12, 0.25], top: T }; // Saugfeld unter der 1. Lage (Zonensteuerung)
+    this.machine.tableVac = this.tableVac;
+    this.head.tableVac = this.tableVac;
     Object.assign(this.machine, { rpm: c.rpm, stitchLength: c.stitch, footForce: c.footForce, footMaterial: c.footMaterial });
     this.contacts = new ClothContacts();
     this.contacts.selfCollision = c.selfCollision;
@@ -315,7 +324,7 @@ export class World {
       const wasOn = this.head.elements.some((e) => e.on);
       this.robot.update(this.t, dt, ctx);
       const isOn = this.head.elements.some((e) => e.on);
-      if (!wasOn && isOn) this.cycle = { gripY: this.robot.pose.y, double: false };
+      if (!wasOn && isOn) this.cycle = { gripY: this.robot.pose.y, double: false, empty: false };
       this.head.pose = this.robot.pose;
       this.head.updateColliders();
       this.machine.update(this.t, dt);
@@ -352,14 +361,18 @@ export class World {
           if (c.sleeping) continue;
           const b = c.aabb;
           if (col.c[0] + br < b[0] || col.c[0] - br > b[3] || col.c[1] + br < b[1] || col.c[1] - br > b[4] || col.c[2] + br < b[2] || col.c[2] - br > b[5]) continue;
-          col.collideCloth(c, c.m.muSteelS * ff, c.m.muSteelK * ff);
+          // Saugtisch: Unterdruck erhöht die Normalkraft der aufliegenden Lage (Reibschluss)
+          const vac = col.vacuum && this.tableVac.on ? { region: this.tableVac.region, pen: (this.tableVac.pressure / c.m.rho) * dt * dt } : null;
+          col.collideCloth(c, c.m.muSteelS * ff, c.m.muSteelK * ff, vac);
         }
       }
       for (const c of cloths) if (!c.sleeping) c.solveLimits(this.cfg.limitLoad);
+      this.machine.unpin();
       const inv = 1 / dt;
       for (const c of cloths) {
         if (c.sleeping) continue;
         const p = c.pos, pp = c.prev, v = c.vel;
+        if (!Number.isFinite(p[0] + p[3 * (c.n >> 1) + 1] + p[3 * c.n - 1])) this._recover(c);
         for (let k = 0, N = 3 * c.n; k < N; k++) {
           let vk = (p[k] - pp[k]) * inv;
           if (vk > 20) vk = 20; else if (vk < -20) vk = -20;
@@ -372,10 +385,19 @@ export class World {
     this._afterFrame();
   }
 
+  // Sicherheitsnetz: nicht-endliche Werte (numerische Instabilität) zurücksetzen
+  _recover(c) {
+    const p = c.pos, pp = c.prev;
+    for (let k = 0; k < 3 * c.n; k++) if (!Number.isFinite(p[k])) p[k] = Number.isFinite(pp[k]) ? pp[k] : 0;
+    c.vel.fill(0);
+    if (!c.warnedNaN) { c.warnedNaN = true; this.log(`${c.name}: numerische Instabilität abgefangen`, 'error'); }
+  }
+
   _afterFrame() {
     for (const e of this.head.events.splice(0)) {
-      if (e.type === 'separate') { this.log(`${e.cloth.name} von Greifer ${e.el + 1} getrennt (Last ${e.Fn.toFixed(3)} N > Haltekraft ${e.Cn.toFixed(3)} N)`); continue; }
-      this.log(`${e.cloth.name} von Greifer ${e.el + 1} abgelöst (F_n ${e.Fn.toFixed(2)} N / C_n ${e.Cn.toFixed(2)} N, F_t ${e.Ft.toFixed(2)} N / C_t ${e.Ct.toFixed(2)} N)`, 'warn');
+      const detail = `F_n ${e.Fn.toFixed(3)}/${e.Cn.toFixed(3)} N, F_t ${e.Ft.toFixed(3)}/${e.Ct.toFixed(3)} N`;
+      if (e.type === 'separate') continue; // Unterlage löst sich – Zusammenfassung je Lage folgt
+      this.log(`${e.cloth.name} löst sich von Greifer ${e.el + 1} (${detail})`, 'warn');
     }
     const anyOn = this.head.elements.some((e) => e.on);
     let heldCount = 0;
@@ -384,11 +406,16 @@ export class World {
       const held = c.attachedCount() > 0;
       if (held) heldCount++;
       if (held && !tr.held) {
-        tr.held = true; tr.state = 'gegriffen'; tr.error = null; tr.ideal = null;
-        tr.pick = c.pose2D(); tr.gpick = { ...this.head.pose };
+        tr.held = true; tr.prevState = tr.state;
+        // als Unterlage mitgegriffen (durch die obere Lage hindurch)?
+        tr.sub = this.head.elements.some((el) => el.frozen.get(c.id)?.ply > 0) && !this.head.elements.some((el) => el.frozen.get(c.id)?.ply === 0);
+        if (!tr.sub) { tr.state = 'gegriffen'; tr.error = null; tr.ideal = null; tr.pick = c.pose2D(); tr.gpick = { ...this.head.pose }; }
       } else if (!held && tr.held) {
         tr.held = false;
-        if (anyOn) { tr.state = 'verloren'; this.log(`${c.name} verloren`, 'error'); }
+        if (tr.sub) {
+          tr.state = tr.prevState || 'Stapel';
+          this.log(`${c.name}: mitgesaugte Unterlage hat sich gelöst (Lagentrennung)`);
+        } else if (anyOn) { tr.state = 'verloren'; this.log(`${c.name} verloren`, 'error'); }
         else {
           const g0 = tr.gpick, g1 = this.head.pose;
           const [dx, dz] = rotY(tr.pick.x - g0.x, tr.pick.z - g0.z, -g0.yaw);
@@ -416,9 +443,13 @@ export class World {
         }
       }
     }
-    if (this.cycle.gripY !== null && !this.cycle.double && heldCount >= 2 && this.robot.pose.y > this.cycle.gripY + 0.01) {
+    if (this.cycle.gripY !== null && !this.cycle.double && heldCount >= 2 && this.robot.pose.y > this.cycle.gripY + 0.06) {
       this.cycle.double = true;
       this.log(`Doppelgriff: ${heldCount} Lagen gleichzeitig gegriffen`, 'error');
+    }
+    if (this.cycle.gripY !== null && !this.cycle.empty && heldCount === 0 && this.robot.pose.y > this.cycle.gripY + 0.01) {
+      this.cycle.empty = true;
+      this.log('Greifer angehoben, aber keine Lage gefasst (Haltekraft zu gering oder noch nicht aufgebaut)', 'warn');
     }
     if (!anyOn) this.cycle.gripY = null;
   }

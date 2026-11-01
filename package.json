@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node server.mjs",
     "test": "node tests/validate.mjs",
-    "scenario": "node tests/scenario.mjs"
+    "scenario": "node tests/scenario.mjs",
+    "build": "node scripts/build-single.mjs"
   },
   "license": "MIT"
 }

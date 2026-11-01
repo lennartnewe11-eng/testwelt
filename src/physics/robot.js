@@ -10,7 +10,9 @@
 //   GRIP ON|OFF [1,2…] Greiferelemente (alle oder Auswahl)
 //   WAIT t             warten [s]
 //   FOOT UP|DOWN       Nähfuß heben/senken
-//   SEW L [rpm] [mm]   Naht der Länge L [m] starten (läuft parallel weiter)
+//   TABLEVAC ON|OFF    Saugtisch im Nähbereich
+//   SEW L [rpm] [mm] [SYNC]  Naht starten (läuft parallel weiter); SYNC koppelt den
+//                      Greifer an die Transporteurbewegung (synchrones Mitführen)
 //   WAITSEW            warten, bis die Naht fertig ist
 //   HOME               Grundstellung
 
@@ -30,7 +32,7 @@ export function parseProgram(text) {
   return out;
 }
 
-const KNOWN = new Set(['SPEED', 'ACCEL', 'MOVE', 'MOVEREL', 'TOUCH', 'GRIP', 'WAIT', 'FOOT', 'SEW', 'WAITSEW', 'HOME']);
+const KNOWN = new Set(['SPEED', 'ACCEL', 'MOVE', 'MOVEREL', 'TOUCH', 'GRIP', 'WAIT', 'FOOT', 'SEW', 'WAITSEW', 'HOME', 'TABLEVAC']);
 
 export function validateProgram(prog) {
   const errs = [];
@@ -61,6 +63,7 @@ export class GantryRobot {
     this.waitUntil = 0;
     this.current = null;
     this.speed = 0;
+    this.follow = false;
   }
 
   load(text) {
@@ -106,6 +109,14 @@ export class GantryRobot {
 
   // ctx: { head, machine, contact(): bool, log(msg) }
   update(t, dt, ctx) {
+    // synchrones Mitführen mit dem Transporteur
+    if (this.follow) {
+      if (ctx.machine.sewing) {
+        const v = ctx.machine.feedVelocity(), d = ctx.machine.feedDir;
+        this.pose = { ...this.pose, x: this.pose.x + d[0] * v * dt, z: this.pose.z + d[2] * v * dt };
+        this.speed = v;
+      } else this.follow = false;
+    }
     // laufende Bewegung
     if (this.seg) {
       if (this.seg.touch) {
@@ -145,8 +156,13 @@ export class GantryRobot {
           break;
         }
         case 'FOOT': ctx.machine.footUp = (ins.args[0] || '').toUpperCase() === 'UP'; break;
+        case 'TABLEVAC':
+          if (ctx.machine.tableVac) ctx.machine.tableVac.on = (ins.args[0] || '').toUpperCase() === 'ON';
+          ctx.log?.(`Saugtisch ${ctx.machine.tableVac?.on ? 'EIN' : 'AUS'}`);
+          break;
         case 'SEW':
           ctx.machine.startSew(n[0] || 0.1, Number.isFinite(n[1]) ? n[1] : undefined, Number.isFinite(n[2]) ? n[2] : undefined);
+          this.follow = ins.args.some((a) => a.toUpperCase() === 'SYNC');
           ctx.log?.(`Nähen ${((n[0] || 0.1) * 100).toFixed(1)} cm`);
           break;
         case 'WAITSEW': if (ctx.machine.busy) return; break;

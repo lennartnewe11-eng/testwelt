@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nähzelle Materialfluss</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: Werkstattleitstand – Aufbau links, 3D-Zelle mittig, Messwerte rechts; auf schmalen Bildschirmen untereinander */
+:root {
+  --bg: #e9ecea;          /* Hallengrau, leicht grünstichig */
+  --panel: #f8f9f8;
+  --panel-2: #eef1ef;
+  --line: #d3d8d5;
+  --ink: #1b2220;
+  --ink-2: #4c5753;
+  --ink-3: #75807b;
+  --accent: #0b6e69;      /* Petrol, Maschinenlack */
+  --accent-ink: #ffffff;
+  --accent-soft: #d5ebe8;
+  --good: #2e7d32; --warn: #a85d00; --crit: #c62828;
+  --good-soft: #e3f1e4; --warn-soft: #fbecd7; --crit-soft: #fbe2e1;
+  --s1: #2a78d6; --s2: #eb6834;
+  --font-display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121615; --panel: #1a1f1e; --panel-2: #212726; --line: #303836;
+    --ink: #e6ebe9; --ink-2: #aab5b0; --ink-3: #7f8a86;
+    --accent: #22a99f; --accent-ink: #06201e; --accent-soft: #163a37;
+    --good: #5cb860; --warn: #e09a3e; --crit: #ef6461;
+    --good-soft: #1b2e1c; --warn-soft: #33260f; --crit-soft: #3a1918;
+    --s1: #3987e5; --s2: #d95926;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121615; --panel: #1a1f1e; --panel-2: #212726; --line: #303836;
+  --ink: #e6ebe9; --ink-2: #aab5b0; --ink-3: #7f8a86;
+  --accent: #22a99f; --accent-ink: #06201e; --accent-soft: #163a37;
+  --good: #5cb860; --warn: #e09a3e; --crit: #ef6461;
+  --good-soft: #1b2e1c; --warn-soft: #33260f; --crit-soft: #3a1918;
+  --s1: #3987e5; --s2: #d95926;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--font-body); }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+.bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding-block: 8px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: baseline; gap: 10px; margin-right: auto; min-width: 0; }
+.brand h1 { font: 700 19px/1 var(--font-display); letter-spacing: 0.01em; margin: 0; white-space: nowrap; }
+.brand span { color: var(--ink-3); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
+  border: 1px solid var(--line); border-radius: var(--r); background: var(--panel-2); cursor: pointer;
+  font-weight: 500;
+}
+.btn:hover { border-color: var(--ink-3); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.small { height: 26px; padding: 0 8px; font-size: 13px; }
+.btn svg { width: 14px; height: 14px; fill: currentColor; }
+.clock { font: 500 13px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink-2); min-width: 150px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 99px; font: 600 12px var(--font-display); letter-spacing: 0.04em; text-transform: uppercase; background: var(--panel-2); color: var(--ink-2); border: 1px solid var(--line); white-space: nowrap; }
+.chip.good { background: var(--good-soft); color: var(--good); border-color: transparent; }
+.chip.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.chip.crit { background: var(--crit-soft); color: var(--crit); border-color: transparent; }
+.chip.accent { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+
+.layout { display: grid; grid-template-columns: 330px minmax(0, 1fr) 360px; min-height: 0; }
+.panel { background: var(--panel); overflow-y: auto; min-height: 0; padding-block: 12px; padding-inline: 14px; display: flex; flex-direction: column; gap: 14px; }
+.panel.left { border-right: 1px solid var(--line); }
+.panel.right { border-left: 1px solid var(--line); }
+.viewport { position: relative; min-width: 0; min-height: 0; background: var(--bg); }
+.viewport canvas { display: block; width: 100%; height: 100%; }
+.overlay { position: absolute; left: 10px; right: 10px; top: 10px; display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; pointer-events: none; }
+.overlay > * { pointer-events: auto; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--panel); }
+.seg button { border: 0; background: transparent; padding: 5px 10px; cursor: pointer; font: 600 12px var(--font-display); letter-spacing: 0.03em; color: var(--ink-2); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.statusline { position: absolute; left: 10px; bottom: 10px; right: 10px; display: flex; gap: 8px; flex-wrap: wrap; pointer-events: none; }
+.statusline .chip { background: var(--panel); }
+.prog-now { font: 500 12px var(--font-mono); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 3px 8px; color: var(--ink-2); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+h2 { font: 700 13px/1 var(--font-display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 8px; }
+section.block { display: flex; flex-direction: column; gap: 8px; }
+section.block + section.block { border-top: 1px solid var(--line); padding-top: 12px; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: -4px -14px 0; padding: 0 14px; }
+.tabs button { border: 0; background: none; padding: 8px 10px; cursor: pointer; font: 600 14px var(--font-display); letter-spacing: 0.02em; color: var(--ink-3); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+label.row, .row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; }
+.row > span:first-child { color: var(--ink-2); }
+select, input[type="number"], input[type="text"] { height: 30px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel-2); padding: 0 8px; min-width: 0; }
+select { width: 100%; }
+input[type="number"] { width: 92px; text-align: right; font-family: var(--font-mono); font-size: 13px; }
+.slider { display: grid; grid-template-columns: 1fr 70px; gap: 4px 8px; align-items: center; }
+.slider label { grid-column: 1 / -1; display: flex; justify-content: space-between; color: var(--ink-2); }
+.slider label b { font: 500 13px var(--font-mono); color: var(--ink); }
+.slider input[type="range"] { width: 100%; accent-color: var(--accent); }
+.slider input[type="number"] { width: 70px; }
+.kv { width: 100%; border-collapse: collapse; font-size: 13px; }
+.kv td { padding: 3px 0; border-bottom: 1px dashed var(--line); }
+.kv td:first-child { color: var(--ink-2); }
+.kv td:last-child { text-align: right; }
+.kv td.mono { text-align: right; white-space: nowrap; padding-left: 8px; }
+.kv td.unit { color: var(--ink-3); width: 64px; padding-left: 6px; text-align: left; font-size: 12px; }
+.kv input { width: 84px; height: 24px; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.note { color: var(--ink-3); font-size: 12px; margin: 0; }
+details summary { cursor: pointer; color: var(--ink-2); font-weight: 500; }
+.predict { display: grid; gap: 4px; padding: 8px; background: var(--panel-2); border-radius: var(--r); border: 1px solid var(--line); }
+.predict .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+
+.code { position: relative; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel-2); }
+.code textarea { display: block; width: 100%; height: 420px; resize: vertical; border: 0; background: transparent; padding: 8px 8px 8px 40px; font: 12.5px/18px var(--font-mono); white-space: pre; overflow: auto; tab-size: 4; position: relative; z-index: 1; }
+.code .gutter { position: absolute; left: 0; top: 0; bottom: 0; width: 32px; overflow: hidden; border-right: 1px solid var(--line); font: 12.5px/18px var(--font-mono); color: var(--ink-3); text-align: right; padding: 8px 6px 0 0; }
+.code .hl { position: absolute; left: 0; right: 0; height: 18px; background: var(--accent-soft); pointer-events: none; z-index: 0; display: none; }
+.jog { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+
+.kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.kpi { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r); padding: 8px 10px; min-width: 0; }
+.kpi .lbl { font: 600 11px var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.kpi .val { font: 500 20px/1.2 var(--font-mono); font-variant-numeric: tabular-nums; }
+.kpi .sub { font-size: 12px; color: var(--ink-3); }
+.headgrid { display: grid; gap: 6px; }
+.el { border: 1px solid var(--line); border-radius: var(--r); padding: 6px; background: var(--panel-2); min-width: 0; }
+.el .t { display: flex; justify-content: space-between; font: 600 12px var(--font-display); color: var(--ink-2); }
+.el .meter { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 4px; }
+.el .meter i { display: block; height: 100%; background: var(--accent); width: 0; }
+.el.on { border-color: var(--accent); }
+.el.hot .meter i { background: var(--warn); }
+.el.double { border-color: var(--crit); }
+.el .n { font: 500 11px var(--font-mono); color: var(--ink-3); }
+.chart-wrap { position: relative; }
+.chart-wrap canvas { width: 100%; height: 150px; display: block; }
+.legend { display: flex; gap: 12px; font-size: 12px; color: var(--ink-2); flex-wrap: wrap; }
+.legend i { display: inline-block; width: 12px; height: 2px; vertical-align: middle; margin-right: 4px; }
+.tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 4px 8px; font: 12px var(--font-mono); display: none; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+.tablewrap { overflow-x: auto; }
+table.plies { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.plies th { text-align: left; font: 600 11px var(--font-display); letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); padding: 4px 4px; border-bottom: 1px solid var(--line); }
+table.plies td { padding: 4px; border-bottom: 1px dashed var(--line); font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.plies td:first-child { font-family: var(--font-body); }
+.log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; font-size: 12.5px; }
+.log li { display: grid; grid-template-columns: 56px 1fr; gap: 6px; padding: 3px 6px; border-left: 3px solid var(--line); background: var(--panel-2); border-radius: 0 4px 4px 0; }
+.log li.warn { border-left-color: var(--warn); }
+.log li.error { border-left-color: var(--crit); }
+.log li time { font-family: var(--font-mono); color: var(--ink-3); }
+
+dialog { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); max-width: min(920px, calc(100vw - 32px)); width: 100%; padding: 0; }
+dialog::backdrop { background: rgba(10, 14, 13, 0.45); }
+dialog .dh { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+dialog .dh h3 { margin: 0; font: 700 18px var(--font-display); }
+dialog .db { padding: 12px 16px; max-height: 70vh; overflow: auto; }
+dialog .db p { max-width: 70ch; color: var(--ink-2); }
+dialog table { width: 100%; border-collapse: collapse; font-size: 13px; }
+dialog th, dialog td { text-align: left; padding: 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+dialog td.num { font-family: var(--font-mono); text-align: right; white-space: nowrap; }
+
+@media (max-width: 1180px) {
+  .app { height: auto; min-height: 100%; }
+  .layout { grid-template-columns: 300px minmax(0, 1fr); }
+  .viewport { height: 72vh; min-height: 420px; }
+  .panel.left { max-height: 72vh; }
+  .panel.right { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); max-height: none; }
+}
+@media (max-width: 760px) {
+  .app { height: auto; }
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .viewport { height: 58vh; min-height: 320px; order: -1; }
+  .panel.left { max-height: none; }
+  .panel { overflow: visible; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .panel.left { border-right: 0; border-top: 1px solid var(--line); }
+  .brand span { display: none; }
+  .clock { min-width: 0; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div class="app">
+  <header class="bar">
+    <div class="brand"><h1>Nähzelle Materialfluss</h1><span>Physikalische Simulation biegeschlaffer Halbzeuge</span></div>
+    <div class="controls">
+      <button class="btn primary" id="btnRun" type="button"><svg viewBox="0 0 16 16"><path d="M4 2l10 6-10 6z"/></svg><span>Programm starten</span></button>
+      <button class="btn" id="btnPause" type="button" title="Physik anhalten/fortsetzen">Pause</button>
+      <button class="btn" id="btnReset" type="button" title="Welt mit den aktuellen Einstellungen neu aufbauen">Zurücksetzen</button>
+      <select id="timeScale" aria-label="Zeitmaßstab" style="width:auto">
+        <option value="1">Echtzeit 1×</option><option value="0.5">Zeitlupe ½×</option><option value="0.25">Zeitlupe ¼×</option><option value="0.1">Zeitlupe 1/10×</option><option value="4">Max. Tempo</option>
+      </select>
+      <span class="clock" id="clock">t = 0,00 s</span>
+      <span class="chip" id="rtf">–</span>
+      <button class="btn" id="btnValidate" type="button">Physik prüfen</button>
+    </div>
+  </header>
+  <div class="layout">
+    <aside class="panel left" aria-label="Aufbau und Programm">
+      <div class="tabs" role="tablist">
+        <button role="tab" aria-selected="true" data-tab="setup" id="tab-setup">Aufbau</button>
+        <button role="tab" aria-selected="false" data-tab="prog" id="tab-prog">Programm</button>
+        <button role="tab" aria-selected="false" data-tab="info" id="tab-info">Modell</button>
+      </div>
+      <div data-pane="setup" class="pane">
+        <section class="block">
+          <h2>Material</h2>
+          <select id="fabric" aria-label="Material"></select>
+          <p class="note" id="fabricMeta"></p>
+          <details id="matDetails">
+            <summary>Kennwerte bearbeiten</summary>
+            <table class="kv" id="matTable"></table>
+          </details>
+          <table class="kv" id="derived"></table>
+        </section>
+        <section class="block">
+          <h2>Zuschnittstapel</h2>
+          <label class="row"><span>Anzahl Lagen</span><input type="number" id="plies" min="1" max="8" step="1"></label>
+          <label class="row"><span>Breite (Schuss) [cm]</span><input type="number" id="plyW" min="10" max="50" step="1"></label>
+          <label class="row"><span>Länge (Kette) [cm]</span><input type="number" id="plyL" min="10" max="60" step="1"></label>
+          <label class="row"><span>Tischoberfläche</span><select id="tableMat" style="width:170px"></select></label>
+        </section>
+        <section class="block">
+          <h2>Greifer</h2>
+          <select id="gripper" aria-label="Greifertyp"></select>
+          <p class="note" id="gripperNote"></p>
+          <div id="gripperParams" style="display:grid;gap:8px"></div>
+          <label class="row"><span>Raster (Reihen × Spalten)</span><span><input type="number" id="rows" min="1" max="5" style="width:56px"> × <input type="number" id="cols" min="1" max="5" style="width:56px"></span></label>
+          <div class="predict" id="predict"></div>
+        </section>
+        <section class="block">
+          <h2>Nähmaschine</h2>
+          <label class="row"><span>Drehzahl [1/min]</span><input type="number" id="rpm" min="100" max="3000" step="50"></label>
+          <label class="row"><span>Stichlänge [mm]</span><input type="number" id="stitch" min="1" max="6" step="0.5"></label>
+          <label class="row"><span>Nähfußdruck [N]</span><input type="number" id="footForce" min="5" max="120" step="5"></label>
+          <label class="row"><span>Nähfuß</span><select id="footMat" style="width:170px"><option value="stahl">Stahl, poliert</option><option value="ptfe">PTFE-beschichtet</option></select></label>
+        </section>
+        <section class="block">
+          <h2>Numerik</h2>
+          <label class="row"><span>Qualität</span><select id="quality" style="width:170px">
+            <option value="fast">Schnell (2 cm, 10 Teilschritte)</option>
+            <option value="std">Standard (1,25 cm, 16)</option>
+            <option value="fine">Fein (1 cm, 24)</option>
+          </select></label>
+          <label class="row"><span>Selbstkontakt der Lagen</span><input type="checkbox" id="selfColl"></label>
+          <button class="btn primary" id="btnApply" type="button">Übernehmen und neu aufbauen</button>
+        </section>
+      </div>
+      <div data-pane="prog" class="pane" hidden>
+        <section class="block">
+          <h2>Ablaufprogramm</h2>
+          <div class="code"><div class="hl" id="hl"></div><div class="gutter" id="gutter"></div><textarea id="program" spellcheck="false" aria-label="Ablaufprogramm"></textarea></div>
+          <p class="note" id="progErr"></p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn primary" id="btnRun2" type="button">Programm starten</button>
+            <button class="btn" id="btnStop" type="button">Anhalten</button>
+            <button class="btn" id="btnDefault" type="button">Beispielprogramm</button>
+          </div>
+          <details>
+            <summary>Befehle</summary>
+            <table class="kv">
+              <tr><td class="mono">MOVE x y z [c°]</td><td>Zielposition der Greiferfläche [m]</td></tr>
+              <tr><td class="mono">MOVEREL dx dy dz</td><td>relativ verfahren</td></tr>
+              <tr><td class="mono">SPEED v / ACCEL a</td><td>Bahn [m/s], [m/s²]</td></tr>
+              <tr><td class="mono">TOUCH [v]</td><td>absenken bis Kontakt</td></tr>
+              <tr><td class="mono">GRIP ON|OFF [1,2]</td><td>Elemente schalten</td></tr>
+              <tr><td class="mono">WAIT t</td><td>warten [s]</td></tr>
+              <tr><td class="mono">FOOT UP|DOWN</td><td>Nähfuß</td></tr>
+              <tr><td class="mono">TABLEVAC ON|OFF</td><td>Saugtisch im Nähbereich</td></tr>
+              <tr><td class="mono">SEW L [rpm] [mm] [SYNC]</td><td>Naht starten, SYNC: Greifer folgt dem Transporteur</td></tr>
+              <tr><td class="mono">WAITSEW</td><td>auf Nahtende warten</td></tr>
+              <tr><td class="mono">HOME</td><td>Grundstellung</td></tr>
+            </table>
+          </details>
+        </section>
+        <section class="block">
+          <h2>Handbetrieb</h2>
+          <p class="note">Verfährt den Greiferkopf, wenn kein Programm läuft.</p>
+          <div class="jog">
+            <button class="btn small" data-jog="-0.05,0,0" type="button">X −5 cm</button>
+            <button class="btn small" data-jog="0,0.01,0" type="button">Y +1 cm</button>
+            <button class="btn small" data-jog="0.05,0,0" type="button">X +5 cm</button>
+            <button class="btn small" data-jog="0,0,-0.05" type="button">Z −5 cm</button>
+            <button class="btn small" data-jog="0,-0.01,0" type="button">Y −1 cm</button>
+            <button class="btn small" data-jog="0,0,0.05" type="button">Z +5 cm</button>
+            <button class="btn small" id="jogTouch" type="button">Tastfahrt</button>
+            <button class="btn small" id="jogGrip" type="button">Greifer ein/aus</button>
+            <button class="btn small" id="jogHome" type="button">Grundstellung</button>
+          </div>
+        </section>
+      </div>
+      <div data-pane="info" class="pane" hidden id="modelInfo"></div>
+    </aside>
+    <section class="viewport" id="viewport" aria-label="3D-Ansicht der Nähzelle">
+      <div class="overlay">
+        <div class="seg" id="views" aria-label="Kamera">
+          <button data-view="gesamt" aria-pressed="true" type="button">Gesamt</button>
+          <button data-view="stapel" aria-pressed="false" type="button">Stapel</button>
+          <button data-view="naehen" aria-pressed="false" type="button">Nähen</button>
+          <button data-view="oben" aria-pressed="false" type="button">Draufsicht</button>
+        </div>
+        <div class="seg" id="colorModes" aria-label="Einfärbung">
+          <button data-color="material" aria-pressed="true" type="button">Material</button>
+          <button data-color="dehnung" aria-pressed="false" type="button">Dehnung</button>
+          <button data-color="lagen" aria-pressed="false" type="button">Lagen</button>
+        </div>
+        <div class="seg"><button id="btnContacts" aria-pressed="false" type="button">Greifpunkte</button></div>
+      </div>
+      <div class="statusline">
+        <span class="prog-now" id="progNow">Programm bereit</span>
+      </div>
+    </section>
+    <aside class="panel right" aria-label="Messwerte">
+      <section class="block">
+        <h2>Zustand</h2>
+        <div class="kpis">
+          <div class="kpi"><div class="lbl">Gegriffene Lagen</div><div class="val" id="kHeld">0</div><div class="sub" id="kHeldSub">–</div></div>
+          <div class="kpi"><div class="lbl">Max. Auslastung</div><div class="val" id="kUtil">–</div><div class="sub">Last / Haltekraft</div></div>
+          <div class="kpi"><div class="lbl">Ablagefehler</div><div class="val" id="kErr">–</div><div class="sub" id="kErrSub">letzte abgelegte Lage</div></div>
+          <div class="kpi"><div class="lbl">Stiche</div><div class="val" id="kStitch">0</div><div class="sub" id="kStitchSub">Naht –</div></div>
+        </div>
+      </section>
+      <section class="block">
+        <h2>Greiferelemente</h2>
+        <div class="headgrid" id="headgrid"></div>
+      </section>
+      <section class="block">
+        <h2>Greiferkraft, oberste Lage</h2>
+        <div class="legend"><span><i style="background:var(--s1)"></i>Last F<sub>n</sub> (Summe)</span><span><i style="background:var(--s2)"></i>Haltekraft C<sub>n</sub> (Summe)</span></div>
+        <div class="chart-wrap"><canvas id="chart" height="150"></canvas><div class="tip" id="tip"></div></div>
+      </section>
+      <section class="block">
+        <h2>Lagen</h2>
+        <div class="tablewrap"><table class="plies" id="plyTable"></table></div>
+        <p class="note">Ablagefehler: Abweichung der ruhenden Lage von der Lage, die sich bei starrem Mitführen durch den Greifer ergäbe. Dehnung: 99-%-Quantil der Fadenabschnitte.</p>
+      </section>
+      <section class="block">
+        <h2>Ereignisse</h2>
+        <ul class="log" id="log"></ul>
+        <button class="btn small" id="btnCsv" type="button" style="align-self:flex-start">Messdaten als CSV kopieren</button>
+      </section>
+    </aside>
+  </div>
+</div>
+<dialog id="dlg"><div class="dh"><h3 id="dlgTitle">Validierung</h3><button class="btn small" id="dlgClose" type="button">Schließen</button></div><div class="db" id="dlgBody"></div></dialog>
+<script type="module" src="./src/ui/app.js"></script>
+</body>
+</html>
