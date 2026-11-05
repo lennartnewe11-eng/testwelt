@@ -162,8 +162,8 @@ HOME
 
 export const NECK_PROGRAM = `# Halsbündchen annähen (T-Shirt Gr. 86, Single Jersey, Bündchen 1×1-Rippe doppelt)
 # Vorstation: rechte Schulter geschlossen, Körper aufgeklappt auf einem Werkstückträger.
-# Beim Beladen zieht der Faltapparat das Bündchen von der Rolle, faltet es längs und
-# legt den Anfang auf den Nahtanfang (linker Schulterpunkt).
+# Der Faltapparat an der Maschine zieht das Bündchen von der Rolle, faltet es längs und
+# hält den Anfang über der Nadel bereit; nach dem Einlegen des Körpers senkt er es ab.
 # Beim Nähen hält der Abzug das Bündchen und schiebt es um den Faktor 1/1,15 langsamer
 # als der Körper läuft: das Bündchen wird um 15 % gedehnt angenäht.
 # Der Ausschnitt wird ganz umrundet (360°). Langarm-Maschine: der Körper dreht unter dem
@@ -171,40 +171,44 @@ export const NECK_PROGRAM = `# Halsbündchen annähen (T-Shirt Gr. 86, Single Je
 # Nahtmitte um (Nähfuß bleibt unten, Saugtisch hält den Körper).
 
 SPEED 0.4
-ACCEL 1.2                   # sanft: das Bündchen liegt nur durch Reibung auf
-MOVE -0.5 0.95 -0.17 0      # Träger am Rückenteil greifen, 22 cm vom Ausschnitt
+ACCEL 1.5
+MOVE -0.62 0.95 0.21 0      # Träger am Vorderteil greifen (Griffpunkt so gewählt, dass er beim
+                            # Umlauf weder den Maschinenarm (0°) noch die Zuführung (90°) kreuzt)
 SPEED 0.12
-MOVE -0.5 0.81 -0.17
+MOVE -0.62 0.81 0.21
 TOUCH 0.01
 GRIP ON
 WAIT 0.4
 SPEED 0.05
 MOVEREL 0 0.02 0
 SPEED 0.3
-MOVE -0.5 0.95 -0.17
+MOVE -0.62 0.95 0.21
 ALIGNPATH hals_1 0.83 0.04  # Nahtanfang 4 cm vor die Nadel
 SPEED 0.1
 TOUCH 0.01
 SPEED 0.03
 MOVEREL 0 0.001 -0.04       # Kanten unter den Nähfuß schieben
-SLEEVEFEED ON               # Abzug fasst das Bündchen, Kamera-Lagekorrektur
-WAIT 0.5
+SLEEVEFEED ON               # Bündchen vor dem Fuß absenken, Anfang unter den Fuß schieben
+WAIT 0.9
 FOOT DOWN
 WAIT 0.2
 SEWPATH hals_1 400 2.5      # erste Hälfte: vorderer Ausschnitt
-# Umgreifen: Nähfuß unten, Saugtisch hält, Roboter greift auf der anderen Seite neu
+# Umgreifen: Nadel bleibt unten, Nähfuß unten, Saugtisch hält, Roboter greift neu
+NEEDLE DOWN
 TABLEVAC ON
 GRIP OFF
-WAIT 0.3
-SPEED 0.2
-MOVEREL 0 0.04 0
-REGRIP 0.24 -90            # neuer Griffpunkt 24 cm von der Nadel, Richtung −90° (siehe Doku)
-SPEED 0.05
+WAIT 0.2
+SPEED 0.3
+MOVEREL 0 0.03 0
+REGRIP 0.17 118            # neuer Griffpunkt 17 cm von der Nadel, Richtung 118° (Draufsicht)
+SPEED 0.1
+MOVEREL 0 -0.027 0
+SPEED 0.02
 TOUCH 0.01
 GRIP ON
-WAIT 0.4
+WAIT 0.3
 TABLEVAC OFF
-SEWPATH hals_2 400 2.5      # zweite Hälfte: hinterer Ausschnitt
+SEWPATH hals_2 400 2.5      # zweite Hälfte: hinterer Ausschnitt (Nadel läuft wieder an)
 SLEEVEFEED OFF
 FOOT UP
 GRIP OFF
@@ -226,7 +230,7 @@ export const SCENARIOS = {
   },
   bund: {
     name: 'T-Shirt, Halsbündchen (gedehnt, 360°)',
-    set: { scenario: 'bund', fabricId: 'jersey', plies: 2, gripper: 'traeger', gripperParams: {}, rows: 1, cols: 1, pitchX: 0.10, pitchZ: 0.13, rpm: 400, stitch: 2.5, pickPlies: 1, program: null },
+    set: { scenario: 'bund', fabricId: 'jersey', plies: 2, gripper: 'traeger', gripperParams: { slot: 16 }, rows: 1, cols: 1, pitchX: 0.10, pitchZ: 0.13, rpm: 400, stitch: 2.5, pickPlies: 1, program: null },
   },
   tshirt: {
     name: 'T-Shirt, Kurvennaht (Seite + Ärmel)',
@@ -353,6 +357,7 @@ export class World {
     this.machine = new SewingMachine({ needle: NEEDLE });
     // Saugtisch im Nähbereich: hält aufliegende Lagen über Unterdruck (erhöht die Normalkraft)
     this.tableVac = { on: false, pressure: c.tableVacPa ?? 800, region: [0.345, 0.625, -0.12, 0.25], top: T }; // Saugfeld unter der 1. Lage (Zonensteuerung)
+    if (neckSc) this.tableVac.region = [0.25, 1.0, -0.45, 0.3]; // Halsbündchen: ganzes Feld um die Nadel (Umgreifen)
     this.machine.tableVac = this.tableVac;
     this.machine.distToPath = distToPath;
     // Nähschablone / Werkstückträger passend zum Teil (Kontur, Nahtbahn, Schlitz)
@@ -363,9 +368,17 @@ export class World {
       this.head.setTemplate({ path, outline: this.garment.body.outline, cloth: this.bodyCloth, dist: (u, v) => distToPath(path, u, v), shape: this.garment.body.outline, holes: [offsetHole(this.garment.body.holes[0], 0.006 + slot)], slot });
       this.machine.pathAt = pathAt;
       const ribOut = N.rib.outline;
-      this.machine.setEdgeGuide({ cloth: this.sleeveCloth, path: N.ribPath, capEdge: this.capEdge, bodyPath: path, bodyCloth: this.bodyCloth, inside: (u, v) => pointInPolygon(ribOut, u, v), profile: 'const' });
-      this.feeder = new SleeveFeeder({ cloth: this.sleeveCloth, path: N.ribPath, pathAt, needle: NEEDLE, holdY: NEEDLE[1] + 2 * this.bodyCloth.radius + 0.4e-3 + this.sleeveCloth.radius });
+      this.machine.setEdgeGuide({ cloth: this.sleeveCloth, path: N.ribPath, capEdge: this.capEdge, bodyPath: path, bodyCloth: this.bodyCloth, inside: (u, v) => pointInPolygon(ribOut, u, v), profile: 'const', allowance: 0.006 });
+      this.feeder = new SleeveFeeder({ cloth: this.sleeveCloth, path: N.ribPath, pathAt, needle: NEEDLE, holdY: NEEDLE[1] + 2 * this.bodyCloth.radius + 0.4e-3 + this.sleeveCloth.radius, parkY: NEEDLE[1] + 0.08 });
       this.machine.feeder = this.feeder;
+      // Bündchen hängt im Faltapparat über der Nadel bereit (Anfang = Nahtanfang)
+      this.feeder.lead = 0.03;
+      const A = this.feeder.analytic(0), rc = this.sleeveCloth;
+      for (let v = 0; v < rc.n; v++) {
+        const [x, z] = rotYc(rc.rest[2 * v], rc.rest[2 * v + 1], A.theta);
+        rc.pos[3 * v] = rc.prev[3 * v] = x + A.tx; rc.pos[3 * v + 1] = rc.prev[3 * v + 1] = NEEDLE[1] + 0.08; rc.pos[3 * v + 2] = rc.prev[3 * v + 2] = z + A.tz;
+      }
+      this.feeder.park();
     } else if (sleeveSc) {
       const path = this.paths.armloch_links, slot = (this.head.params.slot || 16) * 1e-3;
       this.head.setTemplate({ path, outline: this.garment.body.outline, cloth: this.bodyCloth, dist: (u, v) => distToPath(path, u, v), shape: templateOutline(this.garment.body.outline, this.garment.body.chains.armloch_links, 0.01 + slot), slot });
@@ -455,7 +468,9 @@ export class World {
     const full = N.neck;
     // Naht in zwei Hälften (Umgreifen in der Mitte); s-Versatz für Zuführung und Kantensensor
     const half = full.length / 2, k = full.cum.findIndex((x) => x >= half);
-    const p1 = makePath(full.points.slice(0, k + 1)), p2 = makePath(full.points.slice(k));
+    // zweite Hälfte endet 6 mm vor dem Nahtanfang: dort ist in der Linie die linke Schulter noch offen,
+    // die Schulternaht schließt später über die Bündchenenden
+    const p1 = makePath(full.points.slice(0, k + 1)), p2 = makePath(full.points.slice(k, full.points.length - 3));
     p2.offset = full.cum[k];
     this.paths.hals_naht = full; this.paths.hals_1 = p1; this.paths.hals_2 = p2;
     p1.parent = full; p2.parent = full;
@@ -490,10 +505,38 @@ export class World {
     // Knoten an der offenen Kante (für den Kantensensor)
     this.capEdge = new Uint8Array(sc.n);
     const chainPath = { points: ribChain };
-    for (let v = 0; v < sc.n; v++) if (sc.border[v] && distToPath(chainPath, sc.rest[2 * v], sc.rest[2 * v + 1]) < 0.002) this.capEdge[v] = 1;
+    // (Kantenknoten liegen beim Rechteck exakt auf dem Raster und sind daher nicht als „border“ markiert)
+    for (let v = 0; v < sc.n; v++) if (distToPath(chainPath, sc.rest[2 * v], sc.rest[2 * v + 1]) < 0.001) this.capEdge[v] = 1;
     this.cloths.push(bc, sc);
     this.bodyCloth = bc; this.sleeveCloth = sc;
     this.garment = { body: N.body, sleeve: N.rib }; // „sleeve“: zweites, separat geführtes Teil
+  }
+
+  // Kamera-Neuvermessung nach dem Umgreifen: Lage des Teils aus dem Bereich um die restliche Naht
+  // (Halskante), nicht aus den weit entfernten Haltepunkten. Liefert die Abbildung Zuschnitt → Kopf.
+  _localMap(path) {
+    const c = this.bodyCloth, el = this.head.elements[0];
+    if (!el || !el.att.length) return null;
+    const [cx, , cz] = this.head.elementCenter(el), yaw = this.head.pose.yaw, cs = Math.cos(yaw), sn = Math.sin(yaw);
+    const P = [], Q = [];
+    for (let v = 0; v < c.n; v++) {
+      if (distToPath(path, c.rest[2 * v], c.rest[2 * v + 1]) > 0.03) continue;
+      const dx = c.pos[3 * v] - cx, dz = c.pos[3 * v + 2] - cz;
+      P.push([c.rest[2 * v], c.rest[2 * v + 1]]);
+      Q.push([el.ox + dx * cs - dz * sn, el.oz + dx * sn + dz * cs]);
+    }
+    if (P.length < 6) return null;
+    const cp = [0, 0], cq = [0, 0];
+    for (let k = 0; k < P.length; k++) { cp[0] += P[k][0]; cp[1] += P[k][1]; cq[0] += Q[k][0]; cq[1] += Q[k][1]; }
+    cp[0] /= P.length; cp[1] /= P.length; cq[0] /= P.length; cq[1] /= P.length;
+    let A = 0, B = 0;
+    for (let k = 0; k < P.length; k++) {
+      const u = P[k][0] - cp[0], w = P[k][1] - cp[1], x = Q[k][0] - cq[0], z = Q[k][1] - cq[1];
+      A += x * u + z * w; B += x * w - z * u;
+    }
+    const theta = Math.atan2(B, A), [rx, rz] = rotYc(cp[0], cp[1], theta);
+    this.log(`Kamera: Halskante neu vermessen (${P.length} Punkte)`);
+    return { cloth: c, theta, tx: cq[0] - rx, tz: cq[1] - rz };
   }
 
   // Tastsensor: höchste Oberfläche unter den Greiferelementen (inkl. gehaltener Lagen).
@@ -646,7 +689,7 @@ export class World {
 
     const ctx = {
       head: this.head, machine: this.machine, contact: () => this.headContact(), log: (m, l) => this.log(m, l),
-      paths: this.paths, pathAt, partMap: () => this.head.partMap(),
+      paths: this.paths, pathAt, partMap: (path) => (path?.offset && this.neck ? this._localMap(path) : null) || this.head.partMap(),
     };
     for (let s = 0; s < n; s++) {
       if (s % detectEvery === 0) {
@@ -716,13 +759,19 @@ export class World {
       }
       this.machine.solve(cloths, dt, this.t);
       this.head.solve(dt);
-      if (this.feeder?.on) {
-        this.feeder.advance(this.machine.sewing ? this.machine.feedVelocity() * dt * this.machine.topFeedRatio() : 0, dt);
+      if (this.feeder?.on || this.feeder?.parked) {
+        // Halsbündchen: Haltehöhe über dem Trägerblech (Körper liegt auf dem Träger, nicht auf der Stichplatte)
+        if (this.neck && this.head.elements[0].att.length) this.feeder.holdY = Math.max(this.feeder.holdBase ??= this.feeder.holdY, this.head.pose.y + 2 * this.bodyCloth.radius + 0.4e-3 + this.sleeveCloth.radius);
+        if (this.feeder.on) this.feeder.advance(this.machine.sewing ? this.machine.feedVelocity() * dt * this.machine.topFeedRatio() : 0, dt);
         this.feeder.solve(dt);
       }
       for (const c of cloths) if (!c.sleeping) c.solveTethers(c.tetherSlack);
       // Trennblech des Kantenführers: zwischen den Lagen vor dem Nähfuß keine Reibung
       this.contacts.frictionless = (this.machine.edge?.on || this.feeder?.on) && !this.machine.footUp ? this.machine.separatorZone : null;
+      this.contacts.separated = !!this.neck; // Halsbündchen: Blech trennt die Lagen vollständig
+      // unter dem Fuß ordnet das Fußmodell die Lagen (Höhe je Lage); kein zweiter Kontakt dort
+      if (this.neck && !this.underFoot) { const M = this.machine, N = M.needle; this.underFoot = (x, z) => Math.abs(x - N[0]) < M.half[0] + 0.003 && Math.abs(z - N[2]) < M.half[1] + 0.003; }
+      this.contacts.underFoot = this.neck && !this.machine.footUp ? this.underFoot : null;
       this.contacts.solve(cloths, dt);
       for (const col of this.colliders) {
         if (!col.enabled) continue;

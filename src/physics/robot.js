@@ -20,6 +20,8 @@
 //                      vor der Nadel liegt und die Nahtrichtung in Transportrichtung zeigt
 //   SEWPATH name [rpm] [mm]  Naht entlang der Bahn; der Roboter führt und dreht das Teil
 //                      um die Nadel, sodass die Nahttangente stets in Transportrichtung liegt
+//   REGRIP R α         über einen Punkt im Abstand R [m] von der Nadel in Richtung α [°] fahren (Umgreifen)
+//   NEEDLE DOWN|UP     Nadelstopp unten (hält die Lagen beim Umgreifen) bzw. freigeben
 //   HOME               Grundstellung
 
 export const ROT_WEIGHT = 0.2; // m je rad für die Bahnlänge
@@ -41,7 +43,7 @@ export function parseProgram(text) {
   return out;
 }
 
-const KNOWN = new Set(['SPEED', 'ACCEL', 'MOVE', 'MOVEREL', 'TOUCH', 'GRIP', 'WAIT', 'FOOT', 'SEW', 'WAITSEW', 'HOME', 'TABLEVAC', 'ALIGNPATH', 'SEWPATH', 'EDGEGUIDE', 'SLEEVEFEED', 'REGRIP']);
+const KNOWN = new Set(['SPEED', 'ACCEL', 'MOVE', 'MOVEREL', 'TOUCH', 'GRIP', 'WAIT', 'FOOT', 'SEW', 'WAITSEW', 'HOME', 'TABLEVAC', 'ALIGNPATH', 'SEWPATH', 'EDGEGUIDE', 'SLEEVEFEED', 'REGRIP', 'NEEDLE']);
 
 export function validateProgram(prog) {
   const errs = [];
@@ -232,9 +234,13 @@ export class GantryRobot {
           this.moveTo(tgt, t);
           break;
         }
+        case 'NEEDLE': // NEEDLE DOWN: Nadelstopp unten (hält die Lagen beim Umgreifen), NEEDLE UP: freigeben
+          ctx.machine.needleDown = (ins.args[0] || '').toUpperCase() === 'DOWN';
+          ctx.log?.(`Nadel ${ctx.machine.needleDown ? 'unten (hält)' : 'oben'}`);
+          break;
         case 'SEWPATH': {
           const path = ctx.paths?.[ins.args[0]];
-          const map = path && ctx.partMap();
+          const map = path && ctx.partMap(path);
           if (!path || !map) { ctx.log?.(`SEWPATH: ${!path ? 'Bahn „' + ins.args[0] + '“ unbekannt' : 'kein Teil gegriffen'}`, 'error'); break; }
           ctx.machine.sOffset = path.offset || 0;
           ctx.machine.startSew(path.length, Number.isFinite(n[1]) ? n[1] : undefined, Number.isFinite(n[2]) ? n[2] : undefined, path, map.cloth);

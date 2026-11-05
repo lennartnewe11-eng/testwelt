@@ -73,12 +73,16 @@ Zuführung in der Ebene verformen, wie echter Stoff.
 
 ## Ergebnis (Kleinkind-T-Shirt Gr. 86, Single Jersey, 400 min⁻¹, 2,5 mm Stich)
 
+Stand nach der Netzkorrektur am Halsausschnitt (früher überspannte das Netz den hinteren
+Ausschnitt und machte den Körper dort zu steif; Qualitätsstufe „Standard“ der Oberfläche).
+
+
 | Kennzahl | Wert |
 |---|---|
 | Stiche | 83, alle durch beide Lagen |
-| Abweichung am Körper (Einstich ↔ Armlochbahn) | Ø 0,1 mm, max. 0,3 mm |
-| Abweichung am Ärmel (Einstich ↔ Kugelbahn) | Ø 0,5 mm, max. 1,1 mm |
-| eingehaltene Mehrweite | 3,5 % (Soll 2,9 %) |
+| Abweichung am Körper (Einstich ↔ Armlochbahn) | Ø 0,3 mm, max. 1,6 mm |
+| Abweichung am Ärmel (Einstich ↔ Kugelbahn) | Ø 0,35 mm, max. 0,7 mm |
+| eingehaltene Mehrweite | 2,8 % (Soll 2,9 %) |
 | Nahtzeit | ≈ 12,5 s, Zykluszeit inkl. Laden ≈ 27 s |
 
 ## Reale Umsetzung

@@ -41,8 +41,8 @@ export function stationDefs(G) {
   const S = G.seams;
   return [
     { id: 'schulter1', name: 'Schulternaht rechts', machine: 'overlock', seams: [{ len: S.schulter, kmax: 0, val: 600 }], handling: 6.5, stage: 1, cap: 1, proof: 'analog', risk: 0.005 },
-    { id: 'hals', name: 'Halsbündchen (Rolle)', machine: 'overlock', seams: [{ len: S.hals, kmax: 22, val: 400 }], handling: 7.5, stage: 2, cap: 1, proof: 'plan', risk: 0.02, rib: true,
-      note: 'Bündchen läuft von der Rolle durch Faltapparat und Abzug mit Spannungsregelung (15 % Dehnung), wird am Nahtende abgeschnitten. Noch ohne Physik-Nachweis.' },
+    { id: 'hals', name: 'Halsbündchen (Rolle)', machine: 'overlock', seams: [{ len: S.hals, kmax: 22, val: 400 }], handling: 11.0, stage: 2, cap: 1, physics: 'bund', proof: 'zelle', risk: 0.02, rib: true,
+      note: 'Faltapparat hält das Bündchen von der Rolle über der Nadel bereit, Abzug dehnt es um 15 %. Langarm-Maschine, 360°-Umlauf mit Umgreifen (Nadel unten) und Kamera-Neuvermessung. In der Zelle: 116/116 Stiche bei 400 min⁻¹.' },
     { id: 'schulter2', name: 'Schulternaht links', machine: 'overlock', seams: [{ len: S.schulter + 0.036, kmax: 0, val: 600 }], handling: 6.5, stage: 3, cap: 1, proof: 'analog', risk: 0.005 },
     { id: 'aermelL', name: 'Ärmel einsetzen links', machine: 'steppstich', seams: [{ len: S.armloch, kmax: 14, val: 400 }], handling: 13.0, stage: 4, cap: 1, physics: 'aermel', proof: 'zelle', risk: 0.02,
       note: 'Roboter legt den Ärmel auf das Armloch, Ärmelzuführung mit Kamera, Mehrweite über Obertransport. In der Zelle: 83/83 Stiche bei 400 min⁻¹.' },

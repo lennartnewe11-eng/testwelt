@@ -175,6 +175,8 @@ export class ClothContacts {
       const p = C.pos, pp = C.prev, q = D.pos, qp = D.prev;
       const T = D.tri, i0 = T[3 * t], i1 = T[3 * t + 1], i2 = T[3 * t + 2];
       const a = i0 * 3, b = i1 * 3, d = i2 * 3, x = v * 3;
+      // Trennblech: zwei verschiedene Lagen berühren sich im Blechbereich nicht (Blech liegt dazwischen)
+      if (this.separated && C !== D && ((this.frictionless && this.frictionless(p[x], p[x + 2])) || (this.underFoot && this.underFoot(p[x], p[x + 2])))) continue;
       const e1x = q[b] - q[a], e1y = q[b + 1] - q[a + 1], e1z = q[b + 2] - q[a + 2];
       const e2x = q[d] - q[a], e2y = q[d + 1] - q[a + 1], e2z = q[d + 2] - q[a + 2];
       let nX = e1y * e2z - e1z * e2y, nY = e1z * e2x - e1x * e2z, nZ = e1x * e2y - e1y * e2x;
@@ -199,6 +201,8 @@ export class ClothContacts {
       const W = w + w0 * b0 * b0 + w1 * b1 * b1 + w2 * b2 * b2;
       if (W === 0) continue;
       const Cval = dist - thick;
+      // tiefer als drei Stoffdicken: Seitenzuordnung veraltet (Lage hat sich aufgestellt) → verwerfen
+      if (this.separated && Cval < -3 * thick) continue;
       if (Cval < -0.5 * thick) { if (cs) C.wake = true; if (ds) D.wake = true; }
       let dl;
       if (Cval < 0) dl = -Cval / W;                       // Durchdringung auflösen

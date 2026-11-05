@@ -14,7 +14,10 @@ const invert = (A) => { const [rx, rz] = rotY(A.tx, A.tz, -A.theta); return { th
 const apply = (A, u, v) => { const [x, z] = rotY(u, v, A.theta); return [x + A.tx, z + A.tz]; };
 
 export class SleeveFeeder {
-  constructor({ cloth, path, pathAt, needle, slot = 0, release = 0.018, holdY = null }) {
+  constructor({ cloth, path, pathAt, needle, slot = 0, release = 0.018, holdY = null, parkY = null }) {
+    this.parkY = parkY;        // Bereitstellhöhe (Bündchen: Faltapparat hält den Anfang über der Nadel)
+    this.parked = false;
+    this.curY = holdY;
     this.cloth = cloth; this.path = path; this.pathAt = pathAt; this.needle = needle;
     this.slot = slot;          // Abstand der Plattenkante zur Naht [m] (0: Platte deckt die Naht vor der Nadel ab)
     this.release = release;    // Segmente geben frei, wenn ihr Nahtabschnitt näher als dies an der Nadel ist [m]
@@ -48,12 +51,31 @@ export class SleeveFeeder {
     if (this.yaw !== null) { while (yaw - this.yaw > Math.PI) yaw -= 2 * Math.PI; while (yaw - this.yaw < -Math.PI) yaw += 2 * Math.PI; }
     this.yaw = yaw;
     const [rx, rz] = rotY(p[0], p[1], yaw);
-    return { theta: yaw, tx: this.needle[0] - rx, tz: this.needle[2] - rz };
+    // lead: Vorhalt in Transportrichtung (Teil liegt um lead vor der Sollage, beim Einschieben)
+    return { theta: yaw, tx: this.needle[0] - rx, tz: this.needle[2] - rz + (this.lead || 0) };
+  }
+
+  // Bereitstellen: ganzes Teil in Soll-Lage für den Nahtanfang, angehoben über der Nadel
+  park(lead = 0.03) {
+    const c = this.cloth;
+    this.yaw = null;
+    this.lead = lead;           // Anfang liegt vor dem Nähfuß und wird nach dem Absenken eingeschoben
+    this.frame = this.analytic(0);
+    this.att = [];
+    for (let v = 0; v < c.n; v++) { this.att.push(v); c.attached[v] = 99; }
+    this.parked = true; this.curY = this.parkY;
   }
 
   // Platte setzt auf: tatsächliche Lage einmessen (Procrustes), dann programmiert weiterführen
   engage() {
     const c = this.cloth;
+    if (this.parked) {
+      // aus der Bereitstellung: Lage ist bekannt. Absenken vor den Fuß, dann flach unter den
+      // angehobenen Fuß einschieben; erst danach gibt die Platte den Anfang frei.
+      this.parked = false;
+      this.measured = this.frame; this.blend = 1; this.lowering = 0; this.inserting = true;
+      return true;
+    }
     this.att = [];
     let cu = 0, cw = 0, cx = 0, cz = 0, n = 0;
     for (let v = 0; v < c.n; v++) {
@@ -92,6 +114,19 @@ export class SleeveFeeder {
   // Bahnfortschritt (aus dem Untertransport) und Segmentfreigabe
   advance(ds, dt = 0) {
     if (!this.on || !this.frame) return;
+    // Bereitstellung → Arbeitslage: absenken (0,3 s, 1,5 mm über der Arbeitshöhe), einschieben (0,4 s)
+    if (this.inserting) {
+      if (this.lowering < 1) {
+        this.lowering = Math.min(1, this.lowering + dt / 0.3);
+        const k = 0.5 - 0.5 * Math.cos(Math.PI * this.lowering);
+        this.curY = this.parkY + (this.holdY + 0.0015 - this.parkY) * k;
+      } else {
+        this.lead = Math.max(0, this.lead - dt * 0.075);
+        if (this.lead === 0) { this.inserting = false; this.curY = this.holdY; }
+      }
+      this.frame = this.analytic(this.s);
+      if (this.inserting) return;
+    } else this.curY = this.holdY;
     this.s = Math.min(this.path.length, this.s + ds);
     const A = this.analytic(this.s);
     if (this.blend < 1) {
@@ -120,7 +155,7 @@ export class SleeveFeeder {
 
   // Knoten in der Ebene an die Platte binden (Höhe bleibt frei, die Platte liegt auf)
   solve(dt) {
-    if (!this.on || !this.frame) return;
+    if (!(this.on || this.parked) || !this.frame) return;
     const c = this.cloth, p = c.pos, at = this.compliance / (dt * dt);
     for (const v of this.att) {
       const w = c.w[v];
@@ -129,7 +164,8 @@ export class SleeveFeeder {
       const k = w / (w + at);
       p[3 * v] += (tx - p[3 * v]) * k;
       p[3 * v + 2] += (tz - p[3 * v + 2]) * k;
-      if (this.holdY !== null) p[3 * v + 1] += (this.holdY - p[3 * v + 1]) * k;
+      const hy = this.curY ?? this.holdY;
+      if (hy !== null) p[3 * v + 1] += (hy - p[3 * v + 1]) * k;
     }
   }
 }

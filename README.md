@@ -17,6 +17,8 @@ npm test             # Validierung des Physikmodells + Plausibilitätstests der 
 npm run scenario     # Beispielprogramm ohne Grafik durchrechnen (Protokoll im Terminal)
 npm run scenario -- scenario=tshirt   # T-Shirt-Kurvennaht mit Nahtabweichung
 npm run scenario -- scenario=aermel   # Ärmel einsetzen
+npm run scenario -- scenario=bund     # Halsbündchen annähen
+npm run test:bund    # Regressionstest Halsbündchen (≈ 1 min)
 npm run build        # dist/naehzelle.html: eine eigenständige Datei zum Weitergeben
 ```
 
@@ -29,6 +31,7 @@ Benötigt Node.js ≥ 18 und einen aktuellen Browser mit WebGL. Three.js wird vo
 | Rechteckzuschnitte, gerade Naht | Popeline-Stapel, Vakuumgreifer, zwei Lagen vereinzeln, mit Saugtisch ablegen, robotergeführt gerade nähen |
 | T-Shirt, Kurvennaht | Vorder- und Rückenteil eines Kinder-T-Shirts (Jersey) in einer Nähschablone; der Roboter näht die linke Seitennaht mit Achselrundung und Ärmelunternaht in einem Zug und dreht das Teil dabei um die Nadel |
 | T-Shirt, Ärmel einsetzen | Separater Ärmel wird flach in das Armloch genäht: Roboter führt den Körper auf einem Werkstückträger, eine Ärmelzuführung führt den Ärmel gegenläufig mit 2,9 % Mehrweite, Obertransport, Trennblech und Kantensensor ([docs/aermel-einsetzen.md](docs/aermel-einsetzen.md)) |
+| T-Shirt, Halsbündchen | Bündchen (1×1-Rippe, doppelt) von der Zuführung wird um 15 % gedehnt an den Halsausschnitt genäht: Langarm-Maschine, 360°-Umlauf mit Umgreifen (Nadel unten, Saugtisch) und Kamera-Neuvermessung ([docs/halsbuendchen.md](docs/halsbuendchen.md)) |
 
 Wie man darauf aufbauend ein komplettes T-Shirt automatisiert, beschreibt
 [docs/t-shirt-automatisierung.md](docs/t-shirt-automatisierung.md).
@@ -36,13 +39,21 @@ Wie man darauf aufbauend ein komplettes T-Shirt automatisiert, beschreibt
 ## Produktionsstraße
 
 Umschalter oben rechts → **Produktionsstraße** (oder `index.html#linie`): eine komplette
-automatische Linie vom Stoffballen bis zum verpackten T-Shirt. Sie umfasst Legemaschine,
-CNC-Cutter, Kommissionierroboter mit Nadelgreifern, 13 Stationen auf einem Transfersystem mit
-Werkstückträgern sowie Wenden, Kameraprüfung, Bügeln und Verpacken. Die Linie ist eine
-ereignisdiskrete Simulation. Ihre Zykluszeiten werden aus den Nahtlängen der Schnittteile und
-den in der Nähzelle validierten Prozessgrenzen berechnet. Sie zeigt Kennzahlen (Ausbringung,
-Takt, Engpass, Auslastung, Störungen) und jede Station im Detail in 3D. Details:
-[docs/produktionsstrasse.md](docs/produktionsstrasse.md).
+automatische Linie vom Stoffballen bis zum verpackten T-Shirt.
+
+**Aufbau:**
+- Zuschnitt einlagig (Förderband-Cutter) oder im Stapel.
+- Kommissionierung auf Klappträger.
+- 15 Stationen: Halsbündchen von der Rolle, Ärmel, Säume, Pflegeetikett, Klappen, Seitennähte, Kameraprüfung, Wenden auf ein Formbrett, Dämpfen und Falten, Verpacken.
+
+**Simulation:** Die Linie ist eine ereignisdiskrete Simulation. Die Nähzeiten kommen aus den Nahtlängen und einer wählbaren Drehzahlstufe:
+- in der Zelle validiert: ≈ 110 Shirts/h,
+- Entwicklungsziel: ≈ 160 Shirts/h mit Störungen,
+- optimistisch.
+
+Jede Station zeigt, ob sie in der Nähzelle physikalisch nachgewiesen ist. Simuliert werden außerdem Störungen (Fadenbruch, Handhabungsfehler, Rollenwechsel) und Ausschuss.
+
+Details: [docs/produktionsstrasse.md](docs/produktionsstrasse.md).
 
 ## Was die Zelle enthält
 
@@ -170,7 +181,7 @@ index.html                 Oberfläche
 src/physics/               Simulation (ohne Abhängigkeiten, läuft auch in Node)
   constants.js materials.js cloth.js collision.js colliders.js
   grippers.js sewing.js robot.js garments.js feeder.js world.js validation.js
-docs/                      Konzept T-Shirt-Automatisierung, Ärmel einsetzen, Produktionsstraße
+docs/                      Konzept T-Shirt-Automatisierung, Ärmel einsetzen, Halsbündchen, Produktionsstraße
 src/render/                Three.js-Darstellung (models.js: detaillierte Maschinen- und Robotermodelle)
 src/line/                  Produktionsstraße: Schnittteile, Schnittbild, ereignisdiskrete Simulation, 3D-Ansicht
 src/ui/                    Bedienung, Diagramm, Modellbeschreibung, Linienbedienung

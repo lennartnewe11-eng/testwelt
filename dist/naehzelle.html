@@ -425,8 +425,8 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
           <div class="kpi"><div class="lbl">Stiche</div><div class="val" id="kStitch">0</div><div class="sub" id="kStitchSub">Naht –</div></div>
           <div class="kpi"><div class="lbl">Nahtabweichung</div><div class="val" id="kDev">–</div><div class="sub" id="kDevSub">Einstich ↔ Sollbahn</div></div>
           <div class="kpi"><div class="lbl">Greiferkopf</div><div class="val" id="kPose">–</div><div class="sub" id="kPoseSub">Drehung C-Achse</div></div>
-          <div class="kpi" id="kSleeveBox" hidden><div class="lbl">Ärmelnaht</div><div class="val" id="kSleeve">–</div><div class="sub" id="kSleeveSub">Einstich ↔ Kugelnaht</div></div>
-          <div class="kpi" id="kEaseBox" hidden><div class="lbl">Mehrweite</div><div class="val" id="kEase">–</div><div class="sub" id="kEaseSub">eingehalten / Soll</div></div>
+          <div class="kpi" id="kSleeveBox" hidden><div class="lbl" id="kSleeveLbl">Ärmelnaht</div><div class="val" id="kSleeve">–</div><div class="sub" id="kSleeveSub">Einstich ↔ Kugelnaht</div></div>
+          <div class="kpi" id="kEaseBox" hidden><div class="lbl" id="kEaseLbl">Mehrweite</div><div class="val" id="kEase">–</div><div class="sub" id="kEaseSub">eingehalten / Soll</div></div>
         </div>
       </section>
       <section class="block">
@@ -611,6 +611,18 @@ const FABRICS = [
   },
 ];
 
+// Halsbündchen: 1×1-Rippstrick (95 % CO / 5 % EL, 220 g/m²), längs gefaltet → zwei Lagen.
+// Werte für den doppelt gelegten Streifen. Längs des Streifens (Maschenreihe, „Schuss“) ist
+// Rippstrick sehr dehnbar: Anfangsmodul ≈ 2 × 20 N/m (Annahme aus KES-Werten für Rippware,
+// 15 % Dehnung bei ≈ 6 N/m); quer (Maschenstäbchen) deutlich steifer.
+const RIB_FABRIC = {
+  id: 'rippe', name: 'Rippstrick 1×1, doppelt', composition: '95 % CO / 5 % EL', construction: '1×1-Rippe, längs gefaltet',
+  pattern: 'knit', color: '#d9b65a',
+  mass: 440, thickness: 1.6, tensWarp: 1400, tensWeft: 40, shear: 0.3,
+  bendWarp: 0.08, bendWeft: 0.04, muSteelS: 0.32, muSteelK: 0.27, muSelfS: 0.55, muSelfK: 0.45,
+  airPerm: 600, epsR: 2.0, needleHold: 0.05, cohesion: 1.5, wetting: 0.9, breakStrain: 150,
+};
+
 // Starre Werkstoffe für Tische, Maschinen- und Greiferteile. Sie verformen sich bei den
 // auftretenden Kräften um Größenordnungen weniger als Textilien (E-Modul GPa vs. kPa–MPa)
 // und werden deshalb als starr modelliert. frictionFactor skaliert die Stoff-Stahl-Reibung.
@@ -671,7 +683,7 @@ const FABRIC_FIELDS = [
   ['breakStrain', 'Bruchdehnung', '%'],
 ];
 
-return { FABRICS, SOLIDS, fabricById, toSI, bendingLength, FABRIC_FIELDS };
+return { FABRICS, RIB_FABRIC, SOLIDS, fabricById, toSI, bendingLength, FABRIC_FIELDS };
 })();
 
 // ---- src/physics/cloth.js ----
@@ -771,7 +783,10 @@ class Cloth {
     // 2) Dreiecke je Zelle (voll: 2 Dreiecke, 3 Ecken aktiv: 1 Dreieck)
     const tris = [], cellOf = [];
     const area2 = (a, b, c) => (gx[b] - gx[a]) * (gz[c] - gz[a]) - (gx[c] - gx[a]) * (gz[b] - gz[a]);
-    const okTri = (a, b, c) => Math.abs(area2(a, b, c)) > 0.08 * h * h;
+    // Dreiecke, die ein Loch überbrücken (Schwerpunkt im Loch), entfallen – sonst spannt das Netz
+    // über schmale Ausschnitte (z. B. den hinteren Halsausschnitt) und verbindet gegenüberliegende Kanten
+    const inHole = (a, b, c) => holes.some((hl) => pointInPolygon(hl, (gx[a] + gx[b] + gx[c]) / 3, (gz[a] + gz[b] + gz[c]) / 3));
+    const okTri = (a, b, c) => Math.abs(area2(a, b, c)) > 0.08 * h * h && !inHole(a, b, c);
     for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) {
       const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1;
       const act = [a, b, c, d].filter((g) => state[g]);
@@ -1559,6 +1574,8 @@ class ClothContacts {
       const p = C.pos, pp = C.prev, q = D.pos, qp = D.prev;
       const T = D.tri, i0 = T[3 * t], i1 = T[3 * t + 1], i2 = T[3 * t + 2];
       const a = i0 * 3, b = i1 * 3, d = i2 * 3, x = v * 3;
+      // Trennblech: zwei verschiedene Lagen berühren sich im Blechbereich nicht (Blech liegt dazwischen)
+      if (this.separated && C !== D && ((this.frictionless && this.frictionless(p[x], p[x + 2])) || (this.underFoot && this.underFoot(p[x], p[x + 2])))) continue;
       const e1x = q[b] - q[a], e1y = q[b + 1] - q[a + 1], e1z = q[b + 2] - q[a + 2];
       const e2x = q[d] - q[a], e2y = q[d + 1] - q[a + 1], e2z = q[d + 2] - q[a + 2];
       let nX = e1y * e2z - e1z * e2y, nY = e1z * e2x - e1x * e2z, nZ = e1x * e2y - e1y * e2x;
@@ -1583,6 +1600,8 @@ class ClothContacts {
       const W = w + w0 * b0 * b0 + w1 * b1 * b1 + w2 * b2 * b2;
       if (W === 0) continue;
       const Cval = dist - thick;
+      // tiefer als drei Stoffdicken: Seitenzuordnung veraltet (Lage hat sich aufgestellt) → verwerfen
+      if (this.separated && Cval < -3 * thick) continue;
       if (Cval < -0.5 * thick) { if (cs) C.wake = true; if (ds) D.wake = true; }
       let dl;
       if (Cval < 0) dl = -Cval / W;                       // Durchdringung auflösen
@@ -2277,13 +2296,18 @@ class SewingMachine {
     if (stitch) this.stitchLength = stitch;
     this.sewTarget = Math.max(1, Math.round((length * 1000) / this.stitchLength));
     this.stitches = 0;
+    if (!this.sOffset) this.missBody = 0;
     this.sewing = true;
+    this.needleDown = false;
     this.activePath = path;
     this.pathCloth = pathCloth;
-    this.deviations = [];
-    this.devSleeve = [];
-    this.easeTrack = [];
-    this.lastHits = null;
+    // Teilnaht (Fortsetzung nach dem Umgreifen): Messwerte und Fadenzug laufen weiter
+    if (!this.sOffset) {
+      this.deviations = [];
+      this.devSleeve = [];
+      this.easeTrack = [];
+      this.lastHits = null;
+    }
   }
 
   get busy() { return this.sewing; }
@@ -2296,6 +2320,10 @@ class SewingMachine {
         this.phase -= 1;
         this._pendingStitch = true;
       }
+    } else if (this.needleDown) {
+      // Nadelstopp unten (Teilnaht, Umgreifen): Nadel steht im Stoff und hält die Lagen
+      this.phase = Math.min(0.25, this.phase < 0.25 ? this.phase + (this.rpm / 60) * dt : 0.25);
+      if (this.lastPhase > 0.5 && this.phase === 0.25) this.lastPhase = 0.25;
     } else if (this.phase < 0.5 || this.phase > 0.95) {
       // Nadel in Hochstellung fahren
       this.phase = Math.min(0.6, this.phase + (this.rpm / 60) * dt);
@@ -2342,7 +2370,7 @@ class SewingMachine {
   setEdgeGuide(cfg) {
     const Lb = cfg.bodyPath.length, Ls = cfg.path.length;
     this.edge = {
-      ...cfg, on: false, sensor: 0.045, allowance: 0.01, gain: 10, ki: 30, vmax: 0.1, roller: 0.02,
+      on: false, sensor: 0.045, allowance: 0.01, gain: 10, ki: 30, vmax: 0.1, roller: 0.02, ...cfg,
       ease: Ls / Lb - 1, err: null, errLog: [],
     };
     // Seite der Schnittkante relativ zur Nahtrichtung (für die Krümmungsvorsteuerung)
@@ -2360,6 +2388,8 @@ class SewingMachine {
   topFeedRatio() {
     const E = this.edge;
     if (!E || !(E.on || this.feeder?.on) || !this.activePath) return 1;
+    // Halsbündchen: gleichmäßige Dehnung über die ganze Naht (Verhältnis < 1)
+    if (E.profile === 'const') return 1 + E.ease;
     const u = Math.min(1, (this.stitches * this.stitchLength * 1e-3) / this.activePath.length);
     const w = u < 0.1 || u > 0.9 ? 0 : Math.sin((Math.PI * (u - 0.1)) / 0.8) ** 2;
     return 1 + (E.ease * w) / 0.4; // Mittelwert von w über die Naht = 0,4
@@ -2384,7 +2414,7 @@ class SewingMachine {
     // wenn die Naht an der Nadel tangential in Transportrichtung läuft?
     let ff = 0;
     if (this.activePath && this.pathAt) {
-      const sb = this.stitches * this.stitchLength * 1e-3;
+      const sb = (this.sOffset || 0) + this.stitches * this.stitchLength * 1e-3; // Teilnaht: Versatz auf der Gesamtnaht
       const ss = sb * (E.path.length / E.bodyPath.length);
       const a = this.pathAt(E.path, ss), b = this.pathAt(E.path, ss + E.sensor);
       const dx0 = b.p[0] - a.p[0], dz0 = b.p[1] - a.p[1];
@@ -2431,7 +2461,7 @@ class SewingMachine {
     const dt2 = dt * dt;
     const vf = this.feedVelocity();
     const fx = this.feedDir[0] * vf * dt, fz = this.feedDir[2] * vf * dt;
-    const needleIn = this.sewing && this.phase < 0.45;
+    const needleIn = (this.sewing && this.phase < 0.45) || this.needleDown;
     const muFoot = (SOLIDS[this.footMaterial]?.frictionFactor ?? 1);
     let below = null, yBase = this.needle[1];
     for (let k = 0; k < groups.length; k++) {
@@ -2490,15 +2520,18 @@ class SewingMachine {
 
   _makeStitch(groups) {
     // Einstichpunkt in jeder Lage als materieller Punkt (baryzentrisch im Dreieck)
-    const hits = groups.map((g) => ({ c: g.c, hit: locateTriangle(g.c, this.needle[0], this.needle[2]) })).filter((h) => h.hit);
+    // nur Dreiecke, die einen Knoten unter dem Fuß haben (bei Überlappungen in der Draufsicht
+    // sonst ggf. ein Dreieck einer anderen Stelle desselben Teils)
+    const hits = groups.map((g) => ({ c: g.c, hit: locateTriangle(g.c, this.needle[0], this.needle[2], new Set(g.idx)) })).filter((h) => h.hit);
     if (!hits.length) return;
     const top = hits[hits.length - 1];
     this.stitchPoints.push({ cloth: top.c, ...top.hit });
     // Nahtabweichung: Einstichstelle im Zuschnitt gegen die Sollbahn
     if (this.activePath && this.distToPath) {
-      const h = hits.find((x) => x.c === this.pathCloth) || top;
+      const h = hits.find((x) => x.c === this.pathCloth);
+      if (!h) { this.missBody = (this.missBody || 0) + 1; return this._linkStitch(hits); } // Stich verfehlt das geführte Teil
       const [u, v] = h.c.restPoint(h.hit.tri, h.hit.b0, h.hit.b1, h.hit.b2);
-      this.deviations.push(this.distToPath(this.activePath, u, v));
+      this.deviations.push(this.distToPath(this.activePath.parent || this.activePath, u, v)); // Teilnaht: gegen die Gesamtnaht (geschlossener Ausschnitt)
       // zweites Teil (Ärmel): Abweichung von der Kugelnaht und eingenähte Länge
       const E = this.edge;
       if (E && (E.on || this.feeder?.on)) {
@@ -2506,11 +2539,15 @@ class SewingMachine {
         if (hs) {
           const q = hs.c.restPoint(hs.hit.tri, hs.hit.b0, hs.hit.b1, hs.hit.b2);
           (this.devSleeve ||= []).push(this.distToPath(E.path, q[0], q[1]));
-          this.easeTrack.push({ b: [u, v], s: q, pb: projParam(this.activePath, u, v), ps: projParam(E.path, q[0], q[1]) });
+          this.easeTrack.push({ b: [u, v], s: q, pb: projParam(this.activePath.parent || this.activePath, u, v), ps: projParam(E.path, q[0], q[1]) });
         } else (this.devSleeve ||= []).push(NaN);
       }
     }
-    // Fadenzug zum vorigen Einstich in jeder Lage (nur Zug, verkürzte Ruhelänge)
+    this._linkStitch(hits);
+  }
+
+  // Fadenzug zum vorigen Einstich je Lage und Verbindung der Lagen an der Einstichstelle
+  _linkStitch(hits) {
     if (this.lastHits) {
       for (const hcur of hits) {
         const hprev = this.lastHits.find((x) => x.c === hcur.c);
@@ -2580,9 +2617,10 @@ class SewingMachine {
 }
 
 // Sucht das Dreieck einer Lage, das den Punkt (x, z) in Draufsicht enthält.
-function locateTriangle(c, x, z) {
+function locateTriangle(c, x, z, near = null) {
   const p = c.pos, T = c.tri;
   for (let t = 0; t < c.nTri; t++) {
+    if (near && !near.has(T[3 * t]) && !near.has(T[3 * t + 1]) && !near.has(T[3 * t + 2])) continue;
     const a = T[3 * t] * 3, b = T[3 * t + 1] * 3, d = T[3 * t + 2] * 3;
     const v0x = p[d] - p[a], v0z = p[d + 2] - p[a + 2];
     const v1x = p[b] - p[a], v1z = p[b + 2] - p[a + 2];
@@ -2642,6 +2680,8 @@ const __M_physics_robot = (() => {
 //                      vor der Nadel liegt und die Nahtrichtung in Transportrichtung zeigt
 //   SEWPATH name [rpm] [mm]  Naht entlang der Bahn; der Roboter führt und dreht das Teil
 //                      um die Nadel, sodass die Nahttangente stets in Transportrichtung liegt
+//   REGRIP R α         über einen Punkt im Abstand R [m] von der Nadel in Richtung α [°] fahren (Umgreifen)
+//   NEEDLE DOWN|UP     Nadelstopp unten (hält die Lagen beim Umgreifen) bzw. freigeben
 //   HOME               Grundstellung
 
 const ROT_WEIGHT = 0.2; // m je rad für die Bahnlänge
@@ -2663,7 +2703,7 @@ function parseProgram(text) {
   return out;
 }
 
-const KNOWN = new Set(['SPEED', 'ACCEL', 'MOVE', 'MOVEREL', 'TOUCH', 'GRIP', 'WAIT', 'FOOT', 'SEW', 'WAITSEW', 'HOME', 'TABLEVAC', 'ALIGNPATH', 'SEWPATH', 'EDGEGUIDE', 'SLEEVEFEED']);
+const KNOWN = new Set(['SPEED', 'ACCEL', 'MOVE', 'MOVEREL', 'TOUCH', 'GRIP', 'WAIT', 'FOOT', 'SEW', 'WAITSEW', 'HOME', 'TABLEVAC', 'ALIGNPATH', 'SEWPATH', 'EDGEGUIDE', 'SLEEVEFEED', 'REGRIP', 'NEEDLE']);
 
 function validateProgram(prog) {
   const errs = [];
@@ -2839,6 +2879,12 @@ class GantryRobot {
           ctx.log?.(`Nähen ${((n[0] || 0.1) * 100).toFixed(1)} cm`);
           break;
         case 'WAITSEW': if (ctx.machine.busy) return; break;
+        case 'REGRIP': {
+          // Umgreifen: über einen Punkt im Abstand R von der Nadel in Richtung α (Draufsicht, ° von +x nach +z)
+          const N = ctx.machine.needle, a = ((n[1] || 0) * Math.PI) / 180, R = n[0] || 0.2;
+          this.moveTo({ x: N[0] + R * Math.cos(a), y: this.pose.y, z: N[2] + R * Math.sin(a), yaw: this.pose.yaw }, t);
+          break;
+        }
         case 'ALIGNPATH': {
           const path = ctx.paths?.[ins.args[0]];
           const map = path && ctx.partMap();
@@ -2848,10 +2894,15 @@ class GantryRobot {
           this.moveTo(tgt, t);
           break;
         }
+        case 'NEEDLE': // NEEDLE DOWN: Nadelstopp unten (hält die Lagen beim Umgreifen), NEEDLE UP: freigeben
+          ctx.machine.needleDown = (ins.args[0] || '').toUpperCase() === 'DOWN';
+          ctx.log?.(`Nadel ${ctx.machine.needleDown ? 'unten (hält)' : 'oben'}`);
+          break;
         case 'SEWPATH': {
           const path = ctx.paths?.[ins.args[0]];
-          const map = path && ctx.partMap();
+          const map = path && ctx.partMap(path);
           if (!path || !map) { ctx.log?.(`SEWPATH: ${!path ? 'Bahn „' + ins.args[0] + '“ unbekannt' : 'kein Teil gegriffen'}`, 'error'); break; }
+          ctx.machine.sOffset = path.offset || 0;
           ctx.machine.startSew(path.length, Number.isFinite(n[1]) ? n[1] : undefined, Number.isFinite(n[2]) ? n[2] : undefined, path, map.cloth);
           this.pathFollow = { path, map, s: 0, yaw: this.pose.yaw };
           ctx.log?.(`Kurvennaht „${ins.args[0]}“, ${(path.length * 100).toFixed(1)} cm`);
@@ -2920,15 +2971,16 @@ function tshirtPanel({ neckDepth = 0.06 } = {}) {
 
 // Abschnitt der Kontur um die Nahtzugabe nach innen versetzen und gleichmäßig abtasten.
 // trim: Abstand der ersten/letzten Einstichstelle von der Schnittkante [m]
-function seamPath(outline, chain, allowance = 0.01, step = 0.002, trim = 0.004) {
-  // Normale je Segment, die ins Teil zeigt
+function seamPath(outline, chain, allowance = 0.01, step = 0.002, trim = 0.004, inside = null) {
+  // Normale je Segment, die ins Teil zeigt (inside: Materialtest, z. B. für Nähte an Löchern)
+  const inMat = inside || ((x, z) => pointInPolygon(outline, x, z));
   const segN = [];
   for (let k = 0; k < chain.length - 1; k++) {
     const [ax, az] = chain[k], [bx, bz] = chain[k + 1];
     const dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz);
     let nx = -dz / L, nz = dx / L;
     const mx = (ax + bx) / 2 + nx * 1e-3, mz = (az + bz) / 2 + nz * 1e-3;
-    if (!pointInPolygon(outline, mx, mz)) { nx = -nx; nz = -nz; }
+    if (!inMat(mx, mz)) { nx = -nx; nz = -nz; }
     segN.push([nx, nz]);
   }
   // Gehrung an den Ecken
@@ -3053,7 +3105,23 @@ function fitSleeve(armholeLen, ease = 0.02, allowance = 0.01) {
   return setInSleeve((lo + hi) / 2);
 }
 
-return { tshirtPanel, seamPath, makePath, pathAt, distToPath, templateOutline, setInBody, setInSleeve, fitSleeve };
+// Halsbündchen: Körper mit Halsausschnitt (Loch) und die Naht 6 mm außerhalb der Halskante,
+// beginnend am linken Schulterpunkt über den vorderen Ausschnitt. Das Bündchen ist ein
+// gerader, längs gefalteter Streifen; seine Nahtlinie ist um die Dehnung kürzer als die Halsnaht.
+function neckRibParts(stretch = 0.15, ribW = 0.018, allowance = 0.006) {
+  const body = setInBody();
+  const hole = body.holes[0];
+  const inMat = (x, z) => pointInPolygon(body.outline, x, z) && !pointInPolygon(hole, x, z);
+  const chain = [...hole, hole[0]];
+  const neck = seamPath(body.outline, chain, allowance, 0.002, 0.004, inMat);
+  const L = neck.length / (1 + stretch) + 0.008;            // Nahtlinie + Endzugaben (je 4 mm)
+  const rib = { outline: [[-L / 2, -ribW / 2], [L / 2, -ribW / 2], [L / 2, ribW / 2], [-L / 2, ribW / 2]] };
+  rib.chains = { kante: [[-L / 2, -ribW / 2], [L / 2, -ribW / 2]] };   // offene Kanten (Nahtseite)
+  const ribPath = seamPath(rib.outline, rib.chains.kante, allowance);
+  return { body, neck, rib, ribPath, inMat, stretch };
+}
+
+return { tshirtPanel, seamPath, makePath, pathAt, distToPath, templateOutline, setInBody, setInSleeve, fitSleeve, neckRibParts };
 })();
 
 // ---- src/physics/feeder.js ----
@@ -3073,7 +3141,10 @@ const invert = (A) => { const [rx, rz] = rotY(A.tx, A.tz, -A.theta); return { th
 const apply = (A, u, v) => { const [x, z] = rotY(u, v, A.theta); return [x + A.tx, z + A.tz]; };
 
 class SleeveFeeder {
-  constructor({ cloth, path, pathAt, needle, slot = 0, release = 0.018, holdY = null }) {
+  constructor({ cloth, path, pathAt, needle, slot = 0, release = 0.018, holdY = null, parkY = null }) {
+    this.parkY = parkY;        // Bereitstellhöhe (Bündchen: Faltapparat hält den Anfang über der Nadel)
+    this.parked = false;
+    this.curY = holdY;
     this.cloth = cloth; this.path = path; this.pathAt = pathAt; this.needle = needle;
     this.slot = slot;          // Abstand der Plattenkante zur Naht [m] (0: Platte deckt die Naht vor der Nadel ab)
     this.release = release;    // Segmente geben frei, wenn ihr Nahtabschnitt näher als dies an der Nadel ist [m]
@@ -3107,12 +3178,31 @@ class SleeveFeeder {
     if (this.yaw !== null) { while (yaw - this.yaw > Math.PI) yaw -= 2 * Math.PI; while (yaw - this.yaw < -Math.PI) yaw += 2 * Math.PI; }
     this.yaw = yaw;
     const [rx, rz] = rotY(p[0], p[1], yaw);
-    return { theta: yaw, tx: this.needle[0] - rx, tz: this.needle[2] - rz };
+    // lead: Vorhalt in Transportrichtung (Teil liegt um lead vor der Sollage, beim Einschieben)
+    return { theta: yaw, tx: this.needle[0] - rx, tz: this.needle[2] - rz + (this.lead || 0) };
+  }
+
+  // Bereitstellen: ganzes Teil in Soll-Lage für den Nahtanfang, angehoben über der Nadel
+  park(lead = 0.03) {
+    const c = this.cloth;
+    this.yaw = null;
+    this.lead = lead;           // Anfang liegt vor dem Nähfuß und wird nach dem Absenken eingeschoben
+    this.frame = this.analytic(0);
+    this.att = [];
+    for (let v = 0; v < c.n; v++) { this.att.push(v); c.attached[v] = 99; }
+    this.parked = true; this.curY = this.parkY;
   }
 
   // Platte setzt auf: tatsächliche Lage einmessen (Procrustes), dann programmiert weiterführen
   engage() {
     const c = this.cloth;
+    if (this.parked) {
+      // aus der Bereitstellung: Lage ist bekannt. Absenken vor den Fuß, dann flach unter den
+      // angehobenen Fuß einschieben; erst danach gibt die Platte den Anfang frei.
+      this.parked = false;
+      this.measured = this.frame; this.blend = 1; this.lowering = 0; this.inserting = true;
+      return true;
+    }
     this.att = [];
     let cu = 0, cw = 0, cx = 0, cz = 0, n = 0;
     for (let v = 0; v < c.n; v++) {
@@ -3151,6 +3241,19 @@ class SleeveFeeder {
   // Bahnfortschritt (aus dem Untertransport) und Segmentfreigabe
   advance(ds, dt = 0) {
     if (!this.on || !this.frame) return;
+    // Bereitstellung → Arbeitslage: absenken (0,3 s, 1,5 mm über der Arbeitshöhe), einschieben (0,4 s)
+    if (this.inserting) {
+      if (this.lowering < 1) {
+        this.lowering = Math.min(1, this.lowering + dt / 0.3);
+        const k = 0.5 - 0.5 * Math.cos(Math.PI * this.lowering);
+        this.curY = this.parkY + (this.holdY + 0.0015 - this.parkY) * k;
+      } else {
+        this.lead = Math.max(0, this.lead - dt * 0.075);
+        if (this.lead === 0) { this.inserting = false; this.curY = this.holdY; }
+      }
+      this.frame = this.analytic(this.s);
+      if (this.inserting) return;
+    } else this.curY = this.holdY;
     this.s = Math.min(this.path.length, this.s + ds);
     const A = this.analytic(this.s);
     if (this.blend < 1) {
@@ -3179,7 +3282,7 @@ class SleeveFeeder {
 
   // Knoten in der Ebene an die Platte binden (Höhe bleibt frei, die Platte liegt auf)
   solve(dt) {
-    if (!this.on || !this.frame) return;
+    if (!(this.on || this.parked) || !this.frame) return;
     const c = this.cloth, p = c.pos, at = this.compliance / (dt * dt);
     for (const v of this.att) {
       const w = c.w[v];
@@ -3188,7 +3291,8 @@ class SleeveFeeder {
       const k = w / (w + at);
       p[3 * v] += (tx - p[3 * v]) * k;
       p[3 * v + 2] += (tz - p[3 * v + 2]) * k;
-      if (this.holdY !== null) p[3 * v + 1] += (this.holdY - p[3 * v + 1]) * k;
+      const hy = this.curY ?? this.holdY;
+      if (hy !== null) p[3 * v + 1] += (hy - p[3 * v + 1]) * k;
     }
   }
 }
@@ -3202,7 +3306,7 @@ const __M_physics_world = (() => {
 // mit Greiferkopf und ein Stapel Zuschnitte. Zeitintegration mit festen Teilschritten.
 
 const { G, AIR } = __M_physics_constants;
-const { fabricById } = __M_physics_materials;
+const { fabricById, RIB_FABRIC } = __M_physics_materials;
 const { Cloth, rotY } = __M_physics_cloth;
 const { BoxCollider } = __M_physics_colliders;
 const { ClothContacts } = __M_physics_collision;
@@ -3210,7 +3314,7 @@ const { GripperHead, defaultParams } = __M_physics_grippers;
 const { SewingMachine } = __M_physics_sewing;
 const { GantryRobot } = __M_physics_robot;
 const { SleeveFeeder } = __M_physics_feeder;
-const { tshirtPanel, seamPath, pathAt, distToPath, templateOutline, setInBody, fitSleeve } = __M_physics_garments;
+const { tshirtPanel, seamPath, pathAt, distToPath, templateOutline, setInBody, fitSleeve, neckRibParts, makePath } = __M_physics_garments;
 const { rotY: rotYc, pointInPolygon } = __M_physics_cloth;
 const TABLE_TOP = 0.80;
 const STACK_POS = [-0.5, 0.05];
@@ -3359,6 +3463,64 @@ MOVEREL 0 0.12 0
 HOME
 `;
 
+const NECK_PROGRAM = `# Halsbündchen annähen (T-Shirt Gr. 86, Single Jersey, Bündchen 1×1-Rippe doppelt)
+# Vorstation: rechte Schulter geschlossen, Körper aufgeklappt auf einem Werkstückträger.
+# Der Faltapparat an der Maschine zieht das Bündchen von der Rolle, faltet es längs und
+# hält den Anfang über der Nadel bereit; nach dem Einlegen des Körpers senkt er es ab.
+# Beim Nähen hält der Abzug das Bündchen und schiebt es um den Faktor 1/1,15 langsamer
+# als der Körper läuft: das Bündchen wird um 15 % gedehnt angenäht.
+# Der Ausschnitt wird ganz umrundet (360°). Langarm-Maschine: der Körper dreht unter dem
+# Arm durch. Damit der Roboter weder den Arm noch die Zuführung kreuzt, greift er in der
+# Nahtmitte um (Nähfuß bleibt unten, Saugtisch hält den Körper).
+
+SPEED 0.4
+ACCEL 1.5
+MOVE -0.62 0.95 0.21 0      # Träger am Vorderteil greifen (Griffpunkt so gewählt, dass er beim
+                            # Umlauf weder den Maschinenarm (0°) noch die Zuführung (90°) kreuzt)
+SPEED 0.12
+MOVE -0.62 0.81 0.21
+TOUCH 0.01
+GRIP ON
+WAIT 0.4
+SPEED 0.05
+MOVEREL 0 0.02 0
+SPEED 0.3
+MOVE -0.62 0.95 0.21
+ALIGNPATH hals_1 0.83 0.04  # Nahtanfang 4 cm vor die Nadel
+SPEED 0.1
+TOUCH 0.01
+SPEED 0.03
+MOVEREL 0 0.001 -0.04       # Kanten unter den Nähfuß schieben
+SLEEVEFEED ON               # Bündchen vor dem Fuß absenken, Anfang unter den Fuß schieben
+WAIT 0.9
+FOOT DOWN
+WAIT 0.2
+SEWPATH hals_1 400 2.5      # erste Hälfte: vorderer Ausschnitt
+# Umgreifen: Nadel bleibt unten, Nähfuß unten, Saugtisch hält, Roboter greift neu
+NEEDLE DOWN
+TABLEVAC ON
+GRIP OFF
+WAIT 0.2
+SPEED 0.3
+MOVEREL 0 0.03 0
+REGRIP 0.17 118            # neuer Griffpunkt 17 cm von der Nadel, Richtung 118° (Draufsicht)
+SPEED 0.1
+MOVEREL 0 -0.027 0
+SPEED 0.02
+TOUCH 0.01
+GRIP ON
+WAIT 0.3
+TABLEVAC OFF
+SEWPATH hals_2 400 2.5      # zweite Hälfte: hinterer Ausschnitt (Nadel läuft wieder an)
+SLEEVEFEED OFF
+FOOT UP
+GRIP OFF
+WAIT 0.3
+SPEED 0.3
+MOVEREL 0 0.12 0
+HOME
+`;
+
 // Szenarien: setzen Material, Greifer, Raster und Programm passend vor
 const SCENARIOS = {
   rechteck: {
@@ -3369,17 +3531,25 @@ const SCENARIOS = {
     name: 'T-Shirt, Ärmel einsetzen (separates Teil)',
     set: { scenario: 'aermel', fabricId: 'jersey', plies: 2, gripper: 'traeger', gripperParams: {}, rows: 1, cols: 1, pitchX: 0.10, pitchZ: 0.13, rpm: 400, stitch: 2.5, pickPlies: 1, program: null },
   },
+  bund: {
+    name: 'T-Shirt, Halsbündchen (gedehnt, 360°)',
+    set: { scenario: 'bund', fabricId: 'jersey', plies: 2, gripper: 'traeger', gripperParams: { slot: 16 }, rows: 1, cols: 1, pitchX: 0.10, pitchZ: 0.13, rpm: 400, stitch: 2.5, pickPlies: 1, program: null },
+  },
   tshirt: {
     name: 'T-Shirt, Kurvennaht (Seite + Ärmel)',
     set: { scenario: 'tshirt', fabricId: 'jersey', plies: 2, gripper: 'schablone', gripperParams: {}, rows: 1, cols: 1, pitchX: 0.10, pitchZ: 0.13, rpm: 500, stitch: 3, pickPlies: 2, program: null },
   },
 };
 
+function programFor(id) {
+  return id === 'tshirt' ? TSHIRT_PROGRAM : id === 'aermel' ? SLEEVE_PROGRAM : id === 'bund' ? NECK_PROGRAM : DEFAULT_PROGRAM;
+}
+
 function applyScenario(cfg, id) {
   const sc = SCENARIOS[id] || SCENARIOS.rechteck;
   Object.assign(cfg, sc.set);
   cfg.gripperParams = { ...defaultParams(cfg.gripper), ...(sc.set.gripperParams || {}) };
-  cfg.program = id === 'tshirt' ? TSHIRT_PROGRAM : id === 'aermel' ? SLEEVE_PROGRAM : DEFAULT_PROGRAM;
+  cfg.program = programFor(id);
   return cfg;
 }
 
@@ -3430,14 +3600,17 @@ class World {
     this.events = [];
     this.fabric = c.customFabric || fabricById(c.fabricId);
     const T = TABLE_TOP;
+    // Langarm-Maschine beim Halsbündchen: 0,40 m freie Armlänge statt 0,28 m, damit der Körper
+    // beim 360°-Umlauf unter dem Arm durchdrehen kann
+    this.armExtra = c.scenario === 'bund' ? 0.12 : 0;
     this.colliders = [
       new BoxCollider({ name: 'Hallenboden', center: [0, -0.05, 0], half: [4, 0.05, 4], material: 'beton', visual: false }),
       new BoxCollider({ name: 'Stapeltisch', center: [STACK_POS[0], T - 0.02, STACK_POS[1]], half: [0.35, 0.02, 0.3], material: c.tableMaterial }),
-      new BoxCollider({ name: 'Nähtisch', center: [0.55, T - 0.02, -0.05], half: [0.45, 0.02, 0.4], material: c.tableMaterial }),
+      new BoxCollider({ name: 'Nähtisch', center: [0.55 + this.armExtra / 2, T - 0.02, -0.05], half: [0.45 + this.armExtra / 2, 0.02, 0.4], material: c.tableMaterial }),
       new BoxCollider({ name: 'Stichplatte', center: [NEEDLE[0] + 0.13, T - 0.004, NEEDLE[2]], half: [0.18, 0.004, 0.07], material: 'stahl', color: '#c9cdd2' }),
       new BoxCollider({ name: 'Nähkopf', center: [NEEDLE[0] + 0.02, T + 0.2, NEEDLE[2]], half: [0.05, 0.08, 0.05], material: 'guss' }),
-      new BoxCollider({ name: 'Arm', center: [NEEDLE[0] + 0.2, T + 0.23, NEEDLE[2]], half: [0.16, 0.04, 0.045], material: 'guss' }),
-      new BoxCollider({ name: 'Ständer', center: [NEEDLE[0] + 0.33, T + 0.12, NEEDLE[2]], half: [0.05, 0.12, 0.055], material: 'guss' }),
+      new BoxCollider({ name: 'Arm', center: [NEEDLE[0] + 0.2 + this.armExtra / 2, T + 0.23, NEEDLE[2]], half: [0.16 + this.armExtra / 2, 0.04, 0.045], material: 'guss' }),
+      new BoxCollider({ name: 'Ständer', center: [NEEDLE[0] + 0.33 + this.armExtra, T + 0.12, NEEDLE[2]], half: [0.05, 0.12, 0.055], material: 'guss' }),
     ];
     this.colliders[2].vacuum = true; // Nähtisch mit Saugfeld
     this.tableColliders = this.colliders.slice(1, 4);
@@ -3449,8 +3622,8 @@ class World {
     const t = this.fabric.thickness * 1e-3;
     this.paths = {};
     this.feeder = null;
-    const tshirt = c.scenario === 'tshirt', sleeveSc = c.scenario === 'aermel';
-    const plies = tshirt || sleeveSc ? 2 : c.plies;
+    const tshirt = c.scenario === 'tshirt', sleeveSc = c.scenario === 'aermel', neckSc = c.scenario === 'bund';
+    const plies = tshirt || sleeveSc || neckSc ? 2 : c.plies;
     let shapes = [];
     if (tshirt) {
       const front = tshirtPanel({ neckDepth: 0.06 }), back = tshirtPanel({ neckDepth: 0.02 });
@@ -3465,6 +3638,7 @@ class World {
       this.paths.kante_rechts = seamPath(out, this.rectChain, 0.01);
     }
     if (sleeveSc) this._buildSleeveScene(c, T, t, R);
+    else if (neckSc) this._buildNeckScene(c, T, t);
     else for (let i = 0; i < plies; i++) {
       const y = T + t * (i + 0.5) + 1e-5;
       const tol = tshirt ? 0.001 : 0.003; // paarweise geschnittene Teile liegen genauer
@@ -3486,10 +3660,29 @@ class World {
     this.machine = new SewingMachine({ needle: NEEDLE });
     // Saugtisch im Nähbereich: hält aufliegende Lagen über Unterdruck (erhöht die Normalkraft)
     this.tableVac = { on: false, pressure: c.tableVacPa ?? 800, region: [0.345, 0.625, -0.12, 0.25], top: T }; // Saugfeld unter der 1. Lage (Zonensteuerung)
+    if (neckSc) this.tableVac.region = [0.25, 1.0, -0.45, 0.3]; // Halsbündchen: ganzes Feld um die Nadel (Umgreifen)
     this.machine.tableVac = this.tableVac;
     this.machine.distToPath = distToPath;
     // Nähschablone / Werkstückträger passend zum Teil (Kontur, Nahtbahn, Schlitz)
-    if (sleeveSc) {
+    if (neckSc) {
+      // Träger mit Ausschnitt; Bündchen über Zuführung (Abzug) mit konstanter Dehnung geführt
+      const path = this.paths.hals_naht, slot = (this.head.params.slot || 16) * 1e-3;
+      const N = this.neck;
+      this.head.setTemplate({ path, outline: this.garment.body.outline, cloth: this.bodyCloth, dist: (u, v) => distToPath(path, u, v), shape: this.garment.body.outline, holes: [offsetHole(this.garment.body.holes[0], 0.006 + slot)], slot });
+      this.machine.pathAt = pathAt;
+      const ribOut = N.rib.outline;
+      this.machine.setEdgeGuide({ cloth: this.sleeveCloth, path: N.ribPath, capEdge: this.capEdge, bodyPath: path, bodyCloth: this.bodyCloth, inside: (u, v) => pointInPolygon(ribOut, u, v), profile: 'const', allowance: 0.006 });
+      this.feeder = new SleeveFeeder({ cloth: this.sleeveCloth, path: N.ribPath, pathAt, needle: NEEDLE, holdY: NEEDLE[1] + 2 * this.bodyCloth.radius + 0.4e-3 + this.sleeveCloth.radius, parkY: NEEDLE[1] + 0.08 });
+      this.machine.feeder = this.feeder;
+      // Bündchen hängt im Faltapparat über der Nadel bereit (Anfang = Nahtanfang)
+      this.feeder.lead = 0.03;
+      const A = this.feeder.analytic(0), rc = this.sleeveCloth;
+      for (let v = 0; v < rc.n; v++) {
+        const [x, z] = rotYc(rc.rest[2 * v], rc.rest[2 * v + 1], A.theta);
+        rc.pos[3 * v] = rc.prev[3 * v] = x + A.tx; rc.pos[3 * v + 1] = rc.prev[3 * v + 1] = NEEDLE[1] + 0.08; rc.pos[3 * v + 2] = rc.prev[3 * v + 2] = z + A.tz;
+      }
+      this.feeder.park();
+    } else if (sleeveSc) {
       const path = this.paths.armloch_links, slot = (this.head.params.slot || 16) * 1e-3;
       this.head.setTemplate({ path, outline: this.garment.body.outline, cloth: this.bodyCloth, dist: (u, v) => distToPath(path, u, v), shape: templateOutline(this.garment.body.outline, this.garment.body.chains.armloch_links, 0.01 + slot), slot });
       this.machine.pathAt = pathAt;
@@ -3568,6 +3761,85 @@ class World {
     this.cloths.push(bc, sc);
     this.bodyCloth = bc; this.sleeveCloth = sc;
     this.garment = { body, sleeve };
+  }
+
+  // Körper mit Halsausschnitt (aufgeklappt, auf Werkstückträger) und Bündchenstreifen, rechts auf
+  // rechts: die offenen Kanten liegen an der Halskante, der Streifen läuft tangential zum Nahtanfang.
+  _buildNeckScene(c, T, t) {
+    const N = neckRibParts(0.15);
+    this.neck = N;
+    const full = N.neck;
+    // Naht in zwei Hälften (Umgreifen in der Mitte); s-Versatz für Zuführung und Kantensensor
+    const half = full.length / 2, k = full.cum.findIndex((x) => x >= half);
+    // zweite Hälfte endet 6 mm vor dem Nahtanfang: dort ist in der Linie die linke Schulter noch offen,
+    // die Schulternaht schließt später über die Bündchenenden
+    const p1 = makePath(full.points.slice(0, k + 1)), p2 = makePath(full.points.slice(k, full.points.length - 3));
+    p2.offset = full.cum[k];
+    this.paths.hals_naht = full; this.paths.hals_1 = p1; this.paths.hals_2 = p2;
+    p1.parent = full; p2.parent = full;
+    const center = [STACK_POS[0], T + t / 2 + 1e-5, STACK_POS[1]];
+    // feineres Netz: der hintere Ausschnitt ist nur 1,5 cm tief
+    const bc = new Cloth({ fabric: this.fabric, spacing: Math.min(c.spacing, 0.01), outline: N.body.outline, holes: N.body.holes, center, yaw: 0, name: 'Körper' });
+    bc.stackIndex = 2; bc.compressionFactor = c.compressionFactor ?? 0.05;
+    // Bündchen: Nahtanfang auf den Nahtanfang des Körpers, Richtung tangential
+    const sp = N.ribPath, ts = pathAt(sp, 0).t, tb = pathAt(full, 0).t;
+    let phi = Math.atan2(tb[0], tb[1]) - Math.atan2(ts[0], ts[1]);
+    let [rx, rz] = rotYc(sp.points[0][0], sp.points[0][1], phi);
+    let tr = [full.points[0][0] - rx, full.points[0][1] - rz];
+    // Bündchen muss auf der Materialseite liegen (gleiche Seite der Naht wie der Körper)
+    const q = pathAt(sp, 0.02), probe = [q.p[0] - q.t[1] * 0.006, q.p[1] + q.t[0] * 0.006];
+    const ribLeft = pointInPolygon(N.rib.outline, probe[0], probe[1]);
+    const qb = pathAt(full, 0.02), bodyLeft = N.inMat(qb.p[0] - qb.t[1] * 0.006, qb.p[1] + qb.t[0] * 0.006);
+    let ribOutline = N.rib.outline, ribPath = sp, ribChain = N.rib.chains.kante;
+    if (ribLeft !== bodyLeft) {
+      const mir = (pts) => pts.map(([x, z]) => [x, -z]);
+      ribOutline = mir(N.rib.outline).reverse(); ribChain = mir(ribChain);
+      ribPath = seamPath(ribOutline, ribChain, 0.006);
+      const ts2 = pathAt(ribPath, 0).t;
+      phi = Math.atan2(tb[0], tb[1]) - Math.atan2(ts2[0], ts2[1]);
+      [rx, rz] = rotYc(ribPath.points[0][0], ribPath.points[0][1], phi);
+      tr = [full.points[0][0] - rx, full.points[0][1] - rz];
+    }
+    N.rib = { outline: ribOutline, chains: { kante: ribChain } }; N.ribPath = ribPath;
+    this.paths.bund = ribPath;
+    const rib = { ...RIB_FABRIC, thickness: RIB_FABRIC.thickness };
+    const sc = new Cloth({ fabric: rib, spacing: Math.min(c.spacing, 0.005), outline: ribOutline, center: [center[0] + tr[0], T + t + rib.thickness * 1e-3 / 2 + 2e-5, center[2] + tr[1]], yaw: phi, name: 'Bündchen' });
+    sc.stackIndex = 1; sc.compressionFactor = c.compressionFactor ?? 0.05;
+    // Knoten an der offenen Kante (für den Kantensensor)
+    this.capEdge = new Uint8Array(sc.n);
+    const chainPath = { points: ribChain };
+    // (Kantenknoten liegen beim Rechteck exakt auf dem Raster und sind daher nicht als „border“ markiert)
+    for (let v = 0; v < sc.n; v++) if (distToPath(chainPath, sc.rest[2 * v], sc.rest[2 * v + 1]) < 0.001) this.capEdge[v] = 1;
+    this.cloths.push(bc, sc);
+    this.bodyCloth = bc; this.sleeveCloth = sc;
+    this.garment = { body: N.body, sleeve: N.rib }; // „sleeve“: zweites, separat geführtes Teil
+  }
+
+  // Kamera-Neuvermessung nach dem Umgreifen: Lage des Teils aus dem Bereich um die restliche Naht
+  // (Halskante), nicht aus den weit entfernten Haltepunkten. Liefert die Abbildung Zuschnitt → Kopf.
+  _localMap(path) {
+    const c = this.bodyCloth, el = this.head.elements[0];
+    if (!el || !el.att.length) return null;
+    const [cx, , cz] = this.head.elementCenter(el), yaw = this.head.pose.yaw, cs = Math.cos(yaw), sn = Math.sin(yaw);
+    const P = [], Q = [];
+    for (let v = 0; v < c.n; v++) {
+      if (distToPath(path, c.rest[2 * v], c.rest[2 * v + 1]) > 0.03) continue;
+      const dx = c.pos[3 * v] - cx, dz = c.pos[3 * v + 2] - cz;
+      P.push([c.rest[2 * v], c.rest[2 * v + 1]]);
+      Q.push([el.ox + dx * cs - dz * sn, el.oz + dx * sn + dz * cs]);
+    }
+    if (P.length < 6) return null;
+    const cp = [0, 0], cq = [0, 0];
+    for (let k = 0; k < P.length; k++) { cp[0] += P[k][0]; cp[1] += P[k][1]; cq[0] += Q[k][0]; cq[1] += Q[k][1]; }
+    cp[0] /= P.length; cp[1] /= P.length; cq[0] /= P.length; cq[1] /= P.length;
+    let A = 0, B = 0;
+    for (let k = 0; k < P.length; k++) {
+      const u = P[k][0] - cp[0], w = P[k][1] - cp[1], x = Q[k][0] - cq[0], z = Q[k][1] - cq[1];
+      A += x * u + z * w; B += x * w - z * u;
+    }
+    const theta = Math.atan2(B, A), [rx, rz] = rotYc(cp[0], cp[1], theta);
+    this.log(`Kamera: Halskante neu vermessen (${P.length} Punkte)`);
+    return { cloth: c, theta, tx: cq[0] - rx, tz: cq[1] - rz };
   }
 
   // Tastsensor: höchste Oberfläche unter den Greiferelementen (inkl. gehaltener Lagen).
@@ -3720,7 +3992,7 @@ class World {
 
     const ctx = {
       head: this.head, machine: this.machine, contact: () => this.headContact(), log: (m, l) => this.log(m, l),
-      paths: this.paths, pathAt, partMap: () => this.head.partMap(),
+      paths: this.paths, pathAt, partMap: (path) => (path?.offset && this.neck ? this._localMap(path) : null) || this.head.partMap(),
     };
     for (let s = 0; s < n; s++) {
       if (s % detectEvery === 0) {
@@ -3790,13 +4062,19 @@ class World {
       }
       this.machine.solve(cloths, dt, this.t);
       this.head.solve(dt);
-      if (this.feeder?.on) {
-        this.feeder.advance(this.machine.sewing ? this.machine.feedVelocity() * dt * this.machine.topFeedRatio() : 0, dt);
+      if (this.feeder?.on || this.feeder?.parked) {
+        // Halsbündchen: Haltehöhe über dem Trägerblech (Körper liegt auf dem Träger, nicht auf der Stichplatte)
+        if (this.neck && this.head.elements[0].att.length) this.feeder.holdY = Math.max(this.feeder.holdBase ??= this.feeder.holdY, this.head.pose.y + 2 * this.bodyCloth.radius + 0.4e-3 + this.sleeveCloth.radius);
+        if (this.feeder.on) this.feeder.advance(this.machine.sewing ? this.machine.feedVelocity() * dt * this.machine.topFeedRatio() : 0, dt);
         this.feeder.solve(dt);
       }
       for (const c of cloths) if (!c.sleeping) c.solveTethers(c.tetherSlack);
       // Trennblech des Kantenführers: zwischen den Lagen vor dem Nähfuß keine Reibung
       this.contacts.frictionless = (this.machine.edge?.on || this.feeder?.on) && !this.machine.footUp ? this.machine.separatorZone : null;
+      this.contacts.separated = !!this.neck; // Halsbündchen: Blech trennt die Lagen vollständig
+      // unter dem Fuß ordnet das Fußmodell die Lagen (Höhe je Lage); kein zweiter Kontakt dort
+      if (this.neck && !this.underFoot) { const M = this.machine, N = M.needle; this.underFoot = (x, z) => Math.abs(x - N[0]) < M.half[0] + 0.003 && Math.abs(z - N[2]) < M.half[1] + 0.003; }
+      this.contacts.underFoot = this.neck && !this.machine.footUp ? this.underFoot : null;
       this.contacts.solve(cloths, dt);
       for (const col of this.colliders) {
         if (!col.enabled) continue;
@@ -3962,7 +4240,18 @@ class World {
   }
 }
 
-return { TABLE_TOP, STACK_POS, NEEDLE, DEFAULT_PROGRAM, TSHIRT_PROGRAM, SLEEVE_PROGRAM, SCENARIOS, applyScenario, defaultConfig, World };
+// Loch um d nach außen vergrößern (Ausschnitt im Werkstückträger)
+function offsetHole(hole, d) {
+  let cx = 0, cz = 0; for (const [x, z] of hole) { cx += x; cz += z; } cx /= hole.length; cz /= hole.length;
+  return hole.map((p, i) => {
+    const a = hole[(i - 1 + hole.length) % hole.length], b = hole[(i + 1) % hole.length];
+    let nx = b[1] - a[1], nz = -(b[0] - a[0]); const L = Math.hypot(nx, nz) || 1; nx /= L; nz /= L;
+    if (nx * (p[0] - cx) + nz * (p[1] - cz) < 0) { nx = -nx; nz = -nz; }
+    return [p[0] + nx * d, p[1] + nz * d];
+  });
+}
+
+return { TABLE_TOP, STACK_POS, NEEDLE, DEFAULT_PROGRAM, TSHIRT_PROGRAM, SLEEVE_PROGRAM, NECK_PROGRAM, SCENARIOS, programFor, applyScenario, defaultConfig, World };
 })();
 
 // ---- src/physics/validation.js ----
@@ -4945,6 +5234,7 @@ class SceneView {
   _cellDetails(world) {
     const M = mats(), S = this.static, T = TABLE_TOP;
     const [nx, ny, nz] = NEEDLE;
+    const ax = world.armExtra || 0; // Langarm-Maschine: Ständer, Handrad und Motor weiter außen
     const add = (o) => { S.add(o); return o; };
     const bx = (w, h, d, mat, x, y, z) => add(this._box(w, h, d, mat, x, y, z));
     const cy = (r, h, mat, x, y, z, axis = 'y', seg = 24) => {
@@ -4988,13 +5278,13 @@ class SceneView {
     bx(0.035, 0.006, 0.022, M.lamp, nx + 0.035, T + 0.117, nz + 0.03);
     // Bedienfeld am Arm, Rückwärtstaste, Stichsteller am Ständer
     bx(0.07, 0.04, 0.004, M.plastic, nx + 0.24, T + 0.23, nz + 0.046); bx(0.05, 0.025, 0.002, M.screen, nx + 0.24, T + 0.232, nz + 0.049);
-    bx(0.03, 0.012, 0.012, M.paintDark, nx + 0.295, T + 0.175, nz + 0.06);
-    cy(0.018, 0.012, M.paintDark, nx + 0.33, T + 0.12, nz + 0.061, 'z'); bx(0.006, 0.03, 0.006, M.chrome, nx + 0.33, T + 0.13, nz + 0.068);
+    bx(0.03, 0.012, 0.012, M.paintDark, nx + 0.295 + ax, T + 0.175, nz + 0.06);
+    cy(0.018, 0.012, M.paintDark, nx + 0.33 + ax, T + 0.12, nz + 0.061, 'z'); bx(0.006, 0.03, 0.006, M.chrome, nx + 0.33 + ax, T + 0.13, nz + 0.068);
     // Direktantrieb (Servomotor) hinter dem Handrad, Steuerung unter dem Tisch
-    cy(0.045, 0.055, M.blackSteel, nx + 0.44, T + 0.2, nz, 'x', 32); cy(0.02, 0.01, M.alu, nx + 0.472, T + 0.2, nz, 'x');
+    cy(0.045, 0.055, M.blackSteel, nx + 0.44 + ax, T + 0.2, nz, 'x', 32); cy(0.02, 0.01, M.alu, nx + 0.472 + ax, T + 0.2, nz, 'x');
     bx(0.26, 0.12, 0.2, M.paintDark, nx + 0.15, T - 0.14, nz - 0.12); bx(0.06, 0.03, 0.002, M.screen, nx + 0.1, T - 0.13, nz - 0.019);
     // Garnständer mit zwei Konen und Fadenlauf zur Nadel
-    const gx = nx + 0.33, gz = -0.4;
+    const gx = nx + 0.33 + ax, gz = -0.4;
     add(profile(0.62, 'y', gx, T + 0.31, gz, M.steel));
     bx(0.26, 0.006, 0.12, M.paintDark, gx, T + 0.003, gz);
     bx(0.24, 0.01, 0.01, M.steel, gx, T + 0.6, gz);
@@ -5044,7 +5334,7 @@ class SceneView {
     // Nähmaschine: Handrad, Fadenrolle, Nadelstange, Nähfuß
     const [nx, ny, nz] = NEEDLE;
     const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.03, 40), this._mat(0x3b4442, 0.4, 0.4));
-    wheel.rotation.z = Math.PI / 2; wheel.position.set(nx + 0.395, ny + 0.2, nz); wheel.castShadow = true;
+    wheel.rotation.z = Math.PI / 2; wheel.position.set(nx + 0.395 + (world.armExtra || 0), ny + 0.2, nz); wheel.castShadow = true;
     this.static.add(wheel);
     this.wheel = wheel;
     this.needleBar = new THREE.Group();
@@ -5082,15 +5372,16 @@ class SceneView {
     const head = world.head;
     this.templateMesh = null;
     this.carrier = null; this.feederMesh = null; this.separator = null; this.sensor = null;
-    const shapeMesh = (pts, mat, depth = 0.003) => {
+    const shapeMesh = (pts, mat, depth = 0.003, holes = []) => {
       const shape = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, -z)));
+      for (const h of holes) shape.holes.push(new THREE.Path(h.map(([x, z]) => new THREE.Vector2(x, -z))));
       const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
       geo.rotateX(-Math.PI / 2);
       return new THREE.Mesh(geo, mat);
     };
     if (head.type === 'traeger' && head.template) {
       // Werkstückträger: dünnes Blech in Körperkontur mit Nahtschlitz, liegt unter dem Körper
-      const m = shapeMesh(head.template.shape, new THREE.MeshStandardMaterial({ color: 0x8c969c, metalness: 0.7, roughness: 0.35, transparent: true, opacity: 0.85 }), 0.0005);
+      const m = shapeMesh(head.template.shape, new THREE.MeshStandardMaterial({ color: 0x8c969c, metalness: 0.7, roughness: 0.35, transparent: true, opacity: 0.85 }), 0.0005, head.template.holes || []);
       m.receiveShadow = true;
       const g = new THREE.Group(); g.add(m);
       // Anfangslage: unter dem Körper auf dem Stapeltisch
@@ -5498,8 +5789,8 @@ function stationDefs(G) {
   const S = G.seams;
   return [
     { id: 'schulter1', name: 'Schulternaht rechts', machine: 'overlock', seams: [{ len: S.schulter, kmax: 0, val: 600 }], handling: 6.5, stage: 1, cap: 1, proof: 'analog', risk: 0.005 },
-    { id: 'hals', name: 'Halsbündchen (Rolle)', machine: 'overlock', seams: [{ len: S.hals, kmax: 22, val: 400 }], handling: 7.5, stage: 2, cap: 1, proof: 'plan', risk: 0.02, rib: true,
-      note: 'Bündchen läuft von der Rolle durch Faltapparat und Abzug mit Spannungsregelung (15 % Dehnung), wird am Nahtende abgeschnitten. Noch ohne Physik-Nachweis.' },
+    { id: 'hals', name: 'Halsbündchen (Rolle)', machine: 'overlock', seams: [{ len: S.hals, kmax: 22, val: 400 }], handling: 11.0, stage: 2, cap: 1, physics: 'bund', proof: 'zelle', risk: 0.02, rib: true,
+      note: 'Faltapparat hält das Bündchen von der Rolle über der Nadel bereit, Abzug dehnt es um 15 %. Langarm-Maschine, 360°-Umlauf mit Umgreifen (Nadel unten) und Kamera-Neuvermessung. In der Zelle: 116/116 Stiche bei 400 min⁻¹.' },
     { id: 'schulter2', name: 'Schulternaht links', machine: 'overlock', seams: [{ len: S.schulter + 0.036, kmax: 0, val: 600 }], handling: 6.5, stage: 3, cap: 1, proof: 'analog', risk: 0.005 },
     { id: 'aermelL', name: 'Ärmel einsetzen links', machine: 'steppstich', seams: [{ len: S.armloch, kmax: 14, val: 400 }], handling: 13.0, stage: 4, cap: 1, physics: 'aermel', proof: 'zelle', risk: 0.02,
       note: 'Roboter legt den Ärmel auf das Armloch, Ärmelzuführung mit Kamera, Mehrweite über Obertransport. In der Zelle: 83/83 Stiche bei 400 min⁻¹.' },
@@ -6876,7 +7167,7 @@ return { LineUI };
 // ---- src/ui/app.js ----
 const __M_ui_app = (() => {
 // Bedienoberfläche: verbindet Simulation, 3D-Ansicht und Messwerte.
-const { World, defaultConfig, DEFAULT_PROGRAM, TSHIRT_PROGRAM, SLEEVE_PROGRAM, SCENARIOS, applyScenario } = __M_physics_world;
+const { World, defaultConfig, SCENARIOS, applyScenario, programFor } = __M_physics_world;
 const { FABRICS, FABRIC_FIELDS, SOLIDS, fabricById, toSI, bendingLength } = __M_physics_materials;
 const { GRIPPER_TYPES, defaultParams, capacityModel } = __M_physics_grippers;
 const { validateProgram, parseProgram } = __M_physics_robot;
@@ -6915,7 +7206,9 @@ function buildSetupUI() {
   const sc = $('scenario');
   sc.innerHTML = Object.entries(SCENARIOS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
   sc.value = cfg.scenario;
-  $('scenarioNote').textContent = cfg.scenario === 'aermel'
+  $('scenarioNote').textContent = cfg.scenario === 'bund'
+    ? 'Halsbündchen (1×1-Rippe, doppelt) wird um 15 % gedehnt an den Halsausschnitt genäht. Der Körper liegt auf einem Werkstückträger mit Ausschnitt; der Abzug der Bündchenzuführung läuft um 1/1,15 langsamer als der Körper. Langarm-Maschine, 360°-Umlauf mit einmaligem Umgreifen in der Nahtmitte.'
+    : cfg.scenario === 'aermel'
     ? 'Separater Ärmel wird flach in das Armloch eingenäht. Der Körper (Schulternähte geschlossen, aufgeklappt) liegt auf einem Werkstückträger, den der Roboter entlang des Armlochs führt. Die Ärmelzuführung führt den Ärmel gegenläufig und mit 2 % Mehrweite; Obertransport, Trennblech und Kantensensor arbeiten mit.'
     : cfg.scenario === 'tshirt'
     ? 'Vorder- und Rückenteil eines Kinder-T-Shirts (Kimonoschnitt). Eine Nähschablone klemmt beide Teile, der Roboter führt die Seitennaht mit Achselrundung und Ärmelunternaht in einem Zug.'
@@ -7023,7 +7316,7 @@ function readSetup() {
   cfg.tableMaterial = $('tableMat').value;
   cfg.footMaterial = $('footMat').value;
   cfg.quality = $('quality').value;
-  Object.assign(cfg, (cfg.scenario === 'tshirt' || cfg.scenario === 'aermel' ? QUALITY_LARGE : QUALITY)[cfg.quality]);
+  Object.assign(cfg, (['tshirt', 'aermel', 'bund'].includes(cfg.scenario) ? QUALITY_LARGE : QUALITY)[cfg.quality]);
   cfg.selfCollision = $('selfColl').checked;
   cfg.airCushion = $('airCushion').checked;
   cfg.program = $('program').value;
@@ -7134,7 +7427,8 @@ function renderUi(force = false) {
   if (dev.length) {
     const mean = dev.reduce((a, b) => a + b, 0) / dev.length, mx = Math.max(...dev);
     $('kDev').textContent = `${fmt(mean * 1000, 1)} mm`;
-    $('kDevSub').innerHTML = `max. ${fmt(mx * 1000, 1)} mm ` + (mx < 0.003 ? '<span class="chip good">i. O.</span>' : mx < 0.006 ? '<span class="chip warn">grenzwertig</span>' : '<span class="chip crit">n. i. O.</span>');
+    const miss = w.machine.missBody || 0;
+    $('kDevSub').innerHTML = `max. ${fmt(mx * 1000, 1)} mm ` + (mx < 0.003 ? '<span class="chip good">i. O.</span>' : mx < 0.006 ? '<span class="chip warn">grenzwertig</span>' : '<span class="chip crit">n. i. O.</span>') + (miss ? ` · ${miss} Stich${miss > 1 ? 'e' : ''} ohne Körper` : '');
   } else { $('kDev').textContent = '–'; $('kDevSub').textContent = w.machine.activePath ? 'erste Stiche …' : 'nur bei Bahnnaht (SEWPATH)'; }
   const E = w.machine.edge;
   $('kSleeveBox').hidden = $('kEaseBox').hidden = !E;
@@ -7144,13 +7438,24 @@ function renderUi(force = false) {
       const mean = ds.reduce((a, b) => a + b, 0) / ds.length, mx = Math.max(...ds);
       $('kSleeve').textContent = `${fmt(mean * 1000, 1)} mm`;
       $('kSleeveSub').innerHTML = `max. ${fmt(mx * 1000, 1)} mm` + (miss ? ` · <span class="chip crit">${miss} Stiche verfehlt</span>` : mx < 0.003 ? ' <span class="chip good">i. O.</span>' : ' <span class="chip warn">grenzwertig</span>');
-    } else { $('kSleeve').textContent = '–'; $('kSleeveSub').textContent = E.err !== null ? `Kantensensor ${fmt(E.err * 1000, 1)} mm` : 'Einstich ↔ Kugelnaht'; }
+    } else { $('kSleeve').textContent = '–'; $('kSleeveSub').textContent = E.err !== null ? `Kantensensor ${fmt(E.err * 1000, 1)} mm` : (E.profile === 'const' ? 'Einstich ↔ Bündchennaht' : 'Einstich ↔ Kugelnaht'); }
     const et = w.machine.easeTrack || [];
+    const rib = E.profile === 'const';
+    $('kSleeveLbl').textContent = rib ? 'Bündchennaht' : 'Ärmelnaht';
+    $('kEaseLbl').textContent = rib ? 'Bündchendehnung' : 'Mehrweite';
     if (et.length > 3) {
-      const a = et[0], b = et[et.length - 1], ez = (b.ps - a.ps) / Math.max(1e-6, b.pb - a.pb) - 1;
-      $('kEase').textContent = `${fmt(ez * 100, 1)} %`;
-      $('kEaseSub').textContent = `Soll ${fmt(E.ease * 100, 1)} % · ${fmt((b.ps - b.pb) * 1000, 1)} mm eingehalten`;
-    } else { $('kEase').textContent = '–'; $('kEaseSub').textContent = `Soll ${fmt(E.ease * 100, 1)} % (Kugel länger als Armloch)`; }
+      const a = et[0], b = et[et.length - 1];
+      if (rib) {
+        // Dehnung: genähte Körperlänge / eingenähte Bündchenlänge − 1
+        const st = (b.pb - a.pb) / Math.max(1e-6, b.ps - a.ps) - 1, soll = 1 / (1 + E.ease) - 1;
+        $('kEase').textContent = `${fmt(st * 100, 1)} %`;
+        $('kEaseSub').textContent = `Soll ${fmt(soll * 100, 1)} % · Körper ${fmt((b.pb - a.pb) * 100, 1)} cm / Bündchen ${fmt((b.ps - a.ps) * 100, 1)} cm`;
+      } else {
+        const ez = (b.ps - a.ps) / Math.max(1e-6, b.pb - a.pb) - 1;
+        $('kEase').textContent = `${fmt(ez * 100, 1)} %`;
+        $('kEaseSub').textContent = `Soll ${fmt(E.ease * 100, 1)} % · ${fmt((b.ps - b.pb) * 1000, 1)} mm eingehalten`;
+      }
+    } else { $('kEase').textContent = '–'; $('kEaseSub').textContent = rib ? `Soll ${fmt((1 / (1 + E.ease) - 1) * 100, 1)} % (Bündchen kürzer als Ausschnitt)` : `Soll ${fmt(E.ease * 100, 1)} % (Kugel länger als Armloch)`; }
   }
   const rp = w.robot.pose;
   $('kPose').textContent = `${fmt(((rp.yaw * 180) / Math.PI), 0)}°`;
@@ -7284,7 +7589,7 @@ function init() {
   $('btnPause').onclick = () => { running = !running; $('btnPause').textContent = running ? 'Pause' : 'Weiter'; };
   $('btnReset').onclick = rebuild;
   $('btnApply').onclick = () => { rebuild(); startProgram(); };
-  $('btnDefault').onclick = () => { $('program').value = cfg.scenario === 'tshirt' ? TSHIRT_PROGRAM : cfg.scenario === 'aermel' ? SLEEVE_PROGRAM : DEFAULT_PROGRAM; renderGutter(); };
+  $('btnDefault').onclick = () => { $('program').value = programFor(cfg.scenario); renderGutter(); };
   $('timeScale').onchange = (e) => { timeScale = +e.target.value; };
   $('btnValidate').onclick = showValidation;
   $('dlgClose').onclick = () => $('dlg').close();

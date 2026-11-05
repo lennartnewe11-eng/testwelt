@@ -2,89 +2,101 @@
 
 Vom Stoffballen bis zum verpackten Shirt: eine vollautomatische Linie für ein Kinder-T-Shirt
 (Gr. 86, Single Jersey). Sie baut auf den Techniken auf, die in der Nähzelle physikalisch
-simuliert und validiert sind: Vereinzeln mit Nadelgreifern, robotergeführtes Nähen von
-Kurvennähten, Werkstückträger mit Nadelleisten und Ärmelzuführung mit Mehrweite.
+simuliert sind:
+- robotergeführtes Nähen von Kurvennähten,
+- Werkstückträger mit Nadelleisten,
+- Ärmelzuführung mit Mehrweite,
+- Bündchenzuführung mit Dehnung.
 
 In der Oberfläche oben rechts auf **Produktionsstraße** umschalten (oder `index.html#linie`).
 
 ## Was die Simulation ist und was nicht
 
 Die Linie ist ein **digitaler Zwilling als ereignisdiskrete Simulation (DES)**. Jedes Shirt ist
-ein Auftrag, der auf einem Werkstückträger durch die Stationen läuft. Die Zykluszeiten werden
-nicht geschätzt, sondern aus der Geometrie der Schnittteile und den Prozessgrenzen berechnet:
+ein Auftrag, der auf einem Werkstückträger durch die Stationen läuft. Die Nähzeiten kommen aus
+der Geometrie der Schnittteile und einer wählbaren Drehzahlstufe:
 
 ```
-Zykluszeit = Handling + Σ Nähte ( Nahtlänge / (Drehzahl/60 · Stichlänge) + 0,7 s )
-Drehzahl   = min( n_max, 60 · ω_max / (κ_max · Stichlänge) )   bei Kurvennähten
+Zykluszeit = Handhabung + Σ Nähte ( Nahtlänge / (Drehzahl/60 · Stichlänge) + 0,7 s )
+Drehzahl   = min( Stufe, 60 · ω_max / (κ_max · Stichlänge) )   bei Kurvennähten
 ```
-
-ω_max ist die Drehgeschwindigkeit der C-Achse beim Drehen des Teils um die Nadel, κ_max die
-größte Krümmung der Naht. Mit 2 rad/s und 2,5 mm Stich ergibt das zum Beispiel für die Seitennaht
-mit Achselrundung (κ = 25 1/m) etwa 1 920 Stiche/min.
 
 Die Stoffphysik (XPBD, Kontakt, Reibung, Greifer) rechnet die Nähzelle. In der Linie wird sie
-nicht an jeder Station neu gerechnet, das wäre in Echtzeit nicht möglich. Die Stationen
-„Ärmel einsetzen“ und „Seitennaht“ verweisen über **Physik** in der Stationstabelle auf das
-passende Szenario in der Nähzelle, in dem genau dieser Schritt physikalisch nachgewiesen ist.
+nicht an jeder Station neu gerechnet. Jede Station zeigt in der Tabelle, wie gut sie belegt ist:
+
+| Nachweis | Bedeutung | Stationen |
+|---|---|---|
+| **Zelle** | in der Nähzelle physikalisch simuliert („Physik“ öffnet das Szenario) | Halsbündchen, Ärmel einsetzen, Seitennähte |
+| **analog** | gerade, robotergeführte Naht wie der Grundfall der Zelle | Schulternähte, Säume |
+| **Plan** | Planwert ohne Nachweis | Etikett, Klappen, Prüfen, Wenden, Dämpfen, Verpacken |
+
+Handhabungszeiten und Störraten sind Planwerte aus vergleichbaren Roboterzellen.
+
+## Drehzahlstufen
+
+| Stufe | gerade / Kurve | Bedeutung |
+|---|---|---|
+| in der Zelle validiert | je Naht die nachgewiesene Drehzahl: 600 / 400–500 min⁻¹ | belegt, aber langsam |
+| Entwicklungsziel (Standard) | 1 500 / 1 000 min⁻¹ | realistisch nach Prototyp und Regelungsentwicklung |
+| optimistisch | 4 000 / 3 000 min⁻¹ | Drehzahlen manueller Nähplätze, für robotergeführtes Nähen nicht belegt |
 
 ## Ablauf
 
-| # | Bereich | Station | Technik | Zyklus |
+| # | Station | Technik | Zyklus (Ziel / validiert) |
+|---|---|---|---|
+| 1 | Zuschnitt einlagig | Abwickler mit Kantensteuerung, Förderband-Cutter (0,8 m/s), Abnahmeband als Puffer für 3 Schnittbilder | 6,8 s je Shirt |
+| 2 | Kommissionierung | 2 Roboter greifen die einzeln liegenden Teile mit Vakuum und legen sie in Nählage auf den Klappträger | 3,6 s je Shirt |
+| 3 | Schulternaht rechts | Overlock | 8,1 / 9,4 s |
+| 4 | Halsbündchen (Rolle) | Faltapparat und Abzug (15 % Dehnung), Langarm-Maschine, 360° mit Umgreifen | 18,1 / 27,6 s |
+| 5 | Schulternaht links | Overlock, schließt über die Bündchenenden | 8,7 / 10,8 s |
+| 6 | Ärmel einsetzen links / rechts | Roboter legt den Ärmel auf, Ärmelzuführung, Mehrweite | je 18,7 / 26,2 s |
+| 7 | Ärmelsäume | Coverstich, Kantenentroller vor dem Saumumleger | 15,5 / 24,6 s |
+| 8 | Saum Vorder- und Rückenteil | Coverstich | 18,7 / 31,2 s |
+| 9 | Pflegeetikett anheften | Etikett vom Band schneiden, falten, mit Heftriegel an den Seitenrand des Rückenteils | 6,0 s |
+| 10 | Klappträger schließen | Scharnier klappt die Vorderhälfte samt Nadelleisten auf die Rückenhälfte, Kamera prüft die Kanten | 4,5 s |
+| 11 | Seitennaht links / rechts | Overlock, Klappträger als Nähschablone | je 17,4 / 25,1 s |
+| 12 | Fäden absaugen, Kameraprüfung | vor dem Wenden: Nähte liegen außen | 6,0 s |
+| 13 | Wenden auf Formbrett | Saum am Rohrrand klemmen, Unterdruck zieht das Shirt durch, gewendet auf ein Formbrett | 9,0 s |
+| 14 | Dämpfen und Falten | Shirt bleibt auf dem Formbrett, 2 Maschinen | 15,0 s |
+| 15 | Verpacken | Folienbeutel, Schweißbalken, Palette | 7,0 s |
+
+Der Zuschnitt im Stapel (Legemaschine, Stapelcutter, Vereinzeln mit Nadelgreifern) ist zum
+Vergleich wählbar. Rechnerisch ist er nicht langsamer. Das Vereinzeln einzelner Jersey-Lagen
+aus einem Stapel von 20 ist aber technisch das größte Risiko. Deshalb ist der einlagige
+Zuschnitt der Standard.
+
+## Ergebnisse (4 h Laufzeit, letzte Stunde)
+
+| Stufe | Takt | ohne Störungen | mit Störungen | Engpass |
 |---|---|---|---|---|
-| 1 | Zuschnitt | Stoffrollenregal, Legemaschine | 20 Lagen à 1,19 m, Kantensteuerung, Spannungsfrei legen | 5,0 s je Lage |
-| 2 | Zuschnitt | CNC-Cutter | Vakuumtisch mit Folie, oszillierendes Messer, Schnittkontur 23,7 m | 157 s je Stapel |
-| 3 | Zuschnitt | Abnahmetisch | Schnittbild mit 6 Shirts (66 % Ausnutzung) | – |
-| 4 | Kommissionierung | 2 Roboter mit Nadelgreifern | Vereinzeln der obersten Lage, Ablage aller Teile eines Shirts auf einen Werkstückträger | 6,5 s je Shirt |
-| 5 | Nähen | Schulternaht rechts | Overlock, gerade | 7,5 s |
-| 6 | Nähen | Halsbündchen annähen | Overlock, Bündchen 15 % kürzer, Obertransport dehnt es | 12,6 s |
-| 7 | Nähen | Schulternaht links | Overlock, schließt den Kragen | 7,7 s |
-| 8 | Nähen | Ärmel einsetzen links / rechts | Steppstich, Werkstückträger + Ärmelzuführung, flach eingesetzt | je 13,4 s |
-| 9 | Nähen | Ärmel- und Saumnaht | Coverstich, 2 Ärmelsäume + Saum | 20,2 s (Engpass) |
-| 10 | Handling | Falten an der Schulter | Klappe faltet das Vorderteil auf das Rückenteil | 7,0 s |
-| 11 | Nähen | Seitennaht links / rechts | Overlock, Seite + Achselrundung + Ärmelunterkante in einem Zug | je 13,7 s |
-| 12 | Finish | Wenden | Rohrwender bläst das Shirt auf rechts | 7,5 s |
-| 13 | Finish | Fäden kappen, Kameraprüfung | Absaugung, Durchlichtkamera | 6,0 s |
-| 14 | Finish | Bügeln und Falten | Dampfpresse mit Faltklappen, 2 Maschinen | 15,0 s |
-| 15 | Finish | Verpacken | Folienbeutel, Schweißbalken, Palette | 7,0 s |
+| validiert | 31,2 s | 115 Shirts/h | 109 Shirts/h | Saum (Cover) |
+| Entwicklungsziel | 18,7 s | 190 Shirts/h | 161 Shirts/h | Saum (Cover), Ärmel |
+| optimistisch | 15,4 s | 205 Shirts/h | 173 Shirts/h | Ärmel |
 
-Theoretischer Takt mit Standardwerten: 20,2 s, also rund **178 Shirts pro Stunde**. Im
-eingeschwungenen Zustand erreicht die Simulation mit Fadenbrüchen (0,4 % je Naht, 45 s
-automatisches Einfädeln) und Streuung der Handlingzeiten 170 bis 180 Stück pro Stunde.
+Bei „optimistisch“ begrenzen zusätzlich die Werkstückträger und der Transport (theoretisch wären
+234 Shirts pro Stunde möglich).
 
-## Transfersystem
+Störungen in der Simulation:
 
-- Hauptband mit 0,25 m/s und Werkstückträgern (0,70 m) im Abstand von 2,8 m.
-- Jede Station sitzt auf einer **Stichstrecke** mit getrennter Ein- und Ausschleusung. So kann
-  ein fertiger Träger die Station verlassen, auch wenn sich davor ein Träger staut (ohne diese
-  Trennung blockiert sich die Linie gegenseitig).
-- Leere Träger laufen über ein Rückband mit Hubstationen zur Kommissionierung zurück.
-- Die Zahl der Träger begrenzt den Umlaufbestand. Nach dem Gesetz von Little gilt
-  Ausbringung = Umlaufbestand / Durchlaufzeit. Mit nur 6 Trägern sinkt die Ausbringung auf
-  etwa 60 Stück pro Stunde.
+| Störung | Häufigkeit | Behebung |
+|---|---|---|
+| Fadenbruch | 0,4 % je Naht | 45 s automatisches Einfädeln |
+| Handhabungsfehler | je Station 0,3 % bis 3 %, am häufigsten Wenden, Ärmel, Bündchen | 25 s Nachgreifen und Neuvermessen |
+| Stoffrolle wechseln | alle 100 m | 120 s |
+| Bündchenrolle wechseln | alle 50 m (etwa 220 Shirts) | 90 s |
+| Ausschuss an der Kameraprüfung | 1,5 % | Shirt geht in die Nacharbeit |
 
-## Kennzahlen in der Oberfläche
+Weil 15 Stationen hintereinander arbeiten, summieren sich die Störungen. Die Ausbringung sinkt
+dadurch um etwa 15 %.
 
-- **Ausbringung**: Stück pro Stunde über die letzten 10 Minuten, dazu der theoretische Wert.
-- **Taktzeit und Engpass**: langsamste Station (Zykluszeit / Maschinenzahl), Legen,
-  Schneiden und Kommissionieren mitgerechnet.
-- **Durchlaufzeit und Umlaufbestand**: vom Aufsetzen auf den Träger bis zum Verpacken.
-- **Auslastung je Station**: arbeitet (grün), blockiert (orange, Ausgang belegt),
-  Störung (rot, Fadenbruch), wartet auf Teile (grau).
+## Klappträger und Formbrett
 
-Mit dem Feld **Masch.** in der Stationstabelle lässt sich eine Station verdoppeln. Wird die
-Coverstation verdoppelt, steigt die Ausbringung auf etwa 198 Stück pro Stunde, und die
-Seitennaht wird zum neuen Engpass.
-
-## 3D-Ansicht
-
-Die Ansicht zeigt jede Station mit Roboter, Maschine, Schutzzaun, Schaltschrank und
-Signalsäule (grün arbeitet, gelb wartet, rot Störung). Das Shirt ist in jedem Zustand als
-eigenes Modell zu sehen: Einzelteile, Schultern geschlossen, Bündchen, eingesetzte Ärmel,
-gesäumt, gefaltet, geschlossen, gewendet, gebügelt, verpackt. An den Nähstationen wird das Teil
-entlang der echten Nahtbahn unter der Nadel geführt, wie in der Nähzelle.
-
-Kameras: Gesamtansicht, Legen und Zuschnitt, Kommissionierung, jede einzelne Station und
-„Werkstückträger verfolgen“.
+- **Klappträger**: zwei Hälften mit Nadelleisten, das Scharnier liegt auf der Schulterlinie. Vom
+  Kommissionieren bis zur Seitennaht wird kein Stoff mehr frei gehandhabt. Die Klapphälfte ist
+  ein Rahmen, damit das Teil für Nadel und Kamera zugänglich bleibt.
+- **Formbrett**: Das Wenden legt das Shirt direkt auf ein Formbrett, das auf dem Träger
+  mitfährt. Dämpfen, Falten und Verpacken arbeiten mit definierter Lage. Ohne diesen Schritt
+  müsste ein Roboter ein loses Shirt glatt auslegen; das ist bis heute ein Forschungsthema.
 
 ## Tests
 
@@ -92,12 +104,18 @@ Kameras: Gesamtansicht, Legen und Zuschnitt, Kommissionierung, jede einzelne Sta
 node tests/line.mjs
 ```
 
-Prüft die Nahtlängen, die Ausnutzung des Schnittbilds, den Durchsatz gegenüber dem theoretischen
-Takt, ob die Linie ohne Stau läuft, die Wirkung einer verdoppelten Engpassstation und die
-Begrenzung durch zu wenige Werkstückträger.
+Prüft:
+- Nahtlängen und die Ausnutzung des Schnittbilds (ohne Bündchen),
+- dass die Linie in beiden Zuschnittverfahren ohne Stau ≥ 90 % des Takts erreicht,
+- dass Störungen die Ausbringung auf 70–97 % senken,
+- die Reihenfolge der Drehzahlstufen,
+- die Wirkung einer verdoppelten Engpassstation,
+- die Begrenzung durch zu wenige Werkstückträger.
 
 ## Grenzen
 
-- Handlingzeiten sind Planwerte aus vergleichbaren Roboterzellen, keine gemessenen Werte.
-- Wenden, Bügeln und Verpacken sind als Zeitmodelle abgebildet, nicht als Stoffsimulation.
-- Rüsten, Größenwechsel, Schichtmodell und Materialnachschub (Garn, Folie) sind nicht enthalten.
+- Handhabungszeiten und Störraten sind Planwerte.
+- Etikett, Klappen, Wenden, Dämpfen und Verpacken sind Zeitmodelle ohne Stoffsimulation.
+- Größenwechsel, Rüsten, Schichtmodell und Nacharbeit sind nicht modelliert.
+- Die Schulternaht links schließt über die Bündchenenden. Das ist in der Zelle nicht eigens
+  simuliert.

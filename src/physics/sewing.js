@@ -55,7 +55,9 @@ export class SewingMachine {
     if (stitch) this.stitchLength = stitch;
     this.sewTarget = Math.max(1, Math.round((length * 1000) / this.stitchLength));
     this.stitches = 0;
+    if (!this.sOffset) this.missBody = 0;
     this.sewing = true;
+    this.needleDown = false;
     this.activePath = path;
     this.pathCloth = pathCloth;
     // Teilnaht (Fortsetzung nach dem Umgreifen): Messwerte und Fadenzug laufen weiter
@@ -77,6 +79,10 @@ export class SewingMachine {
         this.phase -= 1;
         this._pendingStitch = true;
       }
+    } else if (this.needleDown) {
+      // Nadelstopp unten (Teilnaht, Umgreifen): Nadel steht im Stoff und hält die Lagen
+      this.phase = Math.min(0.25, this.phase < 0.25 ? this.phase + (this.rpm / 60) * dt : 0.25);
+      if (this.lastPhase > 0.5 && this.phase === 0.25) this.lastPhase = 0.25;
     } else if (this.phase < 0.5 || this.phase > 0.95) {
       // Nadel in Hochstellung fahren
       this.phase = Math.min(0.6, this.phase + (this.rpm / 60) * dt);
@@ -123,7 +129,7 @@ export class SewingMachine {
   setEdgeGuide(cfg) {
     const Lb = cfg.bodyPath.length, Ls = cfg.path.length;
     this.edge = {
-      ...cfg, on: false, sensor: 0.045, allowance: 0.01, gain: 10, ki: 30, vmax: 0.1, roller: 0.02,
+      on: false, sensor: 0.045, allowance: 0.01, gain: 10, ki: 30, vmax: 0.1, roller: 0.02, ...cfg,
       ease: Ls / Lb - 1, err: null, errLog: [],
     };
     // Seite der Schnittkante relativ zur Nahtrichtung (für die Krümmungsvorsteuerung)
@@ -214,7 +220,7 @@ export class SewingMachine {
     const dt2 = dt * dt;
     const vf = this.feedVelocity();
     const fx = this.feedDir[0] * vf * dt, fz = this.feedDir[2] * vf * dt;
-    const needleIn = this.sewing && this.phase < 0.45;
+    const needleIn = (this.sewing && this.phase < 0.45) || this.needleDown;
     const muFoot = (SOLIDS[this.footMaterial]?.frictionFactor ?? 1);
     let below = null, yBase = this.needle[1];
     for (let k = 0; k < groups.length; k++) {
@@ -273,15 +279,18 @@ export class SewingMachine {
 
   _makeStitch(groups) {
     // Einstichpunkt in jeder Lage als materieller Punkt (baryzentrisch im Dreieck)
-    const hits = groups.map((g) => ({ c: g.c, hit: locateTriangle(g.c, this.needle[0], this.needle[2]) })).filter((h) => h.hit);
+    // nur Dreiecke, die einen Knoten unter dem Fuß haben (bei Überlappungen in der Draufsicht
+    // sonst ggf. ein Dreieck einer anderen Stelle desselben Teils)
+    const hits = groups.map((g) => ({ c: g.c, hit: locateTriangle(g.c, this.needle[0], this.needle[2], new Set(g.idx)) })).filter((h) => h.hit);
     if (!hits.length) return;
     const top = hits[hits.length - 1];
     this.stitchPoints.push({ cloth: top.c, ...top.hit });
     // Nahtabweichung: Einstichstelle im Zuschnitt gegen die Sollbahn
     if (this.activePath && this.distToPath) {
-      const h = hits.find((x) => x.c === this.pathCloth) || top;
+      const h = hits.find((x) => x.c === this.pathCloth);
+      if (!h) { this.missBody = (this.missBody || 0) + 1; return this._linkStitch(hits); } // Stich verfehlt das geführte Teil
       const [u, v] = h.c.restPoint(h.hit.tri, h.hit.b0, h.hit.b1, h.hit.b2);
-      this.deviations.push(this.distToPath(this.activePath, u, v));
+      this.deviations.push(this.distToPath(this.activePath.parent || this.activePath, u, v)); // Teilnaht: gegen die Gesamtnaht (geschlossener Ausschnitt)
       // zweites Teil (Ärmel): Abweichung von der Kugelnaht und eingenähte Länge
       const E = this.edge;
       if (E && (E.on || this.feeder?.on)) {
@@ -293,7 +302,11 @@ export class SewingMachine {
         } else (this.devSleeve ||= []).push(NaN);
       }
     }
-    // Fadenzug zum vorigen Einstich in jeder Lage (nur Zug, verkürzte Ruhelänge)
+    this._linkStitch(hits);
+  }
+
+  // Fadenzug zum vorigen Einstich je Lage und Verbindung der Lagen an der Einstichstelle
+  _linkStitch(hits) {
     if (this.lastHits) {
       for (const hcur of hits) {
         const hprev = this.lastHits.find((x) => x.c === hcur.c);
@@ -363,9 +376,10 @@ export class SewingMachine {
 }
 
 // Sucht das Dreieck einer Lage, das den Punkt (x, z) in Draufsicht enthält.
-export function locateTriangle(c, x, z) {
+export function locateTriangle(c, x, z, near = null) {
   const p = c.pos, T = c.tri;
   for (let t = 0; t < c.nTri; t++) {
+    if (near && !near.has(T[3 * t]) && !near.has(T[3 * t + 1]) && !near.has(T[3 * t + 2])) continue;
     const a = T[3 * t] * 3, b = T[3 * t + 1] * 3, d = T[3 * t + 2] * 3;
     const v0x = p[d] - p[a], v0z = p[d + 2] - p[a + 2];
     const v1x = p[b] - p[a], v1z = p[b + 2] - p[a + 2];

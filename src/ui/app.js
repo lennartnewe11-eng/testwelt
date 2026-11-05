@@ -260,7 +260,8 @@ function renderUi(force = false) {
   if (dev.length) {
     const mean = dev.reduce((a, b) => a + b, 0) / dev.length, mx = Math.max(...dev);
     $('kDev').textContent = `${fmt(mean * 1000, 1)} mm`;
-    $('kDevSub').innerHTML = `max. ${fmt(mx * 1000, 1)} mm ` + (mx < 0.003 ? '<span class="chip good">i. O.</span>' : mx < 0.006 ? '<span class="chip warn">grenzwertig</span>' : '<span class="chip crit">n. i. O.</span>');
+    const miss = w.machine.missBody || 0;
+    $('kDevSub').innerHTML = `max. ${fmt(mx * 1000, 1)} mm ` + (mx < 0.003 ? '<span class="chip good">i. O.</span>' : mx < 0.006 ? '<span class="chip warn">grenzwertig</span>' : '<span class="chip crit">n. i. O.</span>') + (miss ? ` · ${miss} Stich${miss > 1 ? 'e' : ''} ohne Körper` : '');
   } else { $('kDev').textContent = '–'; $('kDevSub').textContent = w.machine.activePath ? 'erste Stiche …' : 'nur bei Bahnnaht (SEWPATH)'; }
   const E = w.machine.edge;
   $('kSleeveBox').hidden = $('kEaseBox').hidden = !E;
