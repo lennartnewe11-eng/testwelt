@@ -58,10 +58,13 @@ export class SewingMachine {
     this.sewing = true;
     this.activePath = path;
     this.pathCloth = pathCloth;
-    this.deviations = [];
-    this.devSleeve = [];
-    this.easeTrack = [];
-    this.lastHits = null;
+    // Teilnaht (Fortsetzung nach dem Umgreifen): Messwerte und Fadenzug laufen weiter
+    if (!this.sOffset) {
+      this.deviations = [];
+      this.devSleeve = [];
+      this.easeTrack = [];
+      this.lastHits = null;
+    }
   }
 
   get busy() { return this.sewing; }
@@ -138,6 +141,8 @@ export class SewingMachine {
   topFeedRatio() {
     const E = this.edge;
     if (!E || !(E.on || this.feeder?.on) || !this.activePath) return 1;
+    // Halsbündchen: gleichmäßige Dehnung über die ganze Naht (Verhältnis < 1)
+    if (E.profile === 'const') return 1 + E.ease;
     const u = Math.min(1, (this.stitches * this.stitchLength * 1e-3) / this.activePath.length);
     const w = u < 0.1 || u > 0.9 ? 0 : Math.sin((Math.PI * (u - 0.1)) / 0.8) ** 2;
     return 1 + (E.ease * w) / 0.4; // Mittelwert von w über die Naht = 0,4
@@ -162,7 +167,7 @@ export class SewingMachine {
     // wenn die Naht an der Nadel tangential in Transportrichtung läuft?
     let ff = 0;
     if (this.activePath && this.pathAt) {
-      const sb = this.stitches * this.stitchLength * 1e-3;
+      const sb = (this.sOffset || 0) + this.stitches * this.stitchLength * 1e-3; // Teilnaht: Versatz auf der Gesamtnaht
       const ss = sb * (E.path.length / E.bodyPath.length);
       const a = this.pathAt(E.path, ss), b = this.pathAt(E.path, ss + E.sensor);
       const dx0 = b.p[0] - a.p[0], dz0 = b.p[1] - a.p[1];
@@ -284,7 +289,7 @@ export class SewingMachine {
         if (hs) {
           const q = hs.c.restPoint(hs.hit.tri, hs.hit.b0, hs.hit.b1, hs.hit.b2);
           (this.devSleeve ||= []).push(this.distToPath(E.path, q[0], q[1]));
-          this.easeTrack.push({ b: [u, v], s: q, pb: projParam(this.activePath, u, v), ps: projParam(E.path, q[0], q[1]) });
+          this.easeTrack.push({ b: [u, v], s: q, pb: projParam(this.activePath.parent || this.activePath, u, v), ps: projParam(E.path, q[0], q[1]) });
         } else (this.devSleeve ||= []).push(NaN);
       }
     }

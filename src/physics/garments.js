@@ -51,15 +51,16 @@ export function tshirtPanel({ neckDepth = 0.06 } = {}) {
 
 // Abschnitt der Kontur um die Nahtzugabe nach innen versetzen und gleichmäßig abtasten.
 // trim: Abstand der ersten/letzten Einstichstelle von der Schnittkante [m]
-export function seamPath(outline, chain, allowance = 0.01, step = 0.002, trim = 0.004) {
-  // Normale je Segment, die ins Teil zeigt
+export function seamPath(outline, chain, allowance = 0.01, step = 0.002, trim = 0.004, inside = null) {
+  // Normale je Segment, die ins Teil zeigt (inside: Materialtest, z. B. für Nähte an Löchern)
+  const inMat = inside || ((x, z) => pointInPolygon(outline, x, z));
   const segN = [];
   for (let k = 0; k < chain.length - 1; k++) {
     const [ax, az] = chain[k], [bx, bz] = chain[k + 1];
     const dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz);
     let nx = -dz / L, nz = dx / L;
     const mx = (ax + bx) / 2 + nx * 1e-3, mz = (az + bz) / 2 + nz * 1e-3;
-    if (!pointInPolygon(outline, mx, mz)) { nx = -nx; nz = -nz; }
+    if (!inMat(mx, mz)) { nx = -nx; nz = -nz; }
     segN.push([nx, nz]);
   }
   // Gehrung an den Ecken
@@ -182,4 +183,20 @@ export function fitSleeve(armholeLen, ease = 0.02, allowance = 0.01) {
     if (L < armholeLen * (1 + ease)) lo = h; else hi = h;
   }
   return setInSleeve((lo + hi) / 2);
+}
+
+// Halsbündchen: Körper mit Halsausschnitt (Loch) und die Naht 6 mm außerhalb der Halskante,
+// beginnend am linken Schulterpunkt über den vorderen Ausschnitt. Das Bündchen ist ein
+// gerader, längs gefalteter Streifen; seine Nahtlinie ist um die Dehnung kürzer als die Halsnaht.
+export function neckRibParts(stretch = 0.15, ribW = 0.018, allowance = 0.006) {
+  const body = setInBody();
+  const hole = body.holes[0];
+  const inMat = (x, z) => pointInPolygon(body.outline, x, z) && !pointInPolygon(hole, x, z);
+  const chain = [...hole, hole[0]];
+  const neck = seamPath(body.outline, chain, allowance, 0.002, 0.004, inMat);
+  const L = neck.length / (1 + stretch) + 0.008;            // Nahtlinie + Endzugaben (je 4 mm)
+  const rib = { outline: [[-L / 2, -ribW / 2], [L / 2, -ribW / 2], [L / 2, ribW / 2], [-L / 2, ribW / 2]] };
+  rib.chains = { kante: [[-L / 2, -ribW / 2], [L / 2, -ribW / 2]] };   // offene Kanten (Nahtseite)
+  const ribPath = seamPath(rib.outline, rib.chains.kante, allowance);
+  return { body, neck, rib, ribPath, inMat, stretch };
 }

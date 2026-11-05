@@ -1,5 +1,5 @@
 // Bedienoberfläche: verbindet Simulation, 3D-Ansicht und Messwerte.
-import { World, defaultConfig, DEFAULT_PROGRAM, TSHIRT_PROGRAM, SLEEVE_PROGRAM, SCENARIOS, applyScenario } from '../physics/world.js';
+import { World, defaultConfig, SCENARIOS, applyScenario, programFor } from '../physics/world.js';
 import { FABRICS, FABRIC_FIELDS, SOLIDS, fabricById, toSI, bendingLength } from '../physics/materials.js';
 import { GRIPPER_TYPES, defaultParams, capacityModel } from '../physics/grippers.js';
 import { validateProgram, parseProgram } from '../physics/robot.js';
@@ -39,7 +39,9 @@ function buildSetupUI() {
   const sc = $('scenario');
   sc.innerHTML = Object.entries(SCENARIOS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
   sc.value = cfg.scenario;
-  $('scenarioNote').textContent = cfg.scenario === 'aermel'
+  $('scenarioNote').textContent = cfg.scenario === 'bund'
+    ? 'Halsbündchen (1×1-Rippe, doppelt) wird um 15 % gedehnt an den Halsausschnitt genäht. Der Körper liegt auf einem Werkstückträger mit Ausschnitt; der Abzug der Bündchenzuführung läuft um 1/1,15 langsamer als der Körper. Langarm-Maschine, 360°-Umlauf mit einmaligem Umgreifen in der Nahtmitte.'
+    : cfg.scenario === 'aermel'
     ? 'Separater Ärmel wird flach in das Armloch eingenäht. Der Körper (Schulternähte geschlossen, aufgeklappt) liegt auf einem Werkstückträger, den der Roboter entlang des Armlochs führt. Die Ärmelzuführung führt den Ärmel gegenläufig und mit 2 % Mehrweite; Obertransport, Trennblech und Kantensensor arbeiten mit.'
     : cfg.scenario === 'tshirt'
     ? 'Vorder- und Rückenteil eines Kinder-T-Shirts (Kimonoschnitt). Eine Nähschablone klemmt beide Teile, der Roboter führt die Seitennaht mit Achselrundung und Ärmelunternaht in einem Zug.'
@@ -147,7 +149,7 @@ function readSetup() {
   cfg.tableMaterial = $('tableMat').value;
   cfg.footMaterial = $('footMat').value;
   cfg.quality = $('quality').value;
-  Object.assign(cfg, (cfg.scenario === 'tshirt' || cfg.scenario === 'aermel' ? QUALITY_LARGE : QUALITY)[cfg.quality]);
+  Object.assign(cfg, (['tshirt', 'aermel', 'bund'].includes(cfg.scenario) ? QUALITY_LARGE : QUALITY)[cfg.quality]);
   cfg.selfCollision = $('selfColl').checked;
   cfg.airCushion = $('airCushion').checked;
   cfg.program = $('program').value;
@@ -268,13 +270,24 @@ function renderUi(force = false) {
       const mean = ds.reduce((a, b) => a + b, 0) / ds.length, mx = Math.max(...ds);
       $('kSleeve').textContent = `${fmt(mean * 1000, 1)} mm`;
       $('kSleeveSub').innerHTML = `max. ${fmt(mx * 1000, 1)} mm` + (miss ? ` · <span class="chip crit">${miss} Stiche verfehlt</span>` : mx < 0.003 ? ' <span class="chip good">i. O.</span>' : ' <span class="chip warn">grenzwertig</span>');
-    } else { $('kSleeve').textContent = '–'; $('kSleeveSub').textContent = E.err !== null ? `Kantensensor ${fmt(E.err * 1000, 1)} mm` : 'Einstich ↔ Kugelnaht'; }
+    } else { $('kSleeve').textContent = '–'; $('kSleeveSub').textContent = E.err !== null ? `Kantensensor ${fmt(E.err * 1000, 1)} mm` : (E.profile === 'const' ? 'Einstich ↔ Bündchennaht' : 'Einstich ↔ Kugelnaht'); }
     const et = w.machine.easeTrack || [];
+    const rib = E.profile === 'const';
+    $('kSleeveLbl').textContent = rib ? 'Bündchennaht' : 'Ärmelnaht';
+    $('kEaseLbl').textContent = rib ? 'Bündchendehnung' : 'Mehrweite';
     if (et.length > 3) {
-      const a = et[0], b = et[et.length - 1], ez = (b.ps - a.ps) / Math.max(1e-6, b.pb - a.pb) - 1;
-      $('kEase').textContent = `${fmt(ez * 100, 1)} %`;
-      $('kEaseSub').textContent = `Soll ${fmt(E.ease * 100, 1)} % · ${fmt((b.ps - b.pb) * 1000, 1)} mm eingehalten`;
-    } else { $('kEase').textContent = '–'; $('kEaseSub').textContent = `Soll ${fmt(E.ease * 100, 1)} % (Kugel länger als Armloch)`; }
+      const a = et[0], b = et[et.length - 1];
+      if (rib) {
+        // Dehnung: genähte Körperlänge / eingenähte Bündchenlänge − 1
+        const st = (b.pb - a.pb) / Math.max(1e-6, b.ps - a.ps) - 1, soll = 1 / (1 + E.ease) - 1;
+        $('kEase').textContent = `${fmt(st * 100, 1)} %`;
+        $('kEaseSub').textContent = `Soll ${fmt(soll * 100, 1)} % · Körper ${fmt((b.pb - a.pb) * 100, 1)} cm / Bündchen ${fmt((b.ps - a.ps) * 100, 1)} cm`;
+      } else {
+        const ez = (b.ps - a.ps) / Math.max(1e-6, b.pb - a.pb) - 1;
+        $('kEase').textContent = `${fmt(ez * 100, 1)} %`;
+        $('kEaseSub').textContent = `Soll ${fmt(E.ease * 100, 1)} % · ${fmt((b.ps - b.pb) * 1000, 1)} mm eingehalten`;
+      }
+    } else { $('kEase').textContent = '–'; $('kEaseSub').textContent = rib ? `Soll ${fmt((1 / (1 + E.ease) - 1) * 100, 1)} % (Bündchen kürzer als Ausschnitt)` : `Soll ${fmt(E.ease * 100, 1)} % (Kugel länger als Armloch)`; }
   }
   const rp = w.robot.pose;
   $('kPose').textContent = `${fmt(((rp.yaw * 180) / Math.PI), 0)}°`;
@@ -408,7 +421,7 @@ function init() {
   $('btnPause').onclick = () => { running = !running; $('btnPause').textContent = running ? 'Pause' : 'Weiter'; };
   $('btnReset').onclick = rebuild;
   $('btnApply').onclick = () => { rebuild(); startProgram(); };
-  $('btnDefault').onclick = () => { $('program').value = cfg.scenario === 'tshirt' ? TSHIRT_PROGRAM : cfg.scenario === 'aermel' ? SLEEVE_PROGRAM : DEFAULT_PROGRAM; renderGutter(); };
+  $('btnDefault').onclick = () => { $('program').value = programFor(cfg.scenario); renderGutter(); };
   $('timeScale').onchange = (e) => { timeScale = +e.target.value; };
   $('btnValidate').onclick = showValidation;
   $('dlgClose').onclick = () => $('dlg').close();

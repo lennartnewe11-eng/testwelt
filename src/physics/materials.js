@@ -97,6 +97,18 @@ export const FABRICS = [
   },
 ];
 
+// Halsbündchen: 1×1-Rippstrick (95 % CO / 5 % EL, 220 g/m²), längs gefaltet → zwei Lagen.
+// Werte für den doppelt gelegten Streifen. Längs des Streifens (Maschenreihe, „Schuss“) ist
+// Rippstrick sehr dehnbar: Anfangsmodul ≈ 2 × 20 N/m (Annahme aus KES-Werten für Rippware,
+// 15 % Dehnung bei ≈ 6 N/m); quer (Maschenstäbchen) deutlich steifer.
+export const RIB_FABRIC = {
+  id: 'rippe', name: 'Rippstrick 1×1, doppelt', composition: '95 % CO / 5 % EL', construction: '1×1-Rippe, längs gefaltet',
+  pattern: 'knit', color: '#d9b65a',
+  mass: 440, thickness: 1.6, tensWarp: 1400, tensWeft: 40, shear: 0.3,
+  bendWarp: 0.08, bendWeft: 0.04, muSteelS: 0.32, muSteelK: 0.27, muSelfS: 0.55, muSelfK: 0.45,
+  airPerm: 600, epsR: 2.0, needleHold: 0.05, cohesion: 1.5, wetting: 0.9, breakStrain: 150,
+};
+
 // Starre Werkstoffe für Tische, Maschinen- und Greiferteile. Sie verformen sich bei den
 // auftretenden Kräften um Größenordnungen weniger als Textilien (E-Modul GPa vs. kPa–MPa)
 // und werden deshalb als starr modelliert. frictionFactor skaliert die Stoff-Stahl-Reibung.

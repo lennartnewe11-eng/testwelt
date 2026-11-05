@@ -117,6 +117,7 @@ export class SceneView {
   _cellDetails(world) {
     const M = mats(), S = this.static, T = TABLE_TOP;
     const [nx, ny, nz] = NEEDLE;
+    const ax = world.armExtra || 0; // Langarm-Maschine: Ständer, Handrad und Motor weiter außen
     const add = (o) => { S.add(o); return o; };
     const bx = (w, h, d, mat, x, y, z) => add(this._box(w, h, d, mat, x, y, z));
     const cy = (r, h, mat, x, y, z, axis = 'y', seg = 24) => {
@@ -160,13 +161,13 @@ export class SceneView {
     bx(0.035, 0.006, 0.022, M.lamp, nx + 0.035, T + 0.117, nz + 0.03);
     // Bedienfeld am Arm, Rückwärtstaste, Stichsteller am Ständer
     bx(0.07, 0.04, 0.004, M.plastic, nx + 0.24, T + 0.23, nz + 0.046); bx(0.05, 0.025, 0.002, M.screen, nx + 0.24, T + 0.232, nz + 0.049);
-    bx(0.03, 0.012, 0.012, M.paintDark, nx + 0.295, T + 0.175, nz + 0.06);
-    cy(0.018, 0.012, M.paintDark, nx + 0.33, T + 0.12, nz + 0.061, 'z'); bx(0.006, 0.03, 0.006, M.chrome, nx + 0.33, T + 0.13, nz + 0.068);
+    bx(0.03, 0.012, 0.012, M.paintDark, nx + 0.295 + ax, T + 0.175, nz + 0.06);
+    cy(0.018, 0.012, M.paintDark, nx + 0.33 + ax, T + 0.12, nz + 0.061, 'z'); bx(0.006, 0.03, 0.006, M.chrome, nx + 0.33 + ax, T + 0.13, nz + 0.068);
     // Direktantrieb (Servomotor) hinter dem Handrad, Steuerung unter dem Tisch
-    cy(0.045, 0.055, M.blackSteel, nx + 0.44, T + 0.2, nz, 'x', 32); cy(0.02, 0.01, M.alu, nx + 0.472, T + 0.2, nz, 'x');
+    cy(0.045, 0.055, M.blackSteel, nx + 0.44 + ax, T + 0.2, nz, 'x', 32); cy(0.02, 0.01, M.alu, nx + 0.472 + ax, T + 0.2, nz, 'x');
     bx(0.26, 0.12, 0.2, M.paintDark, nx + 0.15, T - 0.14, nz - 0.12); bx(0.06, 0.03, 0.002, M.screen, nx + 0.1, T - 0.13, nz - 0.019);
     // Garnständer mit zwei Konen und Fadenlauf zur Nadel
-    const gx = nx + 0.33, gz = -0.4;
+    const gx = nx + 0.33 + ax, gz = -0.4;
     add(profile(0.62, 'y', gx, T + 0.31, gz, M.steel));
     bx(0.26, 0.006, 0.12, M.paintDark, gx, T + 0.003, gz);
     bx(0.24, 0.01, 0.01, M.steel, gx, T + 0.6, gz);
@@ -216,7 +217,7 @@ export class SceneView {
     // Nähmaschine: Handrad, Fadenrolle, Nadelstange, Nähfuß
     const [nx, ny, nz] = NEEDLE;
     const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.03, 40), this._mat(0x3b4442, 0.4, 0.4));
-    wheel.rotation.z = Math.PI / 2; wheel.position.set(nx + 0.395, ny + 0.2, nz); wheel.castShadow = true;
+    wheel.rotation.z = Math.PI / 2; wheel.position.set(nx + 0.395 + (world.armExtra || 0), ny + 0.2, nz); wheel.castShadow = true;
     this.static.add(wheel);
     this.wheel = wheel;
     this.needleBar = new THREE.Group();
@@ -254,15 +255,16 @@ export class SceneView {
     const head = world.head;
     this.templateMesh = null;
     this.carrier = null; this.feederMesh = null; this.separator = null; this.sensor = null;
-    const shapeMesh = (pts, mat, depth = 0.003) => {
+    const shapeMesh = (pts, mat, depth = 0.003, holes = []) => {
       const shape = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, -z)));
+      for (const h of holes) shape.holes.push(new THREE.Path(h.map(([x, z]) => new THREE.Vector2(x, -z))));
       const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
       geo.rotateX(-Math.PI / 2);
       return new THREE.Mesh(geo, mat);
     };
     if (head.type === 'traeger' && head.template) {
       // Werkstückträger: dünnes Blech in Körperkontur mit Nahtschlitz, liegt unter dem Körper
-      const m = shapeMesh(head.template.shape, new THREE.MeshStandardMaterial({ color: 0x8c969c, metalness: 0.7, roughness: 0.35, transparent: true, opacity: 0.85 }), 0.0005);
+      const m = shapeMesh(head.template.shape, new THREE.MeshStandardMaterial({ color: 0x8c969c, metalness: 0.7, roughness: 0.35, transparent: true, opacity: 0.85 }), 0.0005, head.template.holes || []);
       m.receiveShadow = true;
       const g = new THREE.Group(); g.add(m);
       // Anfangslage: unter dem Körper auf dem Stapeltisch

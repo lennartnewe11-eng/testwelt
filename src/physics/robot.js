@@ -41,7 +41,7 @@ export function parseProgram(text) {
   return out;
 }
 
-const KNOWN = new Set(['SPEED', 'ACCEL', 'MOVE', 'MOVEREL', 'TOUCH', 'GRIP', 'WAIT', 'FOOT', 'SEW', 'WAITSEW', 'HOME', 'TABLEVAC', 'ALIGNPATH', 'SEWPATH', 'EDGEGUIDE', 'SLEEVEFEED']);
+const KNOWN = new Set(['SPEED', 'ACCEL', 'MOVE', 'MOVEREL', 'TOUCH', 'GRIP', 'WAIT', 'FOOT', 'SEW', 'WAITSEW', 'HOME', 'TABLEVAC', 'ALIGNPATH', 'SEWPATH', 'EDGEGUIDE', 'SLEEVEFEED', 'REGRIP']);
 
 export function validateProgram(prog) {
   const errs = [];
@@ -217,6 +217,12 @@ export class GantryRobot {
           ctx.log?.(`Nähen ${((n[0] || 0.1) * 100).toFixed(1)} cm`);
           break;
         case 'WAITSEW': if (ctx.machine.busy) return; break;
+        case 'REGRIP': {
+          // Umgreifen: über einen Punkt im Abstand R von der Nadel in Richtung α (Draufsicht, ° von +x nach +z)
+          const N = ctx.machine.needle, a = ((n[1] || 0) * Math.PI) / 180, R = n[0] || 0.2;
+          this.moveTo({ x: N[0] + R * Math.cos(a), y: this.pose.y, z: N[2] + R * Math.sin(a), yaw: this.pose.yaw }, t);
+          break;
+        }
         case 'ALIGNPATH': {
           const path = ctx.paths?.[ins.args[0]];
           const map = path && ctx.partMap();
@@ -230,6 +236,7 @@ export class GantryRobot {
           const path = ctx.paths?.[ins.args[0]];
           const map = path && ctx.partMap();
           if (!path || !map) { ctx.log?.(`SEWPATH: ${!path ? 'Bahn „' + ins.args[0] + '“ unbekannt' : 'kein Teil gegriffen'}`, 'error'); break; }
+          ctx.machine.sOffset = path.offset || 0;
           ctx.machine.startSew(path.length, Number.isFinite(n[1]) ? n[1] : undefined, Number.isFinite(n[2]) ? n[2] : undefined, path, map.cloth);
           this.pathFollow = { path, map, s: 0, yaw: this.pose.yaw };
           ctx.log?.(`Kurvennaht „${ins.args[0]}“, ${(path.length * 100).toFixed(1)} cm`);
