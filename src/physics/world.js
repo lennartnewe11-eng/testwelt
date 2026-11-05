@@ -460,7 +460,8 @@ export class World {
     this.paths.hals_naht = full; this.paths.hals_1 = p1; this.paths.hals_2 = p2;
     p1.parent = full; p2.parent = full;
     const center = [STACK_POS[0], T + t / 2 + 1e-5, STACK_POS[1]];
-    const bc = new Cloth({ fabric: this.fabric, spacing: c.spacing, outline: N.body.outline, holes: N.body.holes, center, yaw: 0, name: 'Körper' });
+    // feineres Netz: der hintere Ausschnitt ist nur 1,5 cm tief
+    const bc = new Cloth({ fabric: this.fabric, spacing: Math.min(c.spacing, 0.01), outline: N.body.outline, holes: N.body.holes, center, yaw: 0, name: 'Körper' });
     bc.stackIndex = 2; bc.compressionFactor = c.compressionFactor ?? 0.05;
     // Bündchen: Nahtanfang auf den Nahtanfang des Körpers, Richtung tangential
     const sp = N.ribPath, ts = pathAt(sp, 0).t, tb = pathAt(full, 0).t;

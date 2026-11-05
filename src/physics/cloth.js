@@ -94,7 +94,10 @@ export class Cloth {
     // 2) Dreiecke je Zelle (voll: 2 Dreiecke, 3 Ecken aktiv: 1 Dreieck)
     const tris = [], cellOf = [];
     const area2 = (a, b, c) => (gx[b] - gx[a]) * (gz[c] - gz[a]) - (gx[c] - gx[a]) * (gz[b] - gz[a]);
-    const okTri = (a, b, c) => Math.abs(area2(a, b, c)) > 0.08 * h * h;
+    // Dreiecke, die ein Loch überbrücken (Schwerpunkt im Loch), entfallen – sonst spannt das Netz
+    // über schmale Ausschnitte (z. B. den hinteren Halsausschnitt) und verbindet gegenüberliegende Kanten
+    const inHole = (a, b, c) => holes.some((hl) => pointInPolygon(hl, (gx[a] + gx[b] + gx[c]) / 3, (gz[a] + gz[b] + gz[c]) / 3));
+    const okTri = (a, b, c) => Math.abs(area2(a, b, c)) > 0.08 * h * h && !inHole(a, b, c);
     for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) {
       const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1;
       const act = [a, b, c, d].filter((g) => state[g]);
