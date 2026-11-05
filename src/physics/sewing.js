@@ -244,7 +244,7 @@ export class SewingMachine {
           if (this.follow && vf > 0) { const d = this.follow(pp[i], pp[i + 2]); tx = d[0]; tz = d[1]; }
           else { tx = fx; tz = fz; }
         }
-        else if ((this.edge?.on || this.feeder?.on) && k === groups.length - 1) {
+        else if ((this.edge?.on || this.feeder?.on) && k === groups.length - 1 && this.topFeed !== false) {
           // Obertransport (Laufzahn) treibt die obere Lage mit Mehrweitenverhältnis
           const r = this.topFeedRatio();
           tx = below[0] * r; tz = below[1] * r; mu = this.dogMu;
@@ -255,7 +255,8 @@ export class SewingMachine {
         p[i] += cx; p[i + 2] += cz; dx += cx; dz += cz;
         // oberste Lage: Der Nähfuß bremst mit μ_Fuß·F_N, die Lage darunter treibt mit μ_SS·F_N.
         // Ist die Bremsreibung größer, bleibt die obere Lage am Fuß hängen (Lagenverschiebung).
-        if (k > 0 && k === groups.length - 1 && !this.edge?.on && !this.feeder?.on && c.m.muSteelK * muFoot > mu) {
+        // (ohne Obertransport – z. B. reine Untertransport-Maschine – bremst der Fuß die obere Lage immer)
+        if (k > 0 && k === groups.length - 1 && (this.topFeed === false || (!this.edge?.on && !this.feeder?.on)) && c.m.muSteelK * muFoot > mu) {
           p[i] -= dx; p[i + 2] -= dz; dx = 0; dz = 0;
         }
         if (needleIn) { p[i] -= dx; p[i + 2] -= dz; dx = 0; dz = 0; }

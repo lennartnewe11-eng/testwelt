@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="290mm" height="336mm" viewBox="0 0 290 336">
+<text x="10" y="8" font-size="5" font-family="sans-serif" font-weight="bold">Trennblech (Federstahl 0,3 mm, poliert) – Draufsicht in Maschinenkoordinaten</text><text x="10" y="14" font-size="3.2" font-family="sans-serif">Ursprung = Nadel. Oben = hinten (Transportrichtung). Kanten entgraten, Vorderkante zur Nadel 30° anfasen, 2,5 mm über dem Tisch.</text>
+<path d="M20,286 L270,286 L270,60 L260,52 L30,52 L20,62 Z" fill="none" stroke="#000" stroke-width="0.4"/><text x="70" y="156" font-size="4" font-family="sans-serif">Trennblech</text>
+<path d="M211,20 L229,20 L229,52 L211,52 Z" fill="none" stroke="#c00" stroke-width="0.3"/><text x="232" y="36" font-size="4" font-family="sans-serif">Nähfuß</text>
+<path d="M215,36 L225,36 M220,31 L220,41" stroke="#c00" stroke-width="0.3"/><text x="222" y="34" font-size="3" fill="#c00" font-family="sans-serif">Ursprung</text>
+<path d="M10,324 L110,324" stroke="#000" stroke-width="0.6"/><path d="M10,322 L10,326 M110,322 L110,326" stroke="#000" stroke-width="0.4"/><text x="10" y="321" font-size="3.5" font-family="sans-serif">100 mm (Ausdruck in Originalgröße prüfen)</text>
+</svg>

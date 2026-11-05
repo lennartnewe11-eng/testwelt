@@ -1,0 +1,99 @@
+{
+  "stichlaenge_mm": 2.5,
+  "stiche": 83,
+  "armlochnaht_mm": 208,
+  "kugelnaht_mm": 214,
+  "mehrweite_prozent": 2.88,
+  "schlitz_mm": 16,
+  "freigabe_mm": 18,
+  "saugkammern": 15,
+  "kammern_schaltbar": [
+    {
+      "ventil": "V1",
+      "aus_bei_stich": 0,
+      "abheben": true
+    },
+    {
+      "ventil": "V2",
+      "aus_bei_stich": 0,
+      "abheben": false
+    },
+    {
+      "ventil": "V3",
+      "aus_bei_stich": 1,
+      "abheben": false
+    },
+    {
+      "ventil": "V4",
+      "aus_bei_stich": 2,
+      "abheben": true
+    },
+    {
+      "ventil": "V5",
+      "aus_bei_stich": 9,
+      "abheben": false
+    },
+    {
+      "ventil": "V6",
+      "aus_bei_stich": 16,
+      "abheben": true
+    },
+    {
+      "ventil": "V7",
+      "aus_bei_stich": 22,
+      "abheben": false
+    },
+    {
+      "ventil": "V8",
+      "aus_bei_stich": 28,
+      "abheben": false
+    },
+    {
+      "ventil": "V9",
+      "aus_bei_stich": 32,
+      "abheben": true
+    },
+    {
+      "ventil": "V10",
+      "aus_bei_stich": 48,
+      "abheben": true
+    },
+    {
+      "ventil": "V11",
+      "aus_bei_stich": 50,
+      "abheben": false
+    },
+    {
+      "ventil": "V12",
+      "aus_bei_stich": 54,
+      "abheben": false
+    },
+    {
+      "ventil": "V13",
+      "aus_bei_stich": 64,
+      "abheben": true
+    },
+    {
+      "ventil": "V14",
+      "aus_bei_stich": 69,
+      "abheben": false
+    },
+    {
+      "ventil": "V15",
+      "aus_bei_stich": 77,
+      "abheben": false
+    }
+  ],
+  "griffpunkt_traeger_mm": [
+    -110,
+    -270
+  ],
+  "griff_abstand_min_mm": 93,
+  "anlenkpunkt_platte_mm": [
+    0,
+    85
+  ],
+  "anlenk_abstand_min_mm": 47,
+  "drehung_koerper_grad": -50.7,
+  "drehung_aermel_grad": 55.6
+}

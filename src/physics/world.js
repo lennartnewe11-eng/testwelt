@@ -398,7 +398,7 @@ export class World {
     }
     this.machineBoxes = this.colliders.filter((k) => ['Nähkopf', 'Arm', 'Ständer'].includes(k.name));
     this.head.tableVac = this.tableVac;
-    Object.assign(this.machine, { rpm: c.rpm, stitchLength: c.stitch, footForce: c.footForce, footMaterial: c.footMaterial, threadTension: c.threadTension ?? 1.2 });
+    Object.assign(this.machine, { rpm: c.rpm, stitchLength: c.stitch, footForce: c.footForce, footMaterial: c.footMaterial, threadTension: c.threadTension ?? 1.2, topFeed: c.topFeed ?? true });
     this.contacts = new ClothContacts();
     this.contacts.selfCollision = c.selfCollision;
     this.kinematic = [...this.head.colliders, this.machine.foot];

@@ -36,6 +36,13 @@ Benötigt Node.js ≥ 18 und einen aktuellen Browser mit WebGL. Three.js wird vo
 Wie man darauf aufbauend ein komplettes T-Shirt automatisiert, beschreibt
 [docs/t-shirt-automatisierung.md](docs/t-shirt-automatisierung.md).
 
+## Prototyp an der eigenen Nähmaschine
+
+Bauanleitung für einen ersten Prototyp „Ärmel einsetzen“ an einer Zoje A6000 (Flachbett-Steppstich,
+nur Untertransport): [docs/prototyp-aermel-a6000.md](docs/prototyp-aermel-a6000.md). Die
+Fertigungsunterlagen (Schnittteile, Werkstückträger, Trennblech, Vakuumplatte als 1:1-SVG,
+Bahntabelle als CSV) erzeugt `node tools/prototyp-export.mjs` im Ordner `prototyp/`.
+
 ## Produktionsstraße
 
 Umschalter oben rechts → **Produktionsstraße** (oder `index.html#linie`): eine komplette
@@ -185,6 +192,7 @@ docs/                      Konzept T-Shirt-Automatisierung, Ärmel einsetzen, Ha
 src/render/                Three.js-Darstellung (models.js: detaillierte Maschinen- und Robotermodelle)
 src/line/                  Produktionsstraße: Schnittteile, Schnittbild, ereignisdiskrete Simulation, 3D-Ansicht
 src/ui/                    Bedienung, Diagramm, Modellbeschreibung, Linienbedienung
-tests/                     Validierung, Szenario-Lauf, Linientests
+tests/                     Validierung, Szenario-Lauf, Linientests, Halsbündchen
+tools/prototyp-export.mjs  Fertigungsunterlagen für den Prototyp (→ prototyp/)
 scripts/build-single.mjs   Ein-Datei-Version
 ```
