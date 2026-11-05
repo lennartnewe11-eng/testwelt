@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { gridTexture } from '../render/textures.js';
-import { mats, profile, label, signalTower, fence, cabinet, sewingMachine, sewingTable, robot6, conveyor, carrier, spreader, cutter, foldTable, turner, visionTunnel, pressFolder, bagger, pallet, fabricRollRack } from '../render/models.js';
+import { mats, profile, label, signalTower, fence, cabinet, sewingMachine, sewingTable, robot6, conveyor, spreader, cutter, turner, visionTunnel, pressFolder, bagger, pallet, fabricRollRack, klappTraeger, labelTacker, klappDrive, ribFeeder, unwinder, takeoffBelt } from '../render/models.js';
 import { GarmentKit } from './garmentmesh.js';
 import { pathAt } from '../physics/garments.js';
 import { STAGES } from './des.js';
@@ -67,8 +67,51 @@ export class LineView {
       const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.06, 0.25), m.lamp); lamp.position.set(x + 3, 4.6, -1); sc.add(lamp);
     }
 
-    // ---------------- Vorstufe: Stofflager, Legen, Schneiden, Abnehmen, Kommissionieren
+    // ---------------- Vorstufe: Stofflager, Zuschnitt, Kommissionieren
+    const fabricMat = new THREE.MeshStandardMaterial({ color: 0xe9c46a, roughness: 0.9, side: THREE.DoubleSide });
+    this.fabricMat = fabricMat;
     const rack = fabricRollRack(); rack.position.set(-13.2, 0, 0); rack.rotation.y = Math.PI / 2; sc.add(rack);
+    if (sim.cfg.cutMode === 'stapel') this._buildStack(sim); else this._buildSingle(sim);
+    // Kommissionier-Roboter
+    this.kitRobots = [];
+    for (let k = 0; k < sim.cfg.kitRobots; k++) {
+      const r = robot6(1); r.position.set(-1.75, 0, k % 2 ? -0.95 : 0.95); r.rotation.y = 0; sc.add(r);
+      const grip = new THREE.Group(); grip.add(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.02, 0.16), m.aluDark));
+      for (let i = 0; i < 6; i++) grip.add(place(new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.03, 10), m.blackSteel), -0.08 + (i % 3) * 0.08, -0.02, i < 3 ? -0.05 : 0.05));
+      r.userData.tool.add(grip);
+      const piece = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.002, 0.25), fabricMat); piece.position.y = -0.04; piece.visible = false; r.userData.tool.add(piece);
+      r.userData.piece = piece;
+      this.kitRobots.push(r);
+    }
+    sc.add(fence(13.5, 1.4, 'x').translateX(-7.5).translateZ(-1.5));
+
+    // ---------------- Transfersystem mit Hubstationen
+    const conv = conveyor(L + 1.2, H); conv.position.x = -1.2; sc.add(conv);
+    for (const x of [-1.25, L + 0.05]) {
+      const lift = new THREE.Group();
+      lift.add(place(new THREE.Mesh(new THREE.BoxGeometry(0.1, H + 0.2, 0.75), m.paintGrey), x < 0 ? -0.06 : 0.06, (H + 0.2) / 2, 0));
+      lift.position.x = x; sc.add(lift);
+    }
+
+    // ---------------- Stationen
+    this.stationViews = sim.stations.map((st, i) => this._buildStation(st, i));
+
+    // ---------------- Werkstückträger und Kleidungsstücke
+    this.kit = new GarmentKit(sim.G, '#e9c46a');
+    this.carrierViews = sim.carriers.map(() => {
+      const g = klappTraeger(); sc.add(g);
+      return { g, stage: null, garment: null };
+    });
+    // Lager fertiger Ware
+    const pal = pallet(); pal.position.set(L + 1.6, 0, 0); sc.add(pal);
+    this.boxes = new THREE.Group(); this.boxes.position.set(L + 1.6, 0.15, 0); sc.add(this.boxes);
+    this.lastBoxes = 0;
+    this.setPreset('gesamt');
+  }
+
+  // Zuschnitt im Stapel: Legemaschine, Stapelcutter, Abnahmetisch
+  _buildStack(sim) {
+    const sc = this.scene, m = mats(), fabricMat = this.fabricMat;
     this.spreader = spreader(3.2, 1.8, H); this.spreader.position.set(-11.6, 0, 0); sc.add(this.spreader);
     this.cutterM = cutter(3.0, 1.8, H); this.cutterM.position.set(-7.9, 0, 0); sc.add(this.cutterM);
     // Abnahmetisch
@@ -77,7 +120,6 @@ export class LineView {
     for (const sx of [0.1, 1.7]) for (const sz of [-0.75, 0.75]) take.add(profile(H - 0.04, 'y', sx, (H - 0.04) / 2, sz, m.aluDark));
     take.position.set(-4.4, 0, 0); sc.add(take);
     // Stoffstapel (wachsen beim Legen, wandern zum Cutter und Abnahmetisch)
-    const fabricMat = new THREE.MeshStandardMaterial({ color: 0xe9c46a, roughness: 0.9 });
     const mk = sim.marker;
     this.spreadStack = new THREE.Mesh(new THREE.BoxGeometry(mk.length, 1, mk.width), fabricMat); this.spreadStack.castShadow = true; sc.add(this.spreadStack);
     this.cutStack = new THREE.Group(); sc.add(this.cutStack);
@@ -95,45 +137,52 @@ export class LineView {
     this.cutStack.add(this.cutDone);
     const cum = [0]; for (let k = 1; k < this.cutPath.length; k++) cum.push(cum[k - 1] + Math.hypot(this.cutPath[k][0] - this.cutPath[k - 1][0], this.cutPath[k][1] - this.cutPath[k - 1][1]));
     this.cutCum = cum;
-    // Kommissionier-Roboter
-    this.kitRobots = [];
-    for (let k = 0; k < sim.cfg.kitRobots; k++) {
-      const r = robot6(1); r.position.set(-1.75, 0, k % 2 ? -0.95 : 0.95); r.rotation.y = 0; sc.add(r);
-      const grip = new THREE.Group(); grip.add(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.02, 0.16), m.aluDark));
-      for (let i = 0; i < 6; i++) grip.add(place(new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.03, 10), m.blackSteel), -0.08 + (i % 3) * 0.08, -0.02, i < 3 ? -0.05 : 0.05));
-      r.userData.tool.add(grip);
-      const piece = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.002, 0.25), fabricMat); piece.position.y = -0.04; piece.visible = false; r.userData.tool.add(piece);
-      r.userData.piece = piece;
-      this.kitRobots.push(r);
-    }
     sc.add(this._labelAt('Zuschnitt', 'Legen · Schneiden', -10, 2.3, 0.9));
-    this.labelKit = this._labelAt('Kommissionierung', '', -2.6, 2.2, 0.9); sc.add(this.labelKit);
-    this.labelSpread = this._labelAt('Legemaschine', '', -11.6 + 1.6, 1.9, -1.3); sc.add(this.labelSpread);
+        this.labelSpread = this._labelAt('Legemaschine', '', -11.6 + 1.6, 1.9, -1.3); sc.add(this.labelSpread);
     this.labelCut = this._labelAt('CNC-Cutter', '', -7.9 + 1.5, 1.9, -1.3); sc.add(this.labelCut);
-    sc.add(fence(13.5, 1.4, 'x').translateX(-7.5).translateZ(-1.5));
+    this.labelKit = this._labelAt('Kommissionierung', '', -2.6, 2.2, 0.9); sc.add(this.labelKit);
+  }
 
-    // ---------------- Transfersystem mit Hubstationen
-    const conv = conveyor(L + 1.2, H); conv.position.x = -1.2; sc.add(conv);
-    for (const x of [-1.25, L + 0.05]) {
-      const lift = new THREE.Group();
-      lift.add(place(new THREE.Mesh(new THREE.BoxGeometry(0.1, H + 0.2, 0.75), m.paintGrey), x < 0 ? -0.06 : 0.06, (H + 0.2) / 2, 0));
-      lift.position.x = x; sc.add(lift);
+  // Schnittbild als Einzelteile (für das Abnahmeband: entnommene Teile verschwinden)
+  _markerParts(mk) {
+    const g = new THREE.Group(), shirts = [];
+    const outlineMat = new THREE.LineBasicMaterial({ color: 0x5a4a20 });
+    for (const p of mk.parts) {
+      const pts = p.outline.map(([x, z]) => new THREE.Vector2(z + p.z - mk.length / 2, x + p.x - mk.width / 2));
+      const geo = new THREE.ShapeGeometry(new THREE.Shape(pts)); geo.rotateX(Math.PI / 2);
+      const piece = new THREE.Mesh(geo, this.fabricMat); piece.receiveShadow = true;
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([...pts, pts[0]].map((v) => new THREE.Vector3(v.x, 0.0005, v.y))), outlineMat);
+      const pg = new THREE.Group(); pg.add(piece, line); g.add(pg);
+      (shirts[p.shirt] ||= []).push(pg);
     }
+    g.userData.shirts = shirts;
+    return g;
+  }
 
-    // ---------------- Stationen
-    this.stationViews = sim.stations.map((st, i) => this._buildStation(st, i));
-
-    // ---------------- Werkstückträger und Kleidungsstücke
-    this.kit = new GarmentKit(sim.G, '#e9c46a');
-    this.carrierViews = sim.carriers.map(() => {
-      const g = carrier(); sc.add(g);
-      return { g, stage: null, garment: null };
-    });
-    // Lager fertiger Ware
-    const pal = pallet(); pal.position.set(L + 1.6, 0, 0); sc.add(pal);
-    this.boxes = new THREE.Group(); this.boxes.position.set(L + 1.6, 0.15, 0); sc.add(this.boxes);
-    this.lastBoxes = 0;
-    this.setPreset('gesamt');
+  // Einlagiger Zuschnitt: Abwickler, Förderband-Cutter, Abnahmeband
+  _buildSingle(sim) {
+    const sc = this.scene, mk = sim.marker;
+    const unw = unwinder(1.8, H); unw.position.set(-12.0, 0, 0); sc.add(unw); this.unwinder = unw;
+    this.cutterM = cutter(3.0, 1.8, H); this.cutterM.position.set(-11.5, 0, 0); sc.add(this.cutterM);
+    this.beltM = takeoffBelt(4.8, 1.8, H); this.beltM.position.set(-8.3, 0, 0); sc.add(this.beltM);
+    // Stoffbahn vom Abwickler bis vor das Schnittfenster
+    this.web = new THREE.Mesh(new THREE.PlaneGeometry(1, mk.width), this.fabricMat); this.web.rotation.x = -Math.PI / 2; this.web.receiveShadow = true; sc.add(this.web);
+    // aktuelles Schnittfenster mit Schnittbahn
+    this.cutSheet = new THREE.Group(); sc.add(this.cutSheet);
+    const sheet = new THREE.Mesh(new THREE.PlaneGeometry(mk.length, mk.width), this.fabricMat); sheet.rotation.x = -Math.PI / 2; sheet.receiveShadow = true; this.cutSheet.add(sheet);
+    const contour = [];
+    for (const p of mk.parts) contour.push(...[...p.outline, p.outline[0]].map(([x, z]) => [x + p.x, z + p.z]));
+    this.cutPath = contour;
+    this.cutDone = new THREE.Line(new THREE.BufferGeometry().setFromPoints(contour.map(([x, z]) => new THREE.Vector3(z - mk.length / 2, 0.0006, x - mk.width / 2))), new THREE.LineBasicMaterial({ color: 0x111111 }));
+    this.cutSheet.add(this.cutDone);
+    const cum = [0]; for (let k = 1; k < contour.length; k++) cum.push(cum[k - 1] + Math.hypot(contour[k][0] - contour[k - 1][0], contour[k][1] - contour[k - 1][1]));
+    this.cutCum = cum;
+    // Schnittbilder auf dem Abnahmeband (Einzelteile)
+    this.beltMarkers = [];
+    for (let k = 0; k < sim.cfg.beltMarkers + 1; k++) { const g = this._markerParts(mk); g.visible = false; sc.add(g); this.beltMarkers.push(g); }
+    sc.add(this._labelAt('Zuschnitt einlagig', 'Förderband-Cutter · Abnahmeband', -6.2, 2.3, 0.9));
+    this.labelCut = this._labelAt('Förderband-Cutter', '', -11.5 + 1.5, 1.9, -1.3); sc.add(this.labelCut);
+    this.labelKit = this._labelAt('Kommissionierung', '', -2.6, 2.2, 0.9); sc.add(this.labelKit);
   }
 
   _labelAt(t, s, x, y, z) { const l = label(t, s); l.position.set(x, y, z); return l; }
@@ -150,13 +199,16 @@ export class LineView {
       slot.add(place(new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.04, 0.95), m.aluDark), 0.35, H - 0.04, SPUR_Z / 2 - 0.05));
       for (const sx of [0.05, 0.65]) slot.add(place(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.006, 0.95), m.belt), sx, H - 0.017, SPUR_Z / 2 - 0.05));
       for (const sx of [0.08, 0.62]) for (const sz of [-0.15, -0.95]) slot.add(profile(H - 0.06, 'y', sx, (H - 0.06) / 2, sz, m.aluDark));
-      // Roboter auf Sockel
-      const ped = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.25, 0.42), m.paintDark); ped.position.set(0.35, 0.125, ROBOT_Z); ped.castShadow = true; slot.add(ped);
-      const rob = robot6(1); rob.position.set(0.35, 0.25, ROBOT_Z); slot.add(rob);
-      const tool = new THREE.Group();
-      tool.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.018, 0.24), m.aluDark));
-      for (let a = 0; a < 3; a++) for (let b = 0; b < 2; b++) tool.add(place(new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.025, 10), m.rubber), -0.1 + a * 0.1, -0.02, -0.07 + b * 0.14));
-      rob.userData.tool.add(tool);
+      // Roboter auf Sockel (nimmt den Werkstückträger-Einsatz samt Teil auf)
+      let rob = null, tool = null;
+      if (!st.noRobot) {
+        const ped = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.25, 0.42), m.paintDark); ped.position.set(0.35, 0.125, ROBOT_Z); ped.castShadow = true; slot.add(ped);
+        rob = robot6(1); rob.position.set(0.35, 0.25, ROBOT_Z); slot.add(rob);
+        tool = new THREE.Group();
+        tool.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.018, 0.24), m.aluDark));
+        for (let a = 0; a < 3; a++) for (let b = 0; b < 2; b++) tool.add(place(new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.025, 10), m.rubber), -0.1 + a * 0.1, -0.02, -0.07 + b * 0.14));
+        rob.userData.tool.add(tool);
+      }
       // Maschine / Ausrüstung
       let mach = null, table = null;
       if (sewing) {
@@ -173,9 +225,17 @@ export class LineView {
           feeder.position.set(0.1, 0.76, MACH_Z + 0.18); slot.add(feeder);
           view.feeder = { g: feeder, plate };
         }
+        if (st.rib) {
+          // Bündchenzuführung von der Rolle: Faltapparat und Abzug vor dem Nähfuß
+          const rf = ribFeeder(0xe9c46a); rf.position.set(0.35 + 0.05 - 0.36, 0.76, MACH_Z + 0.02); slot.add(rf);
+          view.rib = rf;
+        }
       } else {
-        const ctor = { falttisch: () => foldTable(1.0, 0.8, 0.85), wender: () => turner(0.85), pruefung: () => visionTunnel(0.9, 0.9, 0.85), presse: () => pressFolder(0.85), verpackung: () => bagger(0.85) }[st.machine];
-        mach = ctor(); mach.position.set(0.35, 0, MACH_Z + 0.05); slot.add(mach);
+        const ctor = { etikett: () => labelTacker(0.85), klappen: () => klappDrive(0.85), wender: () => turner(0.85), pruefung: () => visionTunnel(0.9, 0.9, 0.85), presse: () => pressFolder(0.85), verpackung: () => bagger(0.85) }[st.machine];
+        mach = ctor();
+        // Klappstation arbeitet direkt an der Stichstrecke (Antrieb greift ins Trägerscharnier)
+        if (st.machine === 'klappen') mach.position.set(0.35, 0, SPUR_Z - 0.62); else mach.position.set(0.35, 0, MACH_Z + 0.05);
+        slot.add(mach);
         if (st.machine === 'pruefung') { const t2 = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.05, 0.9), m.belt); t2.position.set(0.35, 0.85, MACH_Z + 0.05); slot.add(t2); }
       }
       // Schutzzaun, Lichtvorhang, Schaltschrank, Signalsäule
@@ -235,56 +295,20 @@ export class LineView {
     if (!this.visible) return;
     const m = mats();
     // Vorstufe
-    const sp = sim.spreader, cu = sim.cutter, mk = sim.marker, th = 0.00055;
-    const spX0 = -11.6 + 0.4;
-    const layers = sp.state === 'legen' ? sp.layer + sp.x : sp.state === 'fertig' || (sp.state === 'uebergabe' && cu.state === 'einziehen') ? sim.cfg.layers : 0;
-    this.spreadStack.visible = layers > 0;
-    this.spreadStack.scale.y = Math.max(1e-4, layers * th);
-    this.spreadStack.position.set(spX0 + mk.length / 2, H + (layers * th) / 2, 0);
-    const car = this.spreader.userData.carriage;
-    const prog = sp.state === 'legen' ? ((sp.layer % 2 ? 1 - sp.x : sp.x)) : 0;
-    car.position.x = 0.4 + prog * mk.length;
-    this.spreader.userData.roll.scale.set(1, 1, 1);
-    // Cutter-Stapel
-    const onCut = cu.state === 'einziehen' || cu.state === 'schneiden' || cu.state === 'abgabe';
-    this.cutStack.visible = onCut;
-    const cutX = -7.9 + 0.3 + mk.length / 2;
-    const ch = sim.cfg.layers * th;
-    this.cutStackBox.scale.y = ch; this.cutStackBox.position.y = ch / 2;
-    this.cutStack.position.set(cu.state === 'einziehen' ? cutX - 3.4 * (1 - Math.min(1, cu.t / 15)) : cu.state === 'abgabe' ? cutX + 3.6 * Math.min(1, cu.t / 12) : cutX, H, 0);
-    this.cutStack.children.forEach((o) => { if (o.isLine) o.position.y = ch + 0.0005; });
-    const cp = cu.state === 'schneiden' ? cu.progress : cu.state === 'abgabe' ? 1 : 0;
-    const sCut = cp * this.cutCum[this.cutCum.length - 1];
-    let k = 1; while (k < this.cutCum.length - 1 && this.cutCum[k] < sCut) k++;
-    this.cutDone.geometry.setDrawRange(0, cp > 0 ? k + 1 : 0);
-    const P = this.cutPath[Math.min(k, this.cutPath.length - 1)];
-    const gan = this.cutterM.userData.gantry, head = this.cutterM.userData.head;
-    gan.position.x = 0.3 + P[1] + (cu.state === 'schneiden' ? 0 : 0);
-    head.position.z = P[0] - mk.width / 2;
-    this.cutterM.userData.knife.position.y = 0.03 + (cu.state === 'schneiden' ? 0.004 * Math.sin(t * 120) : 0.03);
-    // Abnahmetisch: Reststapel
-    const perLayer = sim.cfg.shirtsPerMarker;
-    const remLayers = Math.ceil(sim.cutStacks / perLayer);
-    this.takeStack.visible = sim.cutStacks > 0;
-    const th2 = Math.max(1e-4, remLayers * th);
-    this.takeStackBox.scale.y = th2; this.takeStackBox.position.y = th2 / 2;
-    this.takeStack.children.forEach((o) => { if (o.isLine) o.position.y = th2 + 0.0005; });
-    this.takeStack.position.set(-4.4 + 0.9, H, 0);
+    const pickY = sim.cfg.cutMode === 'stapel' ? this._updateStack(sim, t) : this._updateSingle(sim, t);
     // Kommissionier-Roboter: zwischen Stapel und Beladeplatz
     const L = sim.loadSlot;
     this.kitRobots.forEach((r, i) => {
       const busy = L.carrier && L.T > 0;
       const f = busy ? ((L.t / L.T) * 5 + i * 0.5) % 1 : 0.5;
-      const from = new THREE.Vector3(-3.5 - 0.15 * Math.sin(i + Math.floor(L.t)), H + th2 + 0.02, (i % 2 ? -0.3 : 0.3));
+      const from = new THREE.Vector3(-3.5 - 0.15 * Math.sin(i + Math.floor(L.t)), H + pickY + 0.02, (i % 2 ? -0.3 : 0.3));
       const to = new THREE.Vector3(-0.9 + (i % 2 ? 0.12 : -0.12), H + 0.05, (i % 2 ? -0.1 : 0.1));
       const a = f < 0.5 ? f * 2 : 2 - f * 2;
       const p = from.clone().lerp(to, 0.5 - 0.5 * Math.cos(Math.PI * a)); p.y += Math.sin(Math.PI * a) * 0.25;
       r.userData.reach(r.worldToLocal(p.clone()), 0);
       r.userData.piece.visible = busy && f < 0.5;
     });
-    this.labelKit.userData.update('Kommissionierung', `${sim.cutStacks} Shirts im Stapel`);
-    this.labelSpread.userData.update('Legemaschine', sp.state === 'legen' ? `Lage ${sp.layer + 1}/${sim.cfg.layers}` : 'wartet auf Cutter');
-    this.labelCut.userData.update('CNC-Cutter', cu.state === 'schneiden' ? `${Math.round(cu.progress * 100)} % geschnitten` : cu.state === 'leer' ? 'bereit' : cu.state);
+    this.labelKit.userData.update('Kommissionierung', `${sim.avail} Shirts bereit · ${(sim.kitTime).toFixed(1)} s je Kit`);
 
     // Träger und Kleidungsstücke
     sim.carriers.forEach((c, i) => {
@@ -299,12 +323,22 @@ export class LineView {
         slotF = slot.T > 0 ? Math.min(1, slot.t / slot.T) : 1;
         slotPhase = slot.phase;
         if (slotF >= 0.85) stage = st.stage;
+        if (st.id === 'klappen' && slotF > 0.2) stage = st.stage; // Klappvorgang mit klappbarem Modell zeigen
       }
+      // Klappträger: Hälfte geschlossen von „Klappträger schließen“ bis zum Wenden; danach Formbrett
+      const ud = cv.g.userData;
+      let flap = stage >= 9 && stage <= 12 ? 1 : 0;
+      if (st && st.id === 'klappen') flap = Math.max(0, Math.min(1, (slotF - 0.25) / 0.45));
+      if (st && st.id === 'wenden') flap = slotF < 0.3 ? 1 - Math.max(0, Math.min(1, (slotF - 0.15) / 0.15)) : 0;
+      ud.flap.rotation.z = Math.PI * (0.5 - 0.5 * Math.cos(Math.PI * flap));
+      ud.board.visible = c.shirt !== null && (stage >= 13 || (st?.id === 'wenden' && slotF > 0.55));
       const gm = this._garment(cv, stage);
       if (!gm) return;
       if (!gm.root.parent) this.scene.add(gm.root);
-      const rotOnCarrier = stage >= 1 && stage <= 6 ? Math.PI / 2 : 0;
-      const carrierWorld = new THREE.Vector3(pose.x, pose.y + 0.03, pose.z + (stage >= 7 && stage <= 11 ? 0.12 : stage >= 12 ? 0.1 : 0));
+      const onBoard = stage >= 13;
+      const rotOnCarrier = onBoard ? 0 : Math.PI / 2;
+      const carrierWorld = new THREE.Vector3(pose.x, pose.y + (onBoard ? 0.043 : 0.03), pose.z);
+      if (gm.front) gm.front.rotation.x = -Math.PI * (st && st.id === 'klappen' ? (0.5 - 0.5 * Math.cos(Math.PI * flap)) : 1);
       if (!st) { gm.root.position.copy(carrierWorld); gm.root.rotation.set(0, rotOnCarrier, 0); return; }
       this._stationAnim(st, c.slot, slotF, gm, carrierWorld, rotOnCarrier, stage, t);
     });
@@ -317,11 +351,11 @@ export class LineView {
         v.tower.userData.set(state === 'idle' ? 'wait' : state);
         const sewingNow = sl.carrier && sl.phase === 'bearbeiten' && sl.repair <= 0;
         if (v.mach?.userData.update) v.mach.userData.update(t, sewingNow, 3000);
-        if (!sl.carrier) v.rob.userData.reach(new THREE.Vector3(0.0, 0.55, 0.5), 0);
+        if (!sl.carrier && v.rob) v.rob.userData.reach(new THREE.Vector3(0.0, 0.55, 0.5), 0);
         // Sonderanimationen
         const f = sl.T > 0 ? Math.min(1, sl.t / sl.T) : 0;
         const mid = sl.carrier ? Math.max(0, Math.min(1, (f - 0.22) / 0.63)) : 0;
-        if (st.machine === 'falttisch' && v.mach.userData.flap) v.mach.userData.flap.rotation.x = -Math.PI * Math.sin(Math.PI * Math.min(1, mid * 1.2)) * (mid < 0.83 ? 1 : 0.0);
+        if (st.machine === 'etikett') v.mach.userData.needle.position.y = v.mach.userData.y0 + (mid > 0.5 && mid < 0.8 ? 0.012 * Math.cos(t * 40) : 0.015);
         if (st.machine === 'presse') { const cl = sl.carrier ? Math.max(0, Math.min(1, mid / 0.12, (1 - mid) / 0.12)) : 0; v.mach.userData.lid.rotation.x = -0.9 * (1 - (0.5 - 0.5 * Math.cos(Math.PI * cl))); }
         if (st.machine === 'verpackung') v.mach.userData.bar.position.y = 0.85 + 0.25 - 0.18 * Math.sin(Math.PI * mid);
       });
@@ -351,12 +385,90 @@ export class LineView {
     this.renderer.render(this.scene, this.camera);
   }
 
+  _updateStack(sim, t) {
+    const sp = sim.spreader, cu = sim.cutter, mk = sim.marker, th = 0.00055;
+    const spX0 = -11.6 + 0.4;
+    const layers = sp.state === 'legen' ? sp.layer + sp.x : sp.state === 'fertig' || (sp.state === 'uebergabe' && cu.state === 'einziehen') ? sim.cfg.layers : 0;
+    this.spreadStack.visible = layers > 0;
+    this.spreadStack.scale.y = Math.max(1e-4, layers * th);
+    this.spreadStack.position.set(spX0 + mk.length / 2, H + (layers * th) / 2, 0);
+    const car = this.spreader.userData.carriage;
+    const prog = sp.state === 'legen' ? ((sp.layer % 2 ? 1 - sp.x : sp.x)) : 0;
+    car.position.x = 0.4 + prog * mk.length;
+    this.spreader.userData.roll.scale.set(1, 1, 1);
+    // Cutter-Stapel
+    const onCut = cu.state === 'einziehen' || cu.state === 'schneiden' || cu.state === 'abgabe';
+    this.cutStack.visible = onCut;
+    const cutX = -7.9 + 0.3 + mk.length / 2;
+    const ch = sim.cfg.layers * th;
+    this.cutStackBox.scale.y = ch; this.cutStackBox.position.y = ch / 2;
+    this.cutStack.position.set(cu.state === 'einziehen' ? cutX - 3.4 * (1 - Math.min(1, cu.t / 15)) : cu.state === 'abgabe' ? cutX + 3.6 * Math.min(1, cu.t / 12) : cutX, H, 0);
+    this.cutStack.children.forEach((o) => { if (o.isLine) o.position.y = ch + 0.0005; });
+    const cp = cu.state === 'schneiden' ? cu.progress : cu.state === 'abgabe' ? 1 : 0;
+    const sCut = cp * this.cutCum[this.cutCum.length - 1];
+    let k = 1; while (k < this.cutCum.length - 1 && this.cutCum[k] < sCut) k++;
+    this.cutDone.geometry.setDrawRange(0, cp > 0 ? k + 1 : 0);
+    const P = this.cutPath[Math.min(k, this.cutPath.length - 1)];
+    const gan = this.cutterM.userData.gantry, head = this.cutterM.userData.head;
+    gan.position.x = 0.3 + P[1] + (cu.state === 'schneiden' ? 0 : 0);
+    head.position.z = P[0] - mk.width / 2;
+    this.cutterM.userData.knife.position.y = 0.03 + (cu.state === 'schneiden' ? 0.004 * Math.sin(t * 120) : 0.03);
+    // Abnahmetisch: Reststapel
+    const perLayer = sim.cfg.shirtsPerMarker;
+    const remLayers = Math.ceil(sim.avail / perLayer);
+    this.takeStack.visible = sim.avail > 0;
+    const th2 = Math.max(1e-4, remLayers * th);
+    this.takeStackBox.scale.y = th2; this.takeStackBox.position.y = th2 / 2;
+    this.takeStack.children.forEach((o) => { if (o.isLine) o.position.y = th2 + 0.0005; });
+    this.takeStack.position.set(-4.4 + 0.9, H, 0);
+    this.labelSpread.userData.update('Legemaschine', sp.state === 'legen' ? `Lage ${sp.layer + 1}/${sim.cfg.layers}` : 'wartet auf Cutter');
+    this.labelCut.userData.update('CNC-Cutter', cu.state === 'schneiden' ? `${Math.round(cu.progress * 100)} % geschnitten` : cu.state === 'leer' ? 'bereit' : cu.state);
+
+    return th2;
+  }
+
+  _updateSingle(sim, t) {
+    const cu = sim.cutter, mk = sim.marker, x0 = -11.5 + 0.3;
+    // Stoffbahn: vom Abwickler bis an das Schnittfenster; beim Vorschub läuft das Fenster ein
+    const feed = cu.state === 'vorschub' ? Math.min(1, cu.t / Math.max(0.1, cu.T)) : 1;
+    const winX = x0 + mk.length / 2 - (1 - feed) * mk.length;
+    const webStart = -11.65, webEnd = winX - mk.length / 2;
+    this.web.visible = webEnd > webStart + 0.01;
+    this.web.scale.x = Math.max(0.01, webEnd - webStart); this.web.position.set((webStart + webEnd) / 2, H + 0.001, 0);
+    const r = 0.06 + 0.14 * Math.sqrt(1 - Math.min(1, sim.fabricUsed / sim.cfg.rollLen));
+    this.unwinder.userData.roll.scale.set(r / 0.2, 1, r / 0.2);
+    // Schnittfenster (läuft nach dem Schneiden auf das Abnahmeband)
+    const onBelt = cu.state === 'abgabe' ? Math.min(1, cu.t / Math.max(0.1, cu.T)) : 0;
+    this.cutSheet.visible = cu.state !== 'abgabe' || onBelt < 1;
+    this.cutSheet.position.set(winX + onBelt * 3.2, H + 0.0015, 0);
+    const cp = cu.state === 'schneiden' ? cu.progress : cu.state === 'abgabe' ? 1 : 0;
+    const sCut = cp * this.cutCum[this.cutCum.length - 1];
+    let k = 1; while (k < this.cutCum.length - 1 && this.cutCum[k] < sCut) k++;
+    this.cutDone.geometry.setDrawRange(0, cp > 0 ? k + 1 : 0);
+    const P = this.cutPath[Math.min(k, this.cutPath.length - 1)];
+    const gan = this.cutterM.userData.gantry, head = this.cutterM.userData.head;
+    if (cu.state === 'schneiden') { gan.position.x = 0.3 + P[1]; head.position.z = P[0] - mk.width / 2; }
+    this.cutterM.userData.knife.position.y = 0.03 + (cu.state === 'schneiden' ? 0.004 * Math.sin(t * 120) : 0.03);
+    // Abnahmeband: vorderstes Schnittbild am Bandende, Teile entnommener Shirts verschwinden
+    const endX = -8.3 + 4.8 - mk.length / 2 - 0.05;
+    this.beltMarkers.forEach((g, i) => {
+      const b = sim.belt[i];
+      g.visible = !!b;
+      if (!b) return;
+      g.position.set(endX - i * (mk.length + 0.12), H + 0.0015, 0);
+      g.userData.shirts.forEach((parts, sh) => parts.forEach((pg) => { pg.visible = sh < b.left; }));
+    });
+    this.labelCut.userData.update('Förderband-Cutter', cu.paused ? 'Rollenwechsel' : cu.state === 'schneiden' ? `${Math.round(cu.progress * 100)} % geschnitten` : cu.state === 'vorschub' ? 'Vorschub' : sim.belt.length >= sim.cfg.beltMarkers ? 'Band voll' : 'Übergabe');
+    return 0;
+  }
+
   // Bewegung des Kleidungsstücks und des Roboters in einer Station
   _stationAnim(st, slotIdx, f, gm, carrierWorld, rotOnCarrier, stage, t) {
     const sv = this.stationViews[this.sim.stations.indexOf(st)], v = sv.slots[slotIdx];
+    if (st.noRobot) { gm.root.position.copy(carrierWorld); gm.root.rotation.set(0, rotOnCarrier, 0); return; }
     const sewing = v.mach?.userData.needle && v.table;
     // Arbeitsposition an der Maschine
-    let work = { p: new THREE.Vector3(st.s + slotIdx * 1.45 + 0.35, 0.86, MACH_Z + 0.05), yaw: 0 };
+    let work = { p: new THREE.Vector3(st.s + slotIdx * 1.45 + 0.35, st.machine === 'etikett' ? 0.885 : 0.86, MACH_Z + 0.05), yaw: stage >= 13 || st.machine === 'wender' || st.machine === 'presse' || st.machine === 'verpackung' ? 0 : Math.PI / 2 };
     let seamPose = null;
     const path = this.kit.paths[st.id];
     if (sewing && path) {
@@ -387,17 +499,12 @@ export class LineView {
       pos = from.clone().lerp(carrierWorld, u); pos.y += Math.sin(Math.PI * u) * 0.35; yaw = lerpYaw(seamPose ? seamPose.yaw : work.yaw, rotOnCarrier, u);
     }
     gm.root.position.copy(pos); gm.root.rotation.set(0, yaw, 0);
-    // Falten: Vorderseite klappt über die Schulterlinie
-    if (gm.front && st.machine === 'falttisch') {
-      const u = Math.max(0, Math.min(1, (f - 0.3) / 0.45));
-      gm.front.rotation.x = f >= 0.85 ? Math.PI : Math.PI * ease(u); gm.front.position.y = 0.004 * ease(u);
-    }
     // Roboter greift das Teil (Werkzeug über dem Greifpunkt), außer während reiner Maschinenarbeit
     const grip = (gm.grip || new THREE.Vector3()).clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw).add(pos);
     grip.y += 0.06;
     const rob = v.rob;
     const local = rob.worldToLocal(grip.clone());
-    const holdDuringWork = sewing || st.machine === 'falttisch';
+    const holdDuringWork = sewing || st.machine === 'etikett';
     if (f < 0.22 || f >= 0.85 || holdDuringWork) rob.userData.reach(local, yaw);
     else rob.userData.reach(new THREE.Vector3(0.1, 0.6, 0.45), 0);
   }

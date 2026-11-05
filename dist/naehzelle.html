@@ -107,6 +107,8 @@ section.block + section.block { border-top: 1px solid var(--line); padding-top: 
 .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
 label.row, .row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; }
 .row > span:first-child { color: var(--ink-2); }
+.row.stack { grid-template-columns: 1fr; gap: 4px; }
+.row.stack select { width: 100%; }
 select, input[type="number"], input[type="text"] { height: 30px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel-2); padding: 0 8px; min-width: 0; }
 select { width: 100%; }
 input[type="number"] { width: 92px; text-align: right; font-family: var(--font-mono); font-size: 13px; }
@@ -158,6 +160,11 @@ table.stations { width: 100%; border-collapse: collapse; font-size: 12.5px; tabl
 table.stations th { text-align: left; font: 600 11px var(--font-display); letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); padding: 4px; border-bottom: 1px solid var(--line); }
 table.stations td { padding: 6px 4px; border-bottom: 1px dashed var(--line); vertical-align: top; }
 table.stations td:nth-child(2) { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.stations .proof { display: inline-block; font: 600 10px var(--font-display); letter-spacing: 0.04em; text-transform: uppercase; padding: 1px 5px; border-radius: 4px; margin-left: 4px; vertical-align: 1px; }
+table.stations .proof.zelle { background: var(--good-soft); color: var(--good); }
+table.stations .proof.analog { background: var(--line); color: var(--ink-2); }
+table.stations .proof.plan { background: var(--warn-soft); color: var(--warn); }
+table.stations .rpm { display: block; color: var(--ink-3); font-size: 11px; }
 table.stations .note { display: block; color: var(--ink-3); font-size: 11.5px; line-height: 1.35; margin-top: 2px; }
 table.stations col.c2 { width: 58px; } table.stations col.c3 { width: 52px; } table.stations col.c4 { width: 62px; }
 table.plies { width: 100%; border-collapse: collapse; font-size: 12.5px; }
@@ -348,7 +355,7 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
       <div id="lineLeft" hidden>
         <section class="block">
           <h2>Produktionsstraße</h2>
-          <p class="note">T-Shirt Gr. 86 aus Single Jersey: von der Stoffrolle bis zum verpackten Shirt. Materialfluss als ereignisdiskrete Simulation; Zykluszeiten aus den Nahtlängen der Schnittteile und den in der Nähzelle validierten Prozessparametern.</p>
+          <p class="note">T-Shirt Gr. 86 aus Single Jersey: von der Stoffrolle bis zum verpackten Shirt. Materialfluss als ereignisdiskrete Simulation. Nähzeiten aus den Nahtlängen der Schnittteile und der gewählten Drehzahlstufe; Handhabungszeiten und Störraten sind Planwerte.</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn primary" id="lineRun" type="button">Pause</button>
             <button class="btn" id="lineReset" type="button">Neu starten</button>
@@ -357,10 +364,12 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
         </section>
         <section class="block">
           <h2>Zuschnitt</h2>
+          <label class="row stack"><span>Zuschnittverfahren</span><select id="lnCutMode"><option value="einlagig">einlagig (Förderband-Cutter)</option><option value="stapel">Stapel (Legen + Cutter)</option></select></label>
+          <p class="note" id="lnCutNote"></p>
           <label class="row"><span>Stoffbreite [cm]</span><input type="number" id="lnWidth" min="100" max="200" step="5"></label>
           <label class="row"><span>Shirts je Schnittbild</span><input type="number" id="lnShirts" min="1" max="12" step="1"></label>
-          <label class="row"><span>Lagen je Stapel</span><input type="number" id="lnLayers" min="1" max="60" step="1"></label>
-          <label class="row"><span>Schnittgeschwindigkeit [m/s]</span><input type="number" id="lnCut" min="0.05" max="0.6" step="0.01"></label>
+          <label class="row" id="lnLayersRow"><span>Lagen je Stapel</span><input type="number" id="lnLayers" min="1" max="60" step="1"></label>
+          <label class="row"><span>Schnittgeschwindigkeit [m/s]</span><input type="number" id="lnCut" min="0.05" max="2" step="0.01"></label>
           <p class="note" id="lnMarker"></p>
         </section>
         <section class="block">
@@ -368,14 +377,17 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
           <label class="row"><span>Werkstückträger</span><input type="number" id="lnCarriers" min="4" max="60" step="1"></label>
           <label class="row"><span>Bandgeschwindigkeit [m/s]</span><input type="number" id="lnConv" min="0.05" max="0.6" step="0.05"></label>
           <label class="row"><span>Kommissionier-Roboter</span><input type="number" id="lnKit" min="1" max="2" step="1"></label>
+          <label class="row stack"><span>Nähgeschwindigkeit (Drehzahlstufe)</span><select id="lnSpeedPreset"><option value="validiert">in der Zelle validiert</option><option value="ziel">Entwicklungsziel</option><option value="optimistisch">optimistisch</option><option value="eigen">eigene Werte</option></select></label>
+          <p class="note" id="lnSpeedNote"></p>
           <label class="row"><span>Drehzahl gerade Nähte [1/min]</span><input type="number" id="lnRpmS" min="500" max="6000" step="100"></label>
           <label class="row"><span>Max. Drehzahl Kurven [1/min]</span><input type="number" id="lnRpmC" min="300" max="5000" step="100"></label>
           <label class="row"><span>Drehgeschw. C-Achse [rad/s]</span><input type="number" id="lnOmega" min="0.2" max="8" step="0.1"></label>
+          <label class="row"><span>Störungen und Ausschuss</span><input type="checkbox" id="lnFaults" style="width:auto"></label>
         </section>
         <section class="block">
           <h2>Stationen</h2>
           <div class="tablewrap"><table class="stations" id="lnStations"></table></div>
-          <p class="note">Maschinenzahl ändern, um den Engpass zu entlasten. „Physik“ öffnet die Station in der Nähzelle.</p>
+          <p class="note">Nachweis: <b>Zelle</b> = in der Nähzelle physikalisch simuliert, <b>analog</b> = gerade robotergeführte Naht wie der Grundfall der Zelle, <b>Plan</b> = Planwert ohne Nachweis. Maschinenzahl ändern, um den Engpass zu entlasten. „Physik“ öffnet die Station in der Nähzelle.</p>
         </section>
       </div>
     </aside>
@@ -4692,7 +4704,126 @@ function fabricRollRack() {
   return g;
 }
 
-return { mats, profile, label, signalTower, fence, cabinet, sewingMachine, sewingTable, robot6, conveyor, carrier, spreader, cutter, foldTable, turner, visionTunnel, pressFolder, bagger, pallet, fabricRollRack };
+// ---------------------------------------------------------------- Klappträger mit Formbrett
+// Zwei Hälften mit Nadelleisten, Scharnier quer zur Förderrichtung (x = 0). Die Hälfte x > 0
+// (Vorderteil) klappt um +z-Achse auf die Hälfte x < 0. Formbrett für die Teile nach dem Wenden.
+function klappTraeger(w = 0.66, d = 0.56) {
+  const m = mats();
+  const g = new THREE.Group();
+  g.add(rbox(w, 0.025, d, 0.006, m.aluDark, 0, 0.0125, 0));
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(0.012, 0.03, m.chrome, sx * (w / 2 - 0.04), 0.015, sz * (d / 2 - 0.04), 12));
+  g.add(box(0.05, 0.012, 0.03, m.safetyYellow, -w / 2 + 0.05, 0.03, -d / 2 + 0.03));  // RFID-Tag
+  const half = (sign, solid) => {
+    const h = new THREE.Group();
+    if (solid) h.add(box(w / 2 - 0.03, 0.003, d - 0.04, m.steel, sign * (w / 4 - 0.005), 0.0015, 0));
+    else { // Klapphälfte als Rahmen, damit das Teil sichtbar und für die Nadel zugänglich bleibt
+      for (const sz of [-1, 1]) h.add(box(w / 2 - 0.03, 0.004, 0.03, m.alu, sign * (w / 4 - 0.005), 0.002, sz * (d / 2 - 0.035)));
+      h.add(box(0.03, 0.004, d - 0.04, m.alu, sign * (w / 2 - 0.035), 0.002, 0));
+      h.add(box(0.02, 0.004, d - 0.04, m.alu, sign * 0.02, 0.002, 0));
+    }
+    for (const sz of [-1, 1]) h.add(box(w / 2 - 0.08, 0.007, 0.012, m.blackSteel, sign * (w / 4), 0.0045, sz * (d / 2 - 0.05))); // Nadelleisten
+    h.add(box(0.012, 0.007, d - 0.16, m.blackSteel, sign * (w / 2 - 0.05), 0.0045, 0));
+    return h;
+  };
+  const fixed = half(-1, true); fixed.position.y = 0.026; g.add(fixed);
+  const fixedR = half(1, true); fixedR.position.y = 0.026; g.add(fixedR); // Auflage unter der Klapphälfte
+  const flap = new THREE.Group(); flap.position.set(0, 0.03, 0); g.add(flap);
+  const fh = half(1, false); fh.position.y = -0.0005; flap.add(fh);
+  for (const z of [-0.2, 0, 0.2]) g.add(cyl(0.008, 0.06, m.chrome, 0, 0.03, z, 12, 'z'));   // Scharnier
+  // Formbrett (nach dem Wenden): flaches Brett mit Schulterform
+  const board = new THREE.Group();
+  const sh = new THREE.Shape();
+  const bw = 0.15, bl = 0.24;
+  sh.moveTo(-bw, -bl); sh.lineTo(bw, -bl); sh.lineTo(bw, bl - 0.06); sh.quadraticCurveTo(bw, bl, bw - 0.06, bl); sh.lineTo(-bw + 0.06, bl); sh.quadraticCurveTo(-bw, bl, -bw, bl - 0.06); sh.closePath();
+  const bg = new THREE.ExtrudeGeometry(sh, { depth: 0.008, bevelEnabled: true, bevelSize: 0.003, bevelThickness: 0.002, bevelSegments: 2 });
+  bg.rotateX(-Math.PI / 2);
+  const bm = new THREE.Mesh(bg, std2(0xdfe3e6, 0.4, 0.1)); bm.castShadow = bm.receiveShadow = true;
+  board.add(bm); board.add(box(0.06, 0.02, 0.04, m.paintDark, 0, 0.0, 0.2));
+  board.position.set(0, 0.03, 0); board.rotation.y = Math.PI / 2; board.visible = false; g.add(board);
+  g.userData = { flap, board, top: 0.03 };
+  return g;
+}
+const std2 = (color, r, mt) => new THREE.MeshStandardMaterial({ color, roughness: r, metalness: mt });
+
+// Etikettierer: Etikettenband von der Rolle, Ultraschall-Schneiden, Falten, Heftriegel-Kopf
+function labelTacker(h = 0.85) {
+  const m = mats();
+  const g = new THREE.Group();
+  g.add(rbox(0.8, h - 0.05, 0.6, 0.02, m.paintWhite, 0, (h - 0.05) / 2, 0));
+  g.add(rbox(0.7, 0.03, 0.5, 0.01, m.paintGrey, 0, h, 0));
+  g.add(cyl(0.07, 0.03, std2(0xf4f4f0, 0.6, 0), -0.25, h + 0.2, -0.15, 28, 'z'));     // Etikettenrolle
+  g.add(cyl(0.015, 0.06, m.steel, -0.25, h + 0.2, -0.15, 12, 'z'));
+  g.add(box(0.02, 0.18, 0.02, m.alu, -0.25, h + 0.09, -0.15));
+  g.add(rbox(0.16, 0.1, 0.1, 0.01, m.paintDark, -0.08, h + 0.12, -0.15));            // Schneid-/Falteinheit
+  g.add(box(0.002, 0.09, 0.02, std2(0xf4f4f0, 0.6, 0), -0.17, h + 0.16, -0.15));       // Band
+  // Heftriegel-Kopf (kurzer Arm mit Nadel)
+  g.add(rbox(0.1, 0.32, 0.12, 0.015, m.paintWhite, 0.25, h + 0.16, -0.12));
+  g.add(rbox(0.3, 0.08, 0.1, 0.015, m.paintWhite, 0.12, h + 0.3, -0.12));
+  const nb = group(cyl(0.004, 0.08, m.chrome, 0, 0, 0, 10), cyl(0.0008, 0.03, m.chrome, 0, -0.05, 0, 6));
+  nb.position.set(0.0, h + 0.22, -0.12); g.add(nb);
+  g.add(box(0.08, 0.003, 0.08, m.steel, 0.0, h + 0.017, -0.12));
+  g.userData = { needle: nb, y0: h + 0.22 };
+  return g;
+}
+
+// Klappstation: Schwenkantrieb, der in das Trägerscharnier greift, und Kamerabrücke
+function klappDrive(h = 0.85) {
+  const m = mats();
+  const g = new THREE.Group();
+  g.add(rbox(0.3, h - 0.1, 0.3, 0.02, m.paintGrey, 0, (h - 0.1) / 2, 0));
+  g.add(rbox(0.18, 0.14, 0.18, 0.02, m.paintDark, 0, h - 0.02, 0));
+  g.add(cyl(0.03, 0.2, m.chrome, 0, h - 0.02, 0.18, 16, 'z'));                       // Mitnehmerwelle
+  for (const sx of [-1, 1]) g.add(profile(1.0, 'y', sx * 0.45, h + 0.5 - 0.15, 0.62, m.alu));
+  g.add(profile(0.94, 'x', 0, h + 0.85, 0.62, m.alu));
+  for (const x of [-0.2, 0.2]) { g.add(rbox(0.07, 0.09, 0.07, 0.01, m.blackSteel, x, h + 0.78, 0.62)); g.add(cyl(0.02, 0.03, m.chrome, x, h + 0.72, 0.62, 14)); }
+  g.add(box(0.8, 0.01, 0.06, m.lamp, 0, h + 0.82, 0.5));
+  return g;
+}
+
+// Bündchenzuführung: Rippstrick-Rolle, Tänzer, Faltapparat und Abzugswalzen vor dem Nähfuß
+function ribFeeder(color = 0xe9c46a) {
+  const m = mats();
+  const g = new THREE.Group();
+  const rib = std2(color, 0.85, 0);
+  g.add(box(0.03, 0.42, 0.03, m.alu, 0, 0.21, 0));
+  g.add(cyl(0.08, 0.05, rib, 0, 0.42, 0.05, 32, 'z'));                                 // Rolle
+  g.add(cyl(0.012, 0.12, m.steel, 0, 0.42, 0.04, 12, 'z'));
+  g.add(cyl(0.008, 0.08, m.chrome, 0.12, 0.3, 0.05, 10, 'z'));                         // Tänzerwalze
+  g.add(box(0.14, 0.012, 0.012, m.alu, 0.06, 0.3, 0.02));
+  g.add(rbox(0.07, 0.03, 0.05, 0.008, m.chrome, 0.22, 0.08, 0.05));                    // Faltapparat
+  g.add(cyl(0.012, 0.04, m.rubber, 0.29, 0.06, 0.05, 14, 'z'));                       // Abzugswalzen
+  g.add(cyl(0.012, 0.04, m.rubber, 0.29, 0.085, 0.05, 14, 'z'));
+  g.add(rbox(0.06, 0.06, 0.06, 0.008, m.paintDark, 0.29, 0.12, 0.0));                 // Servo
+  const band = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.002, 0.018), rib); band.position.set(0.15, 0.2, 0.05); band.rotation.z = -0.9; g.add(band);
+  return g;
+}
+
+// Abwickler für die Stoffrolle (einlagiger Zuschnitt) mit Kantensteuerung
+function unwinder(W = 1.8, h = 0.85, color = 0xe9c46a) {
+  const m = mats();
+  const g = new THREE.Group();
+  for (const sz of [-1, 1]) { g.add(rbox(0.12, h + 0.25, 0.1, 0.01, m.machineGreen, 0, (h + 0.25) / 2, sz * (W / 2 + 0.08))); }
+  const roll = cyl(0.2, W - 0.1, std2(color, 0.9, 0), 0, h + 0.05, 0, 40, 'z'); g.add(roll);
+  g.add(cyl(0.03, W + 0.25, m.steel, 0, h + 0.05, 0, 16, 'z'));
+  g.add(cyl(0.03, W, m.chrome, 0.35, h + 0.12, 0, 16, 'z'));                         // Umlenkwalze
+  g.add(rbox(0.1, 0.06, 0.1, 0.01, m.paintDark, 0.35, h + 0.2, -W / 2 + 0.1));       // Kantensensor
+  g.add(rbox(0.25, 0.25, 0.2, 0.02, m.paintDark, 0, 0.3, W / 2 + 0.25));            // Antrieb
+  g.userData = { roll };
+  return g;
+}
+
+// Abnahmeband (Vakuum-Förderband) hinter dem Cutter
+function takeoffBelt(L = 4.5, W = 1.8, h = 0.85) {
+  const m = mats();
+  const g = new THREE.Group();
+  g.add(box(L, 0.04, W, m.belt, L / 2, h - 0.02, 0));
+  g.add(rbox(L + 0.06, 0.12, W + 0.06, 0.01, m.paintGrey, L / 2, h - 0.1, 0));
+  for (const x of [0, L]) g.add(cyl(0.06, W, m.alu, x, h - 0.05, 0, 20, 'z'));
+  for (let x = 0.2; x < L; x += 1.1) for (const sz of [-1, 1]) g.add(profile(h - 0.16, 'y', x, (h - 0.16) / 2, sz * (W / 2 - 0.08), m.aluDark));
+  return g;
+}
+
+return { mats, profile, label, signalTower, fence, cabinet, sewingMachine, sewingTable, robot6, conveyor, carrier, spreader, cutter, foldTable, turner, visionTunnel, pressFolder, bagger, pallet, fabricRollRack, klappTraeger, labelTacker, klappDrive, ribFeeder, unwinder, takeoffBelt };
 })();
 
 // ---- src/render/scene.js ----
@@ -5286,14 +5417,15 @@ function buildGarment() {
 
 // Schnittbild: Regal-Packung der Hüllrechtecke, Fadenlauf längs (z) bleibt erhalten.
 // width: Stoffbreite [m], shirts: Shirts je Schnittbild. Rückgabe: Teile mit Lage im Schnittbild.
-function nestMarker(G, width = 1.5, shirts = 6, gap = 0.008) {
+// Das Halsbündchen kommt in der Linie von der Rolle (withRib = false) und ist nicht im Schnittbild.
+function nestMarker(G, width = 1.5, shirts = 6, gap = 0.008, withRib = false) {
   const parts = [];
   for (let k = 0; k < shirts; k++) {
     parts.push({ name: 'Vorderteil', shirt: k, outline: G.front.outline });
     parts.push({ name: 'Rückenteil', shirt: k, outline: G.back.outline });
     parts.push({ name: 'Ärmel links', shirt: k, outline: G.sleeveL.outline });
     parts.push({ name: 'Ärmel rechts', shirt: k, outline: G.sleeveR.outline });
-    parts.push({ name: 'Bündchen', shirt: k, outline: G.rib.outline, rot: true });
+    if (withRib) parts.push({ name: 'Bündchen', shirt: k, outline: G.rib.outline, rot: true });
   }
   for (const p of parts) {
     // Bündchen quer legen (Rippen laufen beim Bündchen quer)
@@ -5326,56 +5458,100 @@ return { DIM, buildGarment, nestMarker, polyArea };
 const __M_line_des = (() => {
 // Produktionsstraße T-Shirt: ereignisdiskrete Simulation (zeitgesteuert) des Materialflusses.
 //
-// Vorstufe (Batch): Stoffrolle → Legemaschine (L Lagen) → CNC-Cutter → Abnahmetisch.
-// Kommissionierung: Roboter mit Nadelgreifer vereinzelt die Teile eines Shirts vom Stapel
-// auf einen Werkstückträger. Hauptstrecke: Transfersystem; jede Station holt den Träger über
-// einen Querumsetzer in den Nebenschluss (die Strecke bleibt frei), bearbeitet ihn und
-// gibt ihn zurück. Leere Träger laufen über Hubstationen und die untere Rücklaufstrecke zurück.
+// Zuschnitt (wählbar):
+//   einlagig – Abwickler → Förderband-Cutter schneidet eine Lage → Abnahmeband. Jedes Teil liegt
+//              einzeln, das Vereinzeln aus dem Stapel entfällt.
+//   stapel   – Legemaschine (L Lagen) → Stapelcutter → Abnahmetisch; Kommissionierroboter
+//              vereinzeln mit Nadelgreifern (langsamer, Doppelgriffe).
+// Kommissionierung: Roboter legen Vorder-, Rückenteil und Ärmel in Nählage auf einen Klappträger.
+// Hauptstrecke: Transfersystem; jede Station holt den Träger in eine Stichstrecke mit getrennter
+// Aus- und Einschleusung, bearbeitet ihn und gibt ihn zurück. Leere Träger laufen über
+// Hubstationen und die untere Rücklaufstrecke zurück.
 //
-// Zykluszeiten: Handhabung (Roboterbewegungen) + Nähzeit aus den Nahtlängen der Schnittteile,
-// Stichlänge und Drehzahl. Bei Kurvennähten begrenzt die Drehgeschwindigkeit der Führung
-// (C-Achse) die Drehzahl: n ≤ 60·ω_max / (κ_max · Stichlänge).
+// Zykluszeiten: Handhabung (Planwert) + Nähzeit aus den Nahtlängen der Schnittteile, Stichlänge
+// und Drehzahl. Bei Kurvennähten begrenzt die Drehgeschwindigkeit der Führung (C-Achse) die
+// Drehzahl: n ≤ 60·ω_max / (κ_max · Stichlänge). Die Drehzahl kommt aus einer von drei Stufen
+// (validiert / Ziel / optimistisch), damit sichtbar bleibt, was nachgewiesen ist und was nicht.
+//
+// Verfügbarkeit: Fadenbrüche, Handhabungsfehler je Station (Planwerte), Rollenwechsel (Stoff,
+// Bündchen) und Ausschuss an der Prüfstation.
 
 const { buildGarment, nestMarker, DIM } = __M_line_garment;
 const STAGES = [
   'Zuschnitt-Kit', 'Schulter rechts', 'Halsbündchen', 'Schulter links', 'Ärmel links', 'Ärmel rechts',
-  'Säume', 'gefaltet', 'Seite links', 'Seite rechts', 'gewendet', 'geprüft', 'gebügelt & gefaltet', 'verpackt',
+  'Ärmelsäume', 'Saum', 'Etikett', 'geklappt', 'Seite links', 'Seite rechts', 'geprüft', 'gewendet',
+  'gebügelt & gefaltet', 'verpackt',
 ];
 
-// Stationsdefinitionen: Nähte (Länge in m, Kurve ja/nein, max. Krümmung 1/m), Handhabung [s]
+// Drehzahlstufen. „validiert“ nutzt je Naht die in der Nähzelle nachgewiesene Drehzahl.
+const SPEED_PRESETS = {
+  validiert: { name: 'in der Nähzelle validiert', rpmStraight: 600, rpmCurveMax: 500, validated: true },
+  ziel: { name: 'Entwicklungsziel', rpmStraight: 1500, rpmCurveMax: 1000 },
+  optimistisch: { name: 'optimistisch (Industriedrehzahl)', rpmStraight: 4000, rpmCurveMax: 3000 },
+};
+
+// Stationsdefinitionen. seams: Länge [m], max. Krümmung [1/m], val = in der Zelle nachgewiesene
+// Drehzahl [1/min]. proof: 'zelle' (physikalisch nachgewiesen), 'analog' (Grundfall der Zelle:
+// gerade, robotergeführte Naht), 'plan' (Planwert ohne Nachweis). risk: Wahrscheinlichkeit eines
+// Handhabungsfehlers je Zyklus (Planwert).
 function stationDefs(G) {
   const S = G.seams;
   return [
-    { id: 'schulter1', name: 'Schulternaht rechts', machine: 'overlock', seams: [{ len: S.schulter, kmax: 0 }], handling: 6.5, stage: 1, cap: 1 },
-    { id: 'hals', name: 'Halsbündchen annähen', machine: 'overlock', seams: [{ len: S.hals, kmax: 22 }], handling: 9.0, stage: 2, cap: 1, note: 'Bündchen 15 % kürzer: Obertransport dehnt es (negative Mehrweite)' },
-    { id: 'schulter2', name: 'Schulternaht links', machine: 'overlock', seams: [{ len: S.schulter + 0.036, kmax: 0 }], handling: 6.5, stage: 3, cap: 1 },
-    { id: 'aermelL', name: 'Ärmel einsetzen links', machine: 'steppstich', seams: [{ len: S.armloch, kmax: 14 }], handling: 11.0, stage: 4, cap: 1, physics: 'aermel', note: 'Werkstückträger + Ärmelzuführung + Mehrweite (in der Physik-Zelle validiert)' },
-    { id: 'aermelR', name: 'Ärmel einsetzen rechts', machine: 'steppstich', seams: [{ len: S.armloch, kmax: 14 }], handling: 11.0, stage: 5, cap: 1, physics: 'aermel' },
-    { id: 'saum', name: 'Ärmel- und Saumnaht (Cover)', machine: 'cover', seams: [{ len: S.aermelsaum, kmax: 0 }, { len: S.aermelsaum, kmax: 0 }, { len: DIM.bw * 2, kmax: 0 }, { len: DIM.bw * 2, kmax: 0 }], handling: 12.0, stage: 6, cap: 1 },
-    { id: 'falten', name: 'Falten an der Schulter', machine: 'falttisch', seams: [], handling: 7.0, stage: 7, cap: 1 },
-    { id: 'seiteL', name: 'Seitennaht links', machine: 'overlock', seams: [{ len: S.seite, kmax: 25 }], handling: 9.0, stage: 8, cap: 1, physics: 'tshirt', note: 'Seite + Achselrundung + Ärmelunterkante in einem Zug (Physik-Zelle: Kurvennaht)' },
-    { id: 'seiteR', name: 'Seitennaht rechts', machine: 'overlock', seams: [{ len: S.seite, kmax: 25 }], handling: 9.0, stage: 9, cap: 1, physics: 'tshirt' },
-    { id: 'wenden', name: 'Wenden', machine: 'wender', seams: [], handling: 7.5, stage: 10, cap: 1 },
-    { id: 'qs', name: 'Fäden kappen & Kameraprüfung', machine: 'pruefung', seams: [], handling: 6.0, stage: 11, cap: 1 },
-    { id: 'buegeln', name: 'Bügeln & Falten', machine: 'presse', seams: [], handling: 15.0, stage: 12, cap: 2 },
-    { id: 'pack', name: 'Verpacken', machine: 'verpackung', seams: [], handling: 7.0, stage: 13, cap: 1 },
+    { id: 'schulter1', name: 'Schulternaht rechts', machine: 'overlock', seams: [{ len: S.schulter, kmax: 0, val: 600 }], handling: 6.5, stage: 1, cap: 1, proof: 'analog', risk: 0.005 },
+    { id: 'hals', name: 'Halsbündchen (Rolle)', machine: 'overlock', seams: [{ len: S.hals, kmax: 22, val: 400 }], handling: 7.5, stage: 2, cap: 1, proof: 'plan', risk: 0.02, rib: true,
+      note: 'Bündchen läuft von der Rolle durch Faltapparat und Abzug mit Spannungsregelung (15 % Dehnung), wird am Nahtende abgeschnitten. Noch ohne Physik-Nachweis.' },
+    { id: 'schulter2', name: 'Schulternaht links', machine: 'overlock', seams: [{ len: S.schulter + 0.036, kmax: 0, val: 600 }], handling: 6.5, stage: 3, cap: 1, proof: 'analog', risk: 0.005 },
+    { id: 'aermelL', name: 'Ärmel einsetzen links', machine: 'steppstich', seams: [{ len: S.armloch, kmax: 14, val: 400 }], handling: 13.0, stage: 4, cap: 1, physics: 'aermel', proof: 'zelle', risk: 0.02,
+      note: 'Roboter legt den Ärmel auf das Armloch, Ärmelzuführung mit Kamera, Mehrweite über Obertransport. In der Zelle: 83/83 Stiche bei 400 min⁻¹.' },
+    { id: 'aermelR', name: 'Ärmel einsetzen rechts', machine: 'steppstich', seams: [{ len: S.armloch, kmax: 14, val: 400 }], handling: 13.0, stage: 5, cap: 1, physics: 'aermel', proof: 'zelle', risk: 0.02 },
+    { id: 'saumA', name: 'Ärmelsäume (Cover)', machine: 'cover', seams: [{ len: S.aermelsaum, kmax: 0, val: 600 }, { len: S.aermelsaum, kmax: 0, val: 600 }], handling: 8.0, stage: 6, cap: 1, proof: 'analog', risk: 0.01,
+      note: 'Kantenentroller vor dem Saumumleger gegen die Rollkante des Jerseys.' },
+    { id: 'saumK', name: 'Saum Vorder- und Rückenteil (Cover)', machine: 'cover', seams: [{ len: S.saum, kmax: 0, val: 600 }, { len: S.saum, kmax: 0, val: 600 }], handling: 9.0, stage: 7, cap: 1, proof: 'analog', risk: 0.01 },
+    { id: 'etikett', name: 'Pflegeetikett anheften', machine: 'etikett', seams: [], handling: 6.0, stage: 8, cap: 1, proof: 'plan', risk: 0.005,
+      note: 'Etikett vom Band schneiden und falten, mit Heftriegel an den Seitenrand des Rückenteils; die Seitennaht fasst es mit.' },
+    { id: 'klappen', name: 'Klappträger schließen', machine: 'klappen', seams: [], handling: 4.5, stage: 9, cap: 1, proof: 'plan', risk: 0.01, noRobot: true,
+      note: 'Scharnier klappt die Vorderhälfte samt Nadelleisten auf die Rückenhälfte; Kamera prüft die Kantendeckung.' },
+    { id: 'seiteL', name: 'Seitennaht links', machine: 'overlock', seams: [{ len: S.seite, kmax: 25, val: 500 }], handling: 9.0, stage: 10, cap: 1, physics: 'tshirt', proof: 'zelle', risk: 0.015,
+      note: 'Geschlossener Klappträger dient als Nähschablone. In der Zelle: Kurvennaht mit Achselrundung bei 500 min⁻¹.' },
+    { id: 'seiteR', name: 'Seitennaht rechts', machine: 'overlock', seams: [{ len: S.seite, kmax: 25, val: 500 }], handling: 9.0, stage: 11, cap: 1, physics: 'tshirt', proof: 'zelle', risk: 0.015 },
+    { id: 'qs', name: 'Fäden absaugen & Kameraprüfung', machine: 'pruefung', seams: [], handling: 6.0, stage: 12, cap: 1, proof: 'plan', risk: 0.003, reject: 0.015,
+      note: 'Vor dem Wenden: die Nähte liegen noch außen und sind für die Kamera sichtbar.' },
+    { id: 'wenden', name: 'Wenden auf Formbrett', machine: 'wender', seams: [], handling: 9.0, stage: 13, cap: 1, proof: 'plan', risk: 0.03,
+      note: 'Saum direkt vom Träger am Rohrrand klemmen, Unterdruck zieht das Shirt durch, gewendet auf ein Formbrett. Ab hier bleibt die Lage definiert.' },
+    { id: 'buegeln', name: 'Dämpfen & Falten', machine: 'presse', seams: [], handling: 15.0, stage: 14, cap: 2, proof: 'plan', risk: 0.01 },
+    { id: 'pack', name: 'Verpacken', machine: 'verpackung', seams: [], handling: 7.0, stage: 15, cap: 1, proof: 'plan', risk: 0.005 },
   ];
 }
 
 function defaultLineConfig() {
   return {
+    cutMode: 'einlagig',                        // 'einlagig' | 'stapel'
     width: 1.5, shirtsPerMarker: 6, layers: 20,
-    spreadSpeed: 0.6, spreadTurn: 3.0,          // m/s, s je Lage
-    cutSpeed: 0.18, cutOverhead: 25,            // m/s im Stapel, s
-    pickTime: 2.6, kitRobots: 2,                // s je Teil (Vereinzeln mit Nadelgreifer)
-    carriers: 22, conveyorSpeed: 0.25, pitch: 2.8, carrierLen: 0.7,
-    rpmStraight: 4000, rpmCurveMax: 3000, omegaMax: 2.0, // 1/min, rad/s (C-Achse)
+    spreadSpeed: 0.6, spreadTurn: 3.0,          // Legemaschine: m/s, s je Lage
+    cutSpeed: 0.18, cutOverhead: 25,            // Stapelcutter: m/s im Stapel, s
+    cutSpeed1: 0.8, feedSpeed: 0.3, beltMarkers: 3, // Förderband-Cutter einlagig: m/s, m/s, Puffer
+    rollLen: 100, rollChange: 120,              // Stoffrolle [m], Wechsel [s]
+    ribRollLen: 50, ribRollChange: 90,          // Bündchenrolle [m], Wechsel [s]
+    pickTime: 1.8,                              // s je Teil vom Abnahmeband (einlagig, Vakuum)
+    pickTimeStack: 3.5, doublePick: 0.03, doublePickTime: 8, // Stapel: Nadelgreifer, Doppelgriffe
+    kitRobots: 2,
+    carriers: 24, conveyorSpeed: 0.25, pitch: 2.8, carrierLen: 0.7,
+    speed: 'ziel',                              // Drehzahlstufe (SPEED_PRESETS) oder 'eigen'
+    rpmStraight: 1500, rpmCurveMax: 1000, omegaMax: 2.0, // 1/min, rad/s (C-Achse)
     seamOverhead: 0.7,                          // Anlauf, Verriegeln, Fadenabschneiden [s]
-    threadBreak: 0.004,                         // Fadenbruch je Naht
-    repairTime: 45,
+    faults: true,                               // Störungen und Ausschuss
+    threadBreak: 0.004, repairTime: 45,         // Fadenbruch je Naht, automatisches Einfädeln [s]
+    retryTime: 25,                              // Handhabungsfehler: Nachgreifen/Neuvermessen [s]
     jitter: 0.05,
     caps: {},                                   // Maschinen je Station (Überschreibung)
   };
+}
+
+function applySpeedPreset(cfg, name) {
+  const p = SPEED_PRESETS[name];
+  cfg.speed = p ? name : 'eigen';
+  if (p) { cfg.rpmStraight = p.rpmStraight; cfg.rpmCurveMax = p.rpmCurveMax; }
+  return cfg;
 }
 
 class LineSim {
@@ -5392,7 +5568,9 @@ class LineSim {
   // Nähzeit einer Naht und die dafür zulässige Drehzahl
   seamTime(seam) {
     const c = this.cfg, st = DIM.stitch;
-    const rpm = seam.kmax > 0 ? Math.min(c.rpmCurveMax, (60 * c.omegaMax) / (seam.kmax * st)) : c.rpmStraight;
+    const validated = c.speed === 'validiert';
+    let rpm = seam.kmax > 0 ? Math.min(c.rpmCurveMax, (60 * c.omegaMax) / (seam.kmax * st)) : c.rpmStraight;
+    if (validated && seam.val) rpm = Math.min(rpm, seam.val);
     return { t: seam.len / ((rpm / 60) * st) + c.seamOverhead, rpm };
   }
 
@@ -5406,7 +5584,7 @@ class LineSim {
     const c = this.cfg;
     this._s = 12345;
     this.t = 0;
-    this.done = 0;
+    this.done = 0; this.rejects = 0; this.faultCount = 0;
     this.events = [];
     this.flowTimes = [];
     this.outputLog = [];
@@ -5414,48 +5592,88 @@ class LineSim {
     let s = 2.2;
     this.stations = this.defs.map((d) => {
       const cap = c.caps[d.id] ?? d.cap;
-      const st = { ...d, cap, s, ct: this.cycleTime(d), slots: Array.from({ length: cap }, () => ({ carrier: null, t: 0, T: 0, phase: 'frei', repair: 0 })), busy: 0, blocked: 0, starved: 0, repair: 0, count: 0 };
+      const st = { ...d, cap, s, ct: this.cycleTime(d), rpm: d.seams.map((x) => this.seamTime(x).rpm), slots: Array.from({ length: cap }, () => ({ carrier: null, t: 0, T: 0, phase: 'frei', repair: 0 })), busy: 0, blocked: 0, starved: 0, repair: 0, count: 0 };
       s += c.pitch * Math.max(1, cap * 0.75);
       return st;
     });
     this.mainLen = s + 1.0;
-    // Werkstückträger: zu Beginn alle leer in der Rücklaufstrecke bzw. am Beladeplatz
+    // Werkstückträger: zu Beginn alle leer in der Rücklaufstrecke
     this.carriers = [];
     for (let k = 0; k < c.carriers; k++) this.carriers.push({ id: k + 1, track: 'ret', s: this.mainLen - k * (c.carrierLen + 0.05), stage: -1, next: 0, shirt: null, wait: 0 });
     this.loadSlot = { carrier: null, t: 0, T: 0 };
     this.lifts = { end: { carrier: null, t: 0 }, start: { carrier: null, t: 0 } };
-    // Vorstufe
-    this.spreader = { state: 'legen', layer: 0, t: 0, x: 0, dir: 1 };
-    this.cutter = { state: 'leer', t: 0, T: 0, progress: 0 };
-    this.cutStacks = 0;            // fertige Schnittpakete auf dem Abnahmetisch (Shirts)
-    this.stackOnCutter = false;
+    // Zuschnitt
+    this.avail = 0;                // Shirts, deren Teile zum Kommissionieren bereitliegen
+    this.belt = [];                // einlagig: Schnittbilder auf dem Abnahmeband { left }
+    this.fabricUsed = 0; this.rollPause = 0;
+    this.ribUsed = 0;
     this.shirtCounter = 0;
-    this.layerTime = this.marker.length / c.spreadSpeed + c.spreadTurn;
-    this.cutTime = this.marker.contour / c.cutSpeed + c.cutOverhead;
-    this.kitTime = (5 * c.pickTime) / c.kitRobots;
+    if (c.cutMode === 'stapel') {
+      this.spreader = { state: 'legen', layer: 0, t: 0, x: 0, dir: 1 };
+      this.cutter = { state: 'leer', t: 0, T: 0, progress: 0 };
+      this.layerTime = this.marker.length / c.spreadSpeed + c.spreadTurn;
+      this.cutTime = this.marker.contour / c.cutSpeed + c.cutOverhead;
+      this.kitTime = (4 * c.pickTimeStack) / c.kitRobots;
+    } else {
+      this.cutter = { state: 'vorschub', t: 0, T: 0, progress: 0 };
+      this.feedTime = this.marker.length / c.feedSpeed + 2;
+      this.cutTime = this.marker.contour / c.cutSpeed1 + 6;
+      this.cutter.T = this.feedTime;
+      this.kitTime = (4 * c.pickTime) / c.kitRobots;
+    }
   }
 
   log(msg, level = 'info') { this.events.push({ t: this.t, msg, level }); if (this.events.length > 200) this.events.shift(); }
 
   step(dt) {
-    const c = this.cfg;
     this.t += dt;
-    this._upstream(dt);
+    if (this.cfg.cutMode === 'stapel') this._upstreamStack(dt); else this._upstreamSingle(dt);
     this._kitting(dt);
     this._stations(dt);
     this._conveyor(dt);
     this._returnLine(dt);
   }
 
-  _upstream(dt) {
+  // Stoffverbrauch; bei leerer Rolle Wechsel (Pause)
+  _useFabric(m) {
+    const c = this.cfg;
+    this.fabricUsed += m;
+    if (c.faults && this.fabricUsed >= c.rollLen) { this.fabricUsed -= c.rollLen; this.rollPause = c.rollChange; this.log(`Stoffrolle leer: Rollenwechsel (${c.rollChange} s)`, 'warn'); }
+  }
+
+  _upstreamSingle(dt) {
+    const c = this.cfg, cu = this.cutter;
+    if (this.rollPause > 0) { this.rollPause -= dt; cu.paused = true; return; }
+    cu.paused = false;
+    cu.t += dt;
+    if (cu.state === 'vorschub') {
+      if (cu.t >= cu.T) { cu.state = 'schneiden'; cu.t = 0; cu.T = this.cutTime; this._useFabric(this.marker.length); }
+    } else if (cu.state === 'schneiden') {
+      cu.progress = Math.min(1, cu.t / cu.T);
+      if (cu.t >= cu.T) { cu.state = 'abgabe'; cu.t = 0; cu.T = 3; }
+    } else if (cu.state === 'abgabe') {
+      // Abnahmeband muss Platz haben
+      if (this.belt.length >= c.beltMarkers) { cu.t = 0; return; }
+      if (cu.t >= cu.T) {
+        this.belt.push({ left: c.shirtsPerMarker });
+        this.avail += c.shirtsPerMarker;
+        cu.state = 'vorschub'; cu.t = 0; cu.T = this.feedTime; cu.progress = 0;
+      }
+    }
+  }
+
+  _upstreamStack(dt) {
     const c = this.cfg, sp = this.spreader, cu = this.cutter;
     // Legemaschine: L Lagen hin und her
     if (sp.state === 'legen') {
-      sp.t += dt;
-      const tl = this.layerTime;
-      sp.x = Math.min(1, (sp.t % tl) / (tl - c.spreadTurn));
-      if (sp.t >= tl) { sp.t -= tl; sp.layer++; sp.dir *= -1; }
-      if (sp.layer >= c.layers) { sp.state = 'fertig'; sp.t = 0; this.log(`Legemaschine: ${c.layers} Lagen gelegt (${(this.marker.length * c.layers).toFixed(1)} m Stoff)`); }
+      if (this.rollPause > 0) { this.rollPause -= dt; }
+      else {
+        sp.t += dt;
+        const tl = this.layerTime;
+        sp.x = Math.min(1, (sp.t % tl) / (tl - c.spreadTurn));
+        if (sp.t >= tl) { sp.t -= tl; sp.layer++; sp.dir *= -1; this._useFabric(this.marker.length); }
+        if (sp.layer >= c.layers) { sp.state = 'fertig'; sp.t = 0; this.log(`Legemaschine: ${c.layers} Lagen gelegt (${(this.marker.length * c.layers).toFixed(1)} m Stoff)`); }
+      }
     } else if (sp.state === 'fertig' && cu.state === 'leer') {
       cu.state = 'einziehen'; cu.t = 0; sp.state = 'uebergabe';
     } else if (sp.state === 'uebergabe' && cu.state !== 'einziehen') {
@@ -5466,25 +5684,30 @@ class LineSim {
     else if (cu.state === 'schneiden') { cu.t += dt; cu.progress = Math.min(1, cu.t / cu.T); if (cu.t >= cu.T) { cu.state = 'abgabe'; cu.t = 0; } }
     else if (cu.state === 'abgabe') {
       // Abnahmetisch muss leer sein (ein Paket Puffer)
-      if (this.cutStacks === 0) { cu.t += dt; if (cu.t > 12) { this.cutStacks = c.layers * c.shirtsPerMarker; this.stackLayers = c.layers; cu.state = 'leer'; cu.progress = 0; this.log(`Schnittpaket mit ${this.cutStacks} Shirts auf dem Abnahmetisch`); } }
+      if (this.avail === 0) { cu.t += dt; if (cu.t > 12) { this.avail = c.layers * c.shirtsPerMarker; this.stackLayers = c.layers; cu.state = 'leer'; cu.progress = 0; this.log(`Schnittpaket mit ${this.avail} Shirts auf dem Abnahmetisch`); } }
     }
   }
 
   _kitting(dt) {
-    const L = this.loadSlot;
-    if (L.carrier) {
-      if (L.T === 0) {
-        if (this.cutStacks > 0) { L.T = this.kitTime * (1 + (this.rng() - 0.5) * this.cfg.jitter); L.t = 0; this.cutStacks--; L.carrier.shirt = ++this.shirtCounter; L.carrier.tStart = this.t; }
-        else { this.kitStarved = (this.kitStarved || 0) + dt; return; }
-      }
-      L.t += dt;
-      if (L.t >= L.T) {
-        const car = L.carrier;
-        car.stage = 0; car.next = 0;
-        // auf die Hauptstrecke, wenn der Anfang frei ist
-        if (!this.carriers.some((o) => o.track === 'main' && o.s < this.cfg.carrierLen + 0.05)) {
-          car.track = 'main'; car.s = 0; L.carrier = null; L.T = 0;
-        }
+    const L = this.loadSlot, c = this.cfg;
+    if (!L.carrier) return;
+    if (L.T === 0) {
+      if (this.avail > 0) {
+        L.T = this.kitTime * (1 + (this.rng() - 0.5) * c.jitter); L.t = 0;
+        // Stapel: Doppelgriffe erkennen (Dicke/Gewicht) und zurücklegen
+        if (c.cutMode === 'stapel' && c.faults) for (let k = 0; k < 4; k++) if (this.rng() < c.doublePick) { L.T += c.doublePickTime / c.kitRobots; this.log('Kommissionierung: Doppelgriff erkannt, Lage zurückgelegt', 'warn'); }
+        this.avail--;
+        if (c.cutMode !== 'stapel' && this.belt.length) { this.belt[0].left--; if (this.belt[0].left <= 0) this.belt.shift(); }
+        L.carrier.shirt = ++this.shirtCounter; L.carrier.tStart = this.t;
+      } else { this.kitStarved = (this.kitStarved || 0) + dt; return; }
+    }
+    L.t += dt;
+    if (L.t >= L.T) {
+      const car = L.carrier;
+      car.stage = 0; car.next = 0;
+      // auf die Hauptstrecke, wenn der Anfang frei ist
+      if (!this.carriers.some((o) => o.track === 'main' && o.s < c.carrierLen + 0.05)) {
+        car.track = 'main'; car.s = 0; L.carrier = null; L.T = 0;
       }
     }
   }
@@ -5492,28 +5715,39 @@ class LineSim {
   _stations(dt) {
     const c = this.cfg;
     for (const st of this.stations) {
-      let anyBusy = false;
       for (const sl of st.slots) {
         if (!sl.carrier) continue;
-        if (sl.repair > 0) { sl.repair -= dt; st.repair += dt / st.cap; sl.phase = 'Fadenbruch'; continue; }
+        if (sl.repair > 0) { sl.repair -= dt; st.repair += dt / st.cap; sl.phase = sl.fault || 'Störung'; continue; }
         if (sl.t < sl.T) {
-          sl.t += dt; anyBusy = true;
+          sl.t += dt;
           const f = sl.t / sl.T;
           sl.phase = f < 0.22 ? 'laden' : f < 0.85 ? 'bearbeiten' : 'entladen';
-          // Fadenbruch während der Naht
-          if (st.seams.length && sl.phase === 'bearbeiten' && !sl.broke && this.rng() < (c.threadBreak * st.seams.length * dt) / (0.63 * sl.T)) {
-            sl.broke = true; sl.repair = c.repairTime;
-            this.log(`${st.name}: Fadenbruch, automatisches Einfädeln/Störung (${c.repairTime} s)`, 'warn');
+          if (c.faults) {
+            // Fadenbruch während der Naht
+            if (st.seams.length && sl.phase === 'bearbeiten' && !sl.broke && this.rng() < (c.threadBreak * st.seams.length * dt) / (0.63 * sl.T)) {
+              sl.broke = true; sl.repair = c.repairTime; sl.fault = 'Fadenbruch'; this.faultCount++;
+              this.log(`${st.name}: Fadenbruch, automatisches Einfädeln (${c.repairTime} s)`, 'warn');
+            }
+            // Handhabungsfehler (Greifer verliert Lage, Kamera findet Kante nicht …)
+            if (sl.failAt !== undefined && f >= sl.failAt) {
+              sl.failAt = undefined; sl.repair = c.retryTime; sl.fault = 'Handhabungsfehler'; this.faultCount++;
+              this.log(`${st.name}: Handhabungsfehler, Nachgreifen und Neuvermessen (${c.retryTime} s)`, 'warn');
+            }
           }
           st.busy += dt / st.cap;
         } else {
           // fertig: zurück auf die Strecke, wenn dort Platz ist
           sl.phase = 'wartet auf Abgabe';
-          const sx = st.s + this.cfg.carrierLen + 0.25; // Einschleusstelle hinter der Ausschleusstelle
+          const sx = st.s + c.carrierLen + 0.25; // Einschleusstelle hinter der Ausschleusstelle
           if (this._gapFree(sx)) {
             const car = sl.carrier;
             car.stage = st.stage; car.next++; car.track = 'main'; car.s = sx; car.wait = 0;
             sl.carrier = null; sl.phase = 'frei'; st.count++;
+            // Prüfstation: Ausschuss geht in die Nacharbeit, der Träger läuft leer weiter
+            if (st.reject && c.faults && this.rng() < st.reject) {
+              this.rejects++; car.shirt = null; car.stage = -1; car.next = this.stations.length; car.rejected = true;
+              this.log(`${st.name}: Fehler erkannt (Nahtfehler/Loch), Shirt in die Nacharbeit`, 'crit');
+            }
           } else st.blocked += dt / st.cap;
         }
       }
@@ -5524,6 +5758,19 @@ class LineSim {
   _gapFree(s) {
     const gap = this.cfg.carrierLen + 0.05;
     return !this.carriers.some((o) => o.track === 'main' && Math.abs(o.s - s) < gap);
+  }
+
+  _startCycle(st, slot, car) {
+    const c = this.cfg;
+    slot.carrier = car; slot.t = 0; slot.broke = false; slot.fault = null;
+    slot.T = st.ct * (1 + (this.rng() - 0.5) * c.jitter);
+    slot.failAt = c.faults && this.rng() < st.risk ? 0.1 + 0.8 * this.rng() : undefined;
+    // Bündchen von der Rolle: Verbrauch, Rollenwechsel
+    if (st.rib && c.faults) {
+      this.ribUsed += this.G.ribL;
+      if (this.ribUsed >= c.ribRollLen) { this.ribUsed -= c.ribRollLen; slot.repair = c.ribRollChange; slot.fault = 'Bündchenrolle wechseln'; this.log(`${st.name}: Bündchenrolle leer, Wechsel (${c.ribRollChange} s)`, 'warn'); }
+    }
+    car.track = 'station'; car.station = st; car.slot = st.slots.indexOf(slot);
   }
 
   _conveyor(dt) {
@@ -5537,12 +5784,7 @@ class LineSim {
       if (st && car.s <= st.s + 1e-6 && target >= st.s) {
         // an der Station: Querumsetzer nimmt den Träger, wenn ein Platz frei ist
         const slot = st.slots.find((sl) => !sl.carrier);
-        if (slot) {
-          slot.carrier = car; slot.t = 0; slot.broke = false;
-          slot.T = st.ct * (1 + (this.rng() - 0.5) * c.jitter);
-          car.track = 'station'; car.station = st; car.slot = st.slots.indexOf(slot);
-          continue;
-        }
+        if (slot) { this._startCycle(st, slot, car); continue; }
         target = st.s; car.wait += dt;
       }
       if (!st && target >= this.mainLen) {
@@ -5556,11 +5798,13 @@ class LineSim {
   }
 
   _finish(car) {
-    this.done++;
-    const ft = this.t - (car.tStart ?? this.t);
-    this.flowTimes.push(ft); if (this.flowTimes.length > 200) this.flowTimes.shift();
-    this.outputLog.push(this.t);
-    car.stage = -1; car.next = 0; car.shirt = null;
+    if (!car.rejected && car.shirt !== null) {
+      this.done++;
+      const ft = this.t - (car.tStart ?? this.t);
+      this.flowTimes.push(ft); if (this.flowTimes.length > 200) this.flowTimes.shift();
+      this.outputLog.push(this.t);
+    }
+    car.stage = -1; car.next = 0; car.shirt = null; car.rejected = false;
   }
 
   _returnLine(dt) {
@@ -5580,19 +5824,27 @@ class LineSim {
     if (S.carrier) { S.t += dt; if (S.t > 4 && !this.loadSlot.carrier) { this.loadSlot.carrier = S.carrier; S.carrier.track = 'load'; S.carrier.s = -0.9; S.carrier = null; } }
   }
 
+  // Zuschnitt je Shirt (Engpass-Kandidat)
+  cutPerShirt() {
+    const c = this.cfg;
+    if (c.cutMode === 'stapel') return Math.max((this.layerTime * c.layers + 15) / (c.layers * c.shirtsPerMarker), this.cutTime / (c.layers * c.shirtsPerMarker));
+    return (this.feedTime + this.cutTime + 3) / c.shirtsPerMarker;
+  }
+
   // Kennzahlen
   kpis() {
     const tw = 600, recent = this.outputLog.filter((t) => t > this.t - tw).length;
     const rate = this.t > 60 ? (recent / Math.min(tw, this.t)) * 3600 : 0;
     const bottleneck = this.stations.reduce((a, s) => (s.ct / s.cap > a.ct / a.cap ? s : a), this.stations[0]);
-    const takt = Math.max(bottleneck.ct / bottleneck.cap, this.kitTime, (this.layerTime * this.cfg.layers + 15) / (this.cfg.layers * this.cfg.shirtsPerMarker), this.cutTime / (this.cfg.layers * this.cfg.shirtsPerMarker));
+    const takt = Math.max(bottleneck.ct / bottleneck.cap, this.kitTime, this.cutPerShirt());
     const ft = this.flowTimes.length ? this.flowTimes.reduce((a, b) => a + b, 0) / this.flowTimes.length : 0;
     const wip = this.carriers.filter((c) => c.shirt !== null).length;
-    return { rate, theo: 3600 / takt, takt, bottleneck, done: this.done, flow: ft, wip };
+    const started = this.done + this.rejects;
+    return { rate, theo: 3600 / takt, takt, bottleneck, done: this.done, flow: ft, wip, rejects: this.rejects, rejectRate: started ? this.rejects / started : 0, faults: this.faultCount };
   }
 }
 
-return { STAGES, stationDefs, defaultLineConfig, LineSim };
+return { STAGES, SPEED_PRESETS, stationDefs, defaultLineConfig, applySpeedPreset, LineSim };
 })();
 
 // ---- src/line/garmentmesh.js ----
@@ -5711,7 +5963,8 @@ class GarmentKit {
       [[bw - 0.005, len - 0.012], [-bw + 0.005, len - 0.012]],
       [[-bw + 0.005, -len + 0.012], [bw - 0.005, -len + 0.012]],
     ];
-    P.saum = makePath(P.saumParts.flat());
+    P.saumA = makePath(P.saumParts.slice(0, 2).flat());   // Ärmelsäume
+    P.saumK = makePath(P.saumParts.slice(2).flat());      // Saum Vorder- und Rückenteil
     // Seitennaht im gefalteten Zustand: Saum → Seite → Achsel → Ärmelunterkante → Ärmelsaum
     const side = [];
     for (let z = -len + 0.004; z <= -ua - 0.02; z += 0.01) side.push([-bw + 0.01, z]);
@@ -5736,53 +5989,61 @@ class GarmentKit {
     return g;
   }
 
-  // Zustand → Gruppe; liefert { root, front (klappbar), grip }
+  // Pflegeetikett am Seitenrand des Rückenteils (links, 6 cm über dem Saum)
+  _label() {
+    const g = new THREE.Group();
+    const lab = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.0008, 0.032), new THREE.MeshStandardMaterial({ color: 0xf7f7f2, roughness: 0.5 }));
+    lab.position.set(-DIM.bw + 0.009, 0, -DIM.len + 0.07); g.add(lab);
+    for (let k = 0; k < 3; k++) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.0009, 0.0015), new THREE.MeshStandardMaterial({ color: 0x3a3f43 })); l.position.set(-DIM.bw + 0.011, 0, -DIM.len + 0.06 + k * 0.007); g.add(l); }
+    g.add(stitchLine([[-DIM.bw + 0.003, -DIM.len + 0.058], [-DIM.bw + 0.003, -DIM.len + 0.082]], this.thread, 0.0005, 0.002));
+    return g;
+  }
+
+  _hems(stage, y, filter = null) {
+    const g = new THREE.Group(), parts = this.paths.saumParts;
+    const use = stage >= 7 ? [0, 1, 2, 3] : stage >= 6 ? [0, 1] : [];
+    for (const i of use) for (const d of [-0.003, 0.003]) {
+      let pts = offsetPolyline(parts[i], d);
+      if (filter) pts = pts.filter(filter);
+      g.add(stitchLine(pts, this.cover, y));
+    }
+    return g;
+  }
+
+  // Zustand (Index in STAGES) → Gruppe; liefert { root, front (klappbar), grip }
+  // 0–12 auf dem Klappträger (Schulterlinie = Scharnier), 13–15 auf dem Formbrett.
   build(stage) {
     const root = new THREE.Group(), G = this.G;
     const face = this.matFace, backM = this.matBack;
     if (stage < 0) return { root };
-    if (stage === 0) {
-      // Kit: links Rücken- und Vorderteil gestapelt, rechts Ärmel und Bündchen
-      const pile = new THREE.Group();
-      const b = flatPiece(G.back.outline, backM); b.position.z = 0.15; pile.add(b);
-      const f = flatPiece(G.front.outline, face); f.position.set(0.004, 0.0013, -0.15 + 0.002); pile.add(f);
-      pile.position.set(-0.17, 0, 0); root.add(pile);
-      const s1 = flatPiece(G.sleeveL.outline, face); s1.position.set(0.18, 0, 0.03); root.add(s1);
-      const s2 = flatPiece(G.sleeveR.outline, face); s2.position.set(0.18, 0.0013, 0.035); root.add(s2);
-      const r = flatPiece(G.rib.outline, this.matRib); r.rotation.y = Math.PI / 2; r.position.set(0.25, 0.0026, -0.15); root.add(r);
-      return { root, grip: new THREE.Vector3(0, 0, 0) };
-    }
-    if (stage <= 6) {
-      // aufgeklappter Körper (Vorderteil vorn, Rückenteil hinten), linke Seite oben
+    if (stage <= 8) {
+      // aufgeklappter Körper (Vorderteil z > 0, Rückenteil z < 0), linke Seite oben
       const bodyG = new THREE.Group();
-      bodyG.add(flatPiece(G.front.outline, backM));
-      const bk = flatPiece(G.back.outline, backM); bk.position.y = 0.0001; bodyG.add(bk);
+      const fr = flatPiece(G.front.outline, backM), bk = flatPiece(G.back.outline, backM);
+      if (stage === 0) { fr.position.z = 0.006; bk.position.z = -0.006; } // noch getrennt, in Nählage
+      bk.position.y = 0.0001; bodyG.add(fr, bk);
       root.add(bodyG);
       const y = 0.0016;
-      root.add(stitchLine(this.paths.schulter1.points, this.thread, y));
+      if (stage >= 1) root.add(stitchLine(this.paths.schulter1.points, this.thread, y));
       if (stage >= 3) root.add(stitchLine(this.paths.schulter2.points, this.thread, y));
       if (stage >= 2) {
-        // Bündchen als Band entlang der Halskante (6 mm Naht, 18 mm breit)
+        // Bündchen als Band entlang der Halskante (6 mm Naht, 12 mm sichtbar)
         const inner = offsetPolyline(this.paths.hals.points, -0.012);
         const band = [...this.paths.hals.points, ...inner.reverse()];
-        const rm = flatPiece(offsetPolyline(band, 0), this.matRib, [], 0.002); rm.position.y = 0.0006; root.add(rm);
+        const rm = flatPiece(band, this.matRib, [], 0.002); rm.position.y = 0.0006; root.add(rm);
         root.add(stitchLine(this.paths.hals.points, this.thread, y + 0.002));
       }
-      if (stage < 4) {
-        // Ärmel und (vor Stufe 2) Bündchen liegen noch neben dem Körper
-        const s1 = flatPiece(G.sleeveL.outline, face); s1.rotation.y = Math.PI / 2; s1.position.set(0.26, 0, 0.16); root.add(s1);
-        const s2 = flatPiece(G.sleeveR.outline, face); s2.rotation.y = Math.PI / 2; s2.position.set(0.26, 0.0013, -0.12); root.add(s2);
-        if (stage < 2) { const r = flatPiece(G.rib.outline, this.matRib); r.rotation.y = Math.PI / 2; r.position.set(-0.24, 0.0, 0); root.add(r); }
-      }
+      // Ärmel: vor dem Einsetzen neben dem Körper auf dem Träger
+      if (stage < 4) { const s1 = flatPiece(G.sleeveL.outline, face); s1.rotation.y = Math.PI / 2; s1.position.set(0.26, 0, 0.16); root.add(s1); }
+      if (stage < 5) { const s2 = flatPiece(G.sleeveR.outline, face); s2.rotation.y = Math.PI / 2; s2.position.set(0.26, 0.0013, -0.12); root.add(s2); }
       if (stage >= 4) { root.add(this._sleeve(false, backM)); root.add(stitchLine(this.paths.aermelL.points, this.thread, y + 0.001)); }
       if (stage >= 5) { root.add(this._sleeve(true, backM)); root.add(stitchLine(this.paths.aermelR.points, this.thread, y + 0.001)); }
-      if (stage === 4) { const s2 = flatPiece(G.sleeveR.outline, face); s2.rotation.y = Math.PI / 2; s2.position.set(0.26, 0.0013, -0.12); root.add(s2); }
-      if (stage >= 6) for (const seg of this.paths.saumParts) for (const d of [-0.003, 0.003]) root.add(stitchLine(offsetPolyline(seg, d), this.cover, y + 0.0015));
+      root.add(this._hems(stage, y + 0.0015));
+      if (stage >= 8) { const l = this._label(); l.position.y = y; root.add(l); }
       return { root, grip: new THREE.Vector3(0, 0, 0) };
     }
-    if (stage <= 9) {
-      // gefaltet: Vorderseite (Vorderteil, vordere Ärmelhälften, vorderes Bündchen) liegt auf dem Rücken.
-      // Rechter Ärmel (um +90° gedreht): lokale x > 0 → Welt z < 0 (hinten); linker Ärmel umgekehrt.
+    if (stage <= 12) {
+      // geklappt: Vorderseite (Vorderteil, vordere Ärmelhälften, vorderes Bündchen) liegt auf dem Rücken.
       const backSide = new THREE.Group(), frontSide = new THREE.Group();
       backSide.add(flatPiece(G.back.outline, backM));
       backSide.add(this._sleeve(false, backM, 'neg'));
@@ -5791,16 +6052,9 @@ class GarmentKit {
       frontSide.add(this._sleeve(false, backM, 'pos'));
       frontSide.add(this._sleeve(true, backM, 'neg'));
       const y = 0.0016;
-      const [hl, hr, hf, hb] = this.paths.saumParts;
-      for (const d of [-0.003, 0.003]) {
-        for (const seg of [hl, hr]) {
-          const pts = offsetPolyline(seg, d);
-          backSide.add(stitchLine(pts.filter(([, z]) => z <= 0.0005), this.cover, y));
-          frontSide.add(stitchLine(pts.filter(([, z]) => z >= -0.0005), this.cover, y));
-        }
-        frontSide.add(stitchLine(offsetPolyline(hf, d), this.cover, y));
-        backSide.add(stitchLine(offsetPolyline(hb, d), this.cover, y));
-      }
+      backSide.add(this._hems(stage, y, ([, z]) => z <= 0.0005));
+      frontSide.add(this._hems(stage, y, ([, z]) => z >= -0.0005));
+      const l = this._label(); l.position.y = y; backSide.add(l);
       // Bündchen: hinterer und vorderer Teil des Bandes
       const inner = offsetPolyline(this.paths.hals.points, -0.012);
       const band = [...this.paths.hals.points, ...inner.slice().reverse()];
@@ -5808,13 +6062,18 @@ class GarmentKit {
       if (backBand.length > 3) { const r = flatPiece(backBand, this.matRib, [], 0.002); r.position.y = 0.0006; backSide.add(r); }
       if (frontBand.length > 3) { const r = flatPiece(frontBand, this.matRib, [], 0.002); r.position.y = 0.0006; frontSide.add(r); }
       const pivot = new THREE.Group(); pivot.add(frontSide); root.add(backSide, pivot);
-      pivot.rotation.x = stage >= 7 ? Math.PI : 0; pivot.position.y = stage >= 7 ? 0.004 : 0;
-      if (stage >= 8) root.add(stitchLine(this.paths.seiteL.points, this.thread, 0.006));
-      if (stage >= 9) root.add(stitchLine(this.paths.seiteR.points, this.thread, 0.006));
+      // Klappen nach oben über die Schulterlinie (negative Drehung um x hebt z > 0 an)
+      pivot.rotation.x = -Math.PI; pivot.position.y = 0.004;
+      if (stage >= 10) root.add(stitchLine(this.paths.seiteL.points, this.thread, 0.006));
+      if (stage >= 11) root.add(stitchLine(this.paths.seiteR.points, this.thread, 0.006));
+      if (stage >= 12) {
+        const ok = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.002, 16), new THREE.MeshStandardMaterial({ color: 0x22c55e, emissive: 0x22c55e, emissiveIntensity: 0.4 }));
+        ok.position.set(0.06, 0.007, -0.22); root.add(ok);
+      }
       return { root, front: pivot, grip: new THREE.Vector3(0, 0, -0.12) };
     }
-    if (stage <= 11) {
-      // gewendet: rechte Seite außen, leicht aufgebauscht; Bündchen als Wulst
+    if (stage === 13) {
+      // gewendet auf dem Formbrett: rechte Seite außen, leicht aufgebauscht; Bündchen als Wulst
       const g = new THREE.Group();
       g.add(puffyPiece(G.back.outline, face, [], 0.014));
       for (const right of [false, true]) {
@@ -5831,15 +6090,11 @@ class GarmentKit {
         for (const seg of [hl, hr]) g.add(stitchLine(offsetPolyline(seg, d).filter(([, z]) => z <= 0.0005), this.cover, 0.021));
         g.add(stitchLine(offsetPolyline(hb, d), this.cover, 0.021));
       }
-      if (stage === 11) {
-        const ok = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.002, 16), new THREE.MeshStandardMaterial({ color: 0x22c55e, emissive: 0x22c55e, emissiveIntensity: 0.4 }));
-        ok.position.set(0.09, 0.024, -0.25); g.add(ok);
-      }
       root.add(g);
       return { root, grip: new THREE.Vector3(0, 0, -0.12) };
     }
-    if (stage === 12) {
-      // gebügelt und gefaltet (Ärmel und Seiten eingeschlagen, einmal gelegt)
+    if (stage === 14) {
+      // gedämpft und gefaltet (Ärmel und Seiten eingeschlagen, einmal gelegt)
       const p = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.022, 0.2), face); p.position.set(0, 0.011, -0.1); p.castShadow = true; root.add(p);
       const ring = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.005, 8, 24, Math.PI), this.matRib); ring.rotation.x = -Math.PI / 2; ring.position.set(0, 0.023, -0.19); root.add(ring);
       return { root, grip: new THREE.Vector3(0, 0, -0.1) };
@@ -5862,7 +6117,7 @@ const __M_line_lineview = (() => {
 
 
 const { gridTexture } = __M_render_textures;
-const { mats, profile, label, signalTower, fence, cabinet, sewingMachine, sewingTable, robot6, conveyor, carrier, spreader, cutter, foldTable, turner, visionTunnel, pressFolder, bagger, pallet, fabricRollRack } = __M_render_models;
+const { mats, profile, label, signalTower, fence, cabinet, sewingMachine, sewingTable, robot6, conveyor, spreader, cutter, turner, visionTunnel, pressFolder, bagger, pallet, fabricRollRack, klappTraeger, labelTacker, klappDrive, ribFeeder, unwinder, takeoffBelt } = __M_render_models;
 const { GarmentKit } = __M_line_garmentmesh;
 const { pathAt } = __M_physics_garments;
 const { STAGES } = __M_line_des;
@@ -5925,8 +6180,51 @@ class LineView {
       const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.06, 0.25), m.lamp); lamp.position.set(x + 3, 4.6, -1); sc.add(lamp);
     }
 
-    // ---------------- Vorstufe: Stofflager, Legen, Schneiden, Abnehmen, Kommissionieren
+    // ---------------- Vorstufe: Stofflager, Zuschnitt, Kommissionieren
+    const fabricMat = new THREE.MeshStandardMaterial({ color: 0xe9c46a, roughness: 0.9, side: THREE.DoubleSide });
+    this.fabricMat = fabricMat;
     const rack = fabricRollRack(); rack.position.set(-13.2, 0, 0); rack.rotation.y = Math.PI / 2; sc.add(rack);
+    if (sim.cfg.cutMode === 'stapel') this._buildStack(sim); else this._buildSingle(sim);
+    // Kommissionier-Roboter
+    this.kitRobots = [];
+    for (let k = 0; k < sim.cfg.kitRobots; k++) {
+      const r = robot6(1); r.position.set(-1.75, 0, k % 2 ? -0.95 : 0.95); r.rotation.y = 0; sc.add(r);
+      const grip = new THREE.Group(); grip.add(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.02, 0.16), m.aluDark));
+      for (let i = 0; i < 6; i++) grip.add(place(new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.03, 10), m.blackSteel), -0.08 + (i % 3) * 0.08, -0.02, i < 3 ? -0.05 : 0.05));
+      r.userData.tool.add(grip);
+      const piece = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.002, 0.25), fabricMat); piece.position.y = -0.04; piece.visible = false; r.userData.tool.add(piece);
+      r.userData.piece = piece;
+      this.kitRobots.push(r);
+    }
+    sc.add(fence(13.5, 1.4, 'x').translateX(-7.5).translateZ(-1.5));
+
+    // ---------------- Transfersystem mit Hubstationen
+    const conv = conveyor(L + 1.2, H); conv.position.x = -1.2; sc.add(conv);
+    for (const x of [-1.25, L + 0.05]) {
+      const lift = new THREE.Group();
+      lift.add(place(new THREE.Mesh(new THREE.BoxGeometry(0.1, H + 0.2, 0.75), m.paintGrey), x < 0 ? -0.06 : 0.06, (H + 0.2) / 2, 0));
+      lift.position.x = x; sc.add(lift);
+    }
+
+    // ---------------- Stationen
+    this.stationViews = sim.stations.map((st, i) => this._buildStation(st, i));
+
+    // ---------------- Werkstückträger und Kleidungsstücke
+    this.kit = new GarmentKit(sim.G, '#e9c46a');
+    this.carrierViews = sim.carriers.map(() => {
+      const g = klappTraeger(); sc.add(g);
+      return { g, stage: null, garment: null };
+    });
+    // Lager fertiger Ware
+    const pal = pallet(); pal.position.set(L + 1.6, 0, 0); sc.add(pal);
+    this.boxes = new THREE.Group(); this.boxes.position.set(L + 1.6, 0.15, 0); sc.add(this.boxes);
+    this.lastBoxes = 0;
+    this.setPreset('gesamt');
+  }
+
+  // Zuschnitt im Stapel: Legemaschine, Stapelcutter, Abnahmetisch
+  _buildStack(sim) {
+    const sc = this.scene, m = mats(), fabricMat = this.fabricMat;
     this.spreader = spreader(3.2, 1.8, H); this.spreader.position.set(-11.6, 0, 0); sc.add(this.spreader);
     this.cutterM = cutter(3.0, 1.8, H); this.cutterM.position.set(-7.9, 0, 0); sc.add(this.cutterM);
     // Abnahmetisch
@@ -5935,7 +6233,6 @@ class LineView {
     for (const sx of [0.1, 1.7]) for (const sz of [-0.75, 0.75]) take.add(profile(H - 0.04, 'y', sx, (H - 0.04) / 2, sz, m.aluDark));
     take.position.set(-4.4, 0, 0); sc.add(take);
     // Stoffstapel (wachsen beim Legen, wandern zum Cutter und Abnahmetisch)
-    const fabricMat = new THREE.MeshStandardMaterial({ color: 0xe9c46a, roughness: 0.9 });
     const mk = sim.marker;
     this.spreadStack = new THREE.Mesh(new THREE.BoxGeometry(mk.length, 1, mk.width), fabricMat); this.spreadStack.castShadow = true; sc.add(this.spreadStack);
     this.cutStack = new THREE.Group(); sc.add(this.cutStack);
@@ -5953,45 +6250,52 @@ class LineView {
     this.cutStack.add(this.cutDone);
     const cum = [0]; for (let k = 1; k < this.cutPath.length; k++) cum.push(cum[k - 1] + Math.hypot(this.cutPath[k][0] - this.cutPath[k - 1][0], this.cutPath[k][1] - this.cutPath[k - 1][1]));
     this.cutCum = cum;
-    // Kommissionier-Roboter
-    this.kitRobots = [];
-    for (let k = 0; k < sim.cfg.kitRobots; k++) {
-      const r = robot6(1); r.position.set(-1.75, 0, k % 2 ? -0.95 : 0.95); r.rotation.y = 0; sc.add(r);
-      const grip = new THREE.Group(); grip.add(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.02, 0.16), m.aluDark));
-      for (let i = 0; i < 6; i++) grip.add(place(new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.03, 10), m.blackSteel), -0.08 + (i % 3) * 0.08, -0.02, i < 3 ? -0.05 : 0.05));
-      r.userData.tool.add(grip);
-      const piece = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.002, 0.25), fabricMat); piece.position.y = -0.04; piece.visible = false; r.userData.tool.add(piece);
-      r.userData.piece = piece;
-      this.kitRobots.push(r);
-    }
     sc.add(this._labelAt('Zuschnitt', 'Legen · Schneiden', -10, 2.3, 0.9));
-    this.labelKit = this._labelAt('Kommissionierung', '', -2.6, 2.2, 0.9); sc.add(this.labelKit);
-    this.labelSpread = this._labelAt('Legemaschine', '', -11.6 + 1.6, 1.9, -1.3); sc.add(this.labelSpread);
+        this.labelSpread = this._labelAt('Legemaschine', '', -11.6 + 1.6, 1.9, -1.3); sc.add(this.labelSpread);
     this.labelCut = this._labelAt('CNC-Cutter', '', -7.9 + 1.5, 1.9, -1.3); sc.add(this.labelCut);
-    sc.add(fence(13.5, 1.4, 'x').translateX(-7.5).translateZ(-1.5));
+    this.labelKit = this._labelAt('Kommissionierung', '', -2.6, 2.2, 0.9); sc.add(this.labelKit);
+  }
 
-    // ---------------- Transfersystem mit Hubstationen
-    const conv = conveyor(L + 1.2, H); conv.position.x = -1.2; sc.add(conv);
-    for (const x of [-1.25, L + 0.05]) {
-      const lift = new THREE.Group();
-      lift.add(place(new THREE.Mesh(new THREE.BoxGeometry(0.1, H + 0.2, 0.75), m.paintGrey), x < 0 ? -0.06 : 0.06, (H + 0.2) / 2, 0));
-      lift.position.x = x; sc.add(lift);
+  // Schnittbild als Einzelteile (für das Abnahmeband: entnommene Teile verschwinden)
+  _markerParts(mk) {
+    const g = new THREE.Group(), shirts = [];
+    const outlineMat = new THREE.LineBasicMaterial({ color: 0x5a4a20 });
+    for (const p of mk.parts) {
+      const pts = p.outline.map(([x, z]) => new THREE.Vector2(z + p.z - mk.length / 2, x + p.x - mk.width / 2));
+      const geo = new THREE.ShapeGeometry(new THREE.Shape(pts)); geo.rotateX(Math.PI / 2);
+      const piece = new THREE.Mesh(geo, this.fabricMat); piece.receiveShadow = true;
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([...pts, pts[0]].map((v) => new THREE.Vector3(v.x, 0.0005, v.y))), outlineMat);
+      const pg = new THREE.Group(); pg.add(piece, line); g.add(pg);
+      (shirts[p.shirt] ||= []).push(pg);
     }
+    g.userData.shirts = shirts;
+    return g;
+  }
 
-    // ---------------- Stationen
-    this.stationViews = sim.stations.map((st, i) => this._buildStation(st, i));
-
-    // ---------------- Werkstückträger und Kleidungsstücke
-    this.kit = new GarmentKit(sim.G, '#e9c46a');
-    this.carrierViews = sim.carriers.map(() => {
-      const g = carrier(); sc.add(g);
-      return { g, stage: null, garment: null };
-    });
-    // Lager fertiger Ware
-    const pal = pallet(); pal.position.set(L + 1.6, 0, 0); sc.add(pal);
-    this.boxes = new THREE.Group(); this.boxes.position.set(L + 1.6, 0.15, 0); sc.add(this.boxes);
-    this.lastBoxes = 0;
-    this.setPreset('gesamt');
+  // Einlagiger Zuschnitt: Abwickler, Förderband-Cutter, Abnahmeband
+  _buildSingle(sim) {
+    const sc = this.scene, mk = sim.marker;
+    const unw = unwinder(1.8, H); unw.position.set(-12.0, 0, 0); sc.add(unw); this.unwinder = unw;
+    this.cutterM = cutter(3.0, 1.8, H); this.cutterM.position.set(-11.5, 0, 0); sc.add(this.cutterM);
+    this.beltM = takeoffBelt(4.8, 1.8, H); this.beltM.position.set(-8.3, 0, 0); sc.add(this.beltM);
+    // Stoffbahn vom Abwickler bis vor das Schnittfenster
+    this.web = new THREE.Mesh(new THREE.PlaneGeometry(1, mk.width), this.fabricMat); this.web.rotation.x = -Math.PI / 2; this.web.receiveShadow = true; sc.add(this.web);
+    // aktuelles Schnittfenster mit Schnittbahn
+    this.cutSheet = new THREE.Group(); sc.add(this.cutSheet);
+    const sheet = new THREE.Mesh(new THREE.PlaneGeometry(mk.length, mk.width), this.fabricMat); sheet.rotation.x = -Math.PI / 2; sheet.receiveShadow = true; this.cutSheet.add(sheet);
+    const contour = [];
+    for (const p of mk.parts) contour.push(...[...p.outline, p.outline[0]].map(([x, z]) => [x + p.x, z + p.z]));
+    this.cutPath = contour;
+    this.cutDone = new THREE.Line(new THREE.BufferGeometry().setFromPoints(contour.map(([x, z]) => new THREE.Vector3(z - mk.length / 2, 0.0006, x - mk.width / 2))), new THREE.LineBasicMaterial({ color: 0x111111 }));
+    this.cutSheet.add(this.cutDone);
+    const cum = [0]; for (let k = 1; k < contour.length; k++) cum.push(cum[k - 1] + Math.hypot(contour[k][0] - contour[k - 1][0], contour[k][1] - contour[k - 1][1]));
+    this.cutCum = cum;
+    // Schnittbilder auf dem Abnahmeband (Einzelteile)
+    this.beltMarkers = [];
+    for (let k = 0; k < sim.cfg.beltMarkers + 1; k++) { const g = this._markerParts(mk); g.visible = false; sc.add(g); this.beltMarkers.push(g); }
+    sc.add(this._labelAt('Zuschnitt einlagig', 'Förderband-Cutter · Abnahmeband', -6.2, 2.3, 0.9));
+    this.labelCut = this._labelAt('Förderband-Cutter', '', -11.5 + 1.5, 1.9, -1.3); sc.add(this.labelCut);
+    this.labelKit = this._labelAt('Kommissionierung', '', -2.6, 2.2, 0.9); sc.add(this.labelKit);
   }
 
   _labelAt(t, s, x, y, z) { const l = label(t, s); l.position.set(x, y, z); return l; }
@@ -6008,13 +6312,16 @@ class LineView {
       slot.add(place(new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.04, 0.95), m.aluDark), 0.35, H - 0.04, SPUR_Z / 2 - 0.05));
       for (const sx of [0.05, 0.65]) slot.add(place(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.006, 0.95), m.belt), sx, H - 0.017, SPUR_Z / 2 - 0.05));
       for (const sx of [0.08, 0.62]) for (const sz of [-0.15, -0.95]) slot.add(profile(H - 0.06, 'y', sx, (H - 0.06) / 2, sz, m.aluDark));
-      // Roboter auf Sockel
-      const ped = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.25, 0.42), m.paintDark); ped.position.set(0.35, 0.125, ROBOT_Z); ped.castShadow = true; slot.add(ped);
-      const rob = robot6(1); rob.position.set(0.35, 0.25, ROBOT_Z); slot.add(rob);
-      const tool = new THREE.Group();
-      tool.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.018, 0.24), m.aluDark));
-      for (let a = 0; a < 3; a++) for (let b = 0; b < 2; b++) tool.add(place(new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.025, 10), m.rubber), -0.1 + a * 0.1, -0.02, -0.07 + b * 0.14));
-      rob.userData.tool.add(tool);
+      // Roboter auf Sockel (nimmt den Werkstückträger-Einsatz samt Teil auf)
+      let rob = null, tool = null;
+      if (!st.noRobot) {
+        const ped = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.25, 0.42), m.paintDark); ped.position.set(0.35, 0.125, ROBOT_Z); ped.castShadow = true; slot.add(ped);
+        rob = robot6(1); rob.position.set(0.35, 0.25, ROBOT_Z); slot.add(rob);
+        tool = new THREE.Group();
+        tool.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.018, 0.24), m.aluDark));
+        for (let a = 0; a < 3; a++) for (let b = 0; b < 2; b++) tool.add(place(new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.025, 10), m.rubber), -0.1 + a * 0.1, -0.02, -0.07 + b * 0.14));
+        rob.userData.tool.add(tool);
+      }
       // Maschine / Ausrüstung
       let mach = null, table = null;
       if (sewing) {
@@ -6031,9 +6338,17 @@ class LineView {
           feeder.position.set(0.1, 0.76, MACH_Z + 0.18); slot.add(feeder);
           view.feeder = { g: feeder, plate };
         }
+        if (st.rib) {
+          // Bündchenzuführung von der Rolle: Faltapparat und Abzug vor dem Nähfuß
+          const rf = ribFeeder(0xe9c46a); rf.position.set(0.35 + 0.05 - 0.36, 0.76, MACH_Z + 0.02); slot.add(rf);
+          view.rib = rf;
+        }
       } else {
-        const ctor = { falttisch: () => foldTable(1.0, 0.8, 0.85), wender: () => turner(0.85), pruefung: () => visionTunnel(0.9, 0.9, 0.85), presse: () => pressFolder(0.85), verpackung: () => bagger(0.85) }[st.machine];
-        mach = ctor(); mach.position.set(0.35, 0, MACH_Z + 0.05); slot.add(mach);
+        const ctor = { etikett: () => labelTacker(0.85), klappen: () => klappDrive(0.85), wender: () => turner(0.85), pruefung: () => visionTunnel(0.9, 0.9, 0.85), presse: () => pressFolder(0.85), verpackung: () => bagger(0.85) }[st.machine];
+        mach = ctor();
+        // Klappstation arbeitet direkt an der Stichstrecke (Antrieb greift ins Trägerscharnier)
+        if (st.machine === 'klappen') mach.position.set(0.35, 0, SPUR_Z - 0.62); else mach.position.set(0.35, 0, MACH_Z + 0.05);
+        slot.add(mach);
         if (st.machine === 'pruefung') { const t2 = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.05, 0.9), m.belt); t2.position.set(0.35, 0.85, MACH_Z + 0.05); slot.add(t2); }
       }
       // Schutzzaun, Lichtvorhang, Schaltschrank, Signalsäule
@@ -6093,56 +6408,20 @@ class LineView {
     if (!this.visible) return;
     const m = mats();
     // Vorstufe
-    const sp = sim.spreader, cu = sim.cutter, mk = sim.marker, th = 0.00055;
-    const spX0 = -11.6 + 0.4;
-    const layers = sp.state === 'legen' ? sp.layer + sp.x : sp.state === 'fertig' || (sp.state === 'uebergabe' && cu.state === 'einziehen') ? sim.cfg.layers : 0;
-    this.spreadStack.visible = layers > 0;
-    this.spreadStack.scale.y = Math.max(1e-4, layers * th);
-    this.spreadStack.position.set(spX0 + mk.length / 2, H + (layers * th) / 2, 0);
-    const car = this.spreader.userData.carriage;
-    const prog = sp.state === 'legen' ? ((sp.layer % 2 ? 1 - sp.x : sp.x)) : 0;
-    car.position.x = 0.4 + prog * mk.length;
-    this.spreader.userData.roll.scale.set(1, 1, 1);
-    // Cutter-Stapel
-    const onCut = cu.state === 'einziehen' || cu.state === 'schneiden' || cu.state === 'abgabe';
-    this.cutStack.visible = onCut;
-    const cutX = -7.9 + 0.3 + mk.length / 2;
-    const ch = sim.cfg.layers * th;
-    this.cutStackBox.scale.y = ch; this.cutStackBox.position.y = ch / 2;
-    this.cutStack.position.set(cu.state === 'einziehen' ? cutX - 3.4 * (1 - Math.min(1, cu.t / 15)) : cu.state === 'abgabe' ? cutX + 3.6 * Math.min(1, cu.t / 12) : cutX, H, 0);
-    this.cutStack.children.forEach((o) => { if (o.isLine) o.position.y = ch + 0.0005; });
-    const cp = cu.state === 'schneiden' ? cu.progress : cu.state === 'abgabe' ? 1 : 0;
-    const sCut = cp * this.cutCum[this.cutCum.length - 1];
-    let k = 1; while (k < this.cutCum.length - 1 && this.cutCum[k] < sCut) k++;
-    this.cutDone.geometry.setDrawRange(0, cp > 0 ? k + 1 : 0);
-    const P = this.cutPath[Math.min(k, this.cutPath.length - 1)];
-    const gan = this.cutterM.userData.gantry, head = this.cutterM.userData.head;
-    gan.position.x = 0.3 + P[1] + (cu.state === 'schneiden' ? 0 : 0);
-    head.position.z = P[0] - mk.width / 2;
-    this.cutterM.userData.knife.position.y = 0.03 + (cu.state === 'schneiden' ? 0.004 * Math.sin(t * 120) : 0.03);
-    // Abnahmetisch: Reststapel
-    const perLayer = sim.cfg.shirtsPerMarker;
-    const remLayers = Math.ceil(sim.cutStacks / perLayer);
-    this.takeStack.visible = sim.cutStacks > 0;
-    const th2 = Math.max(1e-4, remLayers * th);
-    this.takeStackBox.scale.y = th2; this.takeStackBox.position.y = th2 / 2;
-    this.takeStack.children.forEach((o) => { if (o.isLine) o.position.y = th2 + 0.0005; });
-    this.takeStack.position.set(-4.4 + 0.9, H, 0);
+    const pickY = sim.cfg.cutMode === 'stapel' ? this._updateStack(sim, t) : this._updateSingle(sim, t);
     // Kommissionier-Roboter: zwischen Stapel und Beladeplatz
     const L = sim.loadSlot;
     this.kitRobots.forEach((r, i) => {
       const busy = L.carrier && L.T > 0;
       const f = busy ? ((L.t / L.T) * 5 + i * 0.5) % 1 : 0.5;
-      const from = new THREE.Vector3(-3.5 - 0.15 * Math.sin(i + Math.floor(L.t)), H + th2 + 0.02, (i % 2 ? -0.3 : 0.3));
+      const from = new THREE.Vector3(-3.5 - 0.15 * Math.sin(i + Math.floor(L.t)), H + pickY + 0.02, (i % 2 ? -0.3 : 0.3));
       const to = new THREE.Vector3(-0.9 + (i % 2 ? 0.12 : -0.12), H + 0.05, (i % 2 ? -0.1 : 0.1));
       const a = f < 0.5 ? f * 2 : 2 - f * 2;
       const p = from.clone().lerp(to, 0.5 - 0.5 * Math.cos(Math.PI * a)); p.y += Math.sin(Math.PI * a) * 0.25;
       r.userData.reach(r.worldToLocal(p.clone()), 0);
       r.userData.piece.visible = busy && f < 0.5;
     });
-    this.labelKit.userData.update('Kommissionierung', `${sim.cutStacks} Shirts im Stapel`);
-    this.labelSpread.userData.update('Legemaschine', sp.state === 'legen' ? `Lage ${sp.layer + 1}/${sim.cfg.layers}` : 'wartet auf Cutter');
-    this.labelCut.userData.update('CNC-Cutter', cu.state === 'schneiden' ? `${Math.round(cu.progress * 100)} % geschnitten` : cu.state === 'leer' ? 'bereit' : cu.state);
+    this.labelKit.userData.update('Kommissionierung', `${sim.avail} Shirts bereit · ${(sim.kitTime).toFixed(1)} s je Kit`);
 
     // Träger und Kleidungsstücke
     sim.carriers.forEach((c, i) => {
@@ -6157,12 +6436,22 @@ class LineView {
         slotF = slot.T > 0 ? Math.min(1, slot.t / slot.T) : 1;
         slotPhase = slot.phase;
         if (slotF >= 0.85) stage = st.stage;
+        if (st.id === 'klappen' && slotF > 0.2) stage = st.stage; // Klappvorgang mit klappbarem Modell zeigen
       }
+      // Klappträger: Hälfte geschlossen von „Klappträger schließen“ bis zum Wenden; danach Formbrett
+      const ud = cv.g.userData;
+      let flap = stage >= 9 && stage <= 12 ? 1 : 0;
+      if (st && st.id === 'klappen') flap = Math.max(0, Math.min(1, (slotF - 0.25) / 0.45));
+      if (st && st.id === 'wenden') flap = slotF < 0.3 ? 1 - Math.max(0, Math.min(1, (slotF - 0.15) / 0.15)) : 0;
+      ud.flap.rotation.z = Math.PI * (0.5 - 0.5 * Math.cos(Math.PI * flap));
+      ud.board.visible = c.shirt !== null && (stage >= 13 || (st?.id === 'wenden' && slotF > 0.55));
       const gm = this._garment(cv, stage);
       if (!gm) return;
       if (!gm.root.parent) this.scene.add(gm.root);
-      const rotOnCarrier = stage >= 1 && stage <= 6 ? Math.PI / 2 : 0;
-      const carrierWorld = new THREE.Vector3(pose.x, pose.y + 0.03, pose.z + (stage >= 7 && stage <= 11 ? 0.12 : stage >= 12 ? 0.1 : 0));
+      const onBoard = stage >= 13;
+      const rotOnCarrier = onBoard ? 0 : Math.PI / 2;
+      const carrierWorld = new THREE.Vector3(pose.x, pose.y + (onBoard ? 0.043 : 0.03), pose.z);
+      if (gm.front) gm.front.rotation.x = -Math.PI * (st && st.id === 'klappen' ? (0.5 - 0.5 * Math.cos(Math.PI * flap)) : 1);
       if (!st) { gm.root.position.copy(carrierWorld); gm.root.rotation.set(0, rotOnCarrier, 0); return; }
       this._stationAnim(st, c.slot, slotF, gm, carrierWorld, rotOnCarrier, stage, t);
     });
@@ -6175,11 +6464,11 @@ class LineView {
         v.tower.userData.set(state === 'idle' ? 'wait' : state);
         const sewingNow = sl.carrier && sl.phase === 'bearbeiten' && sl.repair <= 0;
         if (v.mach?.userData.update) v.mach.userData.update(t, sewingNow, 3000);
-        if (!sl.carrier) v.rob.userData.reach(new THREE.Vector3(0.0, 0.55, 0.5), 0);
+        if (!sl.carrier && v.rob) v.rob.userData.reach(new THREE.Vector3(0.0, 0.55, 0.5), 0);
         // Sonderanimationen
         const f = sl.T > 0 ? Math.min(1, sl.t / sl.T) : 0;
         const mid = sl.carrier ? Math.max(0, Math.min(1, (f - 0.22) / 0.63)) : 0;
-        if (st.machine === 'falttisch' && v.mach.userData.flap) v.mach.userData.flap.rotation.x = -Math.PI * Math.sin(Math.PI * Math.min(1, mid * 1.2)) * (mid < 0.83 ? 1 : 0.0);
+        if (st.machine === 'etikett') v.mach.userData.needle.position.y = v.mach.userData.y0 + (mid > 0.5 && mid < 0.8 ? 0.012 * Math.cos(t * 40) : 0.015);
         if (st.machine === 'presse') { const cl = sl.carrier ? Math.max(0, Math.min(1, mid / 0.12, (1 - mid) / 0.12)) : 0; v.mach.userData.lid.rotation.x = -0.9 * (1 - (0.5 - 0.5 * Math.cos(Math.PI * cl))); }
         if (st.machine === 'verpackung') v.mach.userData.bar.position.y = 0.85 + 0.25 - 0.18 * Math.sin(Math.PI * mid);
       });
@@ -6209,12 +6498,90 @@ class LineView {
     this.renderer.render(this.scene, this.camera);
   }
 
+  _updateStack(sim, t) {
+    const sp = sim.spreader, cu = sim.cutter, mk = sim.marker, th = 0.00055;
+    const spX0 = -11.6 + 0.4;
+    const layers = sp.state === 'legen' ? sp.layer + sp.x : sp.state === 'fertig' || (sp.state === 'uebergabe' && cu.state === 'einziehen') ? sim.cfg.layers : 0;
+    this.spreadStack.visible = layers > 0;
+    this.spreadStack.scale.y = Math.max(1e-4, layers * th);
+    this.spreadStack.position.set(spX0 + mk.length / 2, H + (layers * th) / 2, 0);
+    const car = this.spreader.userData.carriage;
+    const prog = sp.state === 'legen' ? ((sp.layer % 2 ? 1 - sp.x : sp.x)) : 0;
+    car.position.x = 0.4 + prog * mk.length;
+    this.spreader.userData.roll.scale.set(1, 1, 1);
+    // Cutter-Stapel
+    const onCut = cu.state === 'einziehen' || cu.state === 'schneiden' || cu.state === 'abgabe';
+    this.cutStack.visible = onCut;
+    const cutX = -7.9 + 0.3 + mk.length / 2;
+    const ch = sim.cfg.layers * th;
+    this.cutStackBox.scale.y = ch; this.cutStackBox.position.y = ch / 2;
+    this.cutStack.position.set(cu.state === 'einziehen' ? cutX - 3.4 * (1 - Math.min(1, cu.t / 15)) : cu.state === 'abgabe' ? cutX + 3.6 * Math.min(1, cu.t / 12) : cutX, H, 0);
+    this.cutStack.children.forEach((o) => { if (o.isLine) o.position.y = ch + 0.0005; });
+    const cp = cu.state === 'schneiden' ? cu.progress : cu.state === 'abgabe' ? 1 : 0;
+    const sCut = cp * this.cutCum[this.cutCum.length - 1];
+    let k = 1; while (k < this.cutCum.length - 1 && this.cutCum[k] < sCut) k++;
+    this.cutDone.geometry.setDrawRange(0, cp > 0 ? k + 1 : 0);
+    const P = this.cutPath[Math.min(k, this.cutPath.length - 1)];
+    const gan = this.cutterM.userData.gantry, head = this.cutterM.userData.head;
+    gan.position.x = 0.3 + P[1] + (cu.state === 'schneiden' ? 0 : 0);
+    head.position.z = P[0] - mk.width / 2;
+    this.cutterM.userData.knife.position.y = 0.03 + (cu.state === 'schneiden' ? 0.004 * Math.sin(t * 120) : 0.03);
+    // Abnahmetisch: Reststapel
+    const perLayer = sim.cfg.shirtsPerMarker;
+    const remLayers = Math.ceil(sim.avail / perLayer);
+    this.takeStack.visible = sim.avail > 0;
+    const th2 = Math.max(1e-4, remLayers * th);
+    this.takeStackBox.scale.y = th2; this.takeStackBox.position.y = th2 / 2;
+    this.takeStack.children.forEach((o) => { if (o.isLine) o.position.y = th2 + 0.0005; });
+    this.takeStack.position.set(-4.4 + 0.9, H, 0);
+    this.labelSpread.userData.update('Legemaschine', sp.state === 'legen' ? `Lage ${sp.layer + 1}/${sim.cfg.layers}` : 'wartet auf Cutter');
+    this.labelCut.userData.update('CNC-Cutter', cu.state === 'schneiden' ? `${Math.round(cu.progress * 100)} % geschnitten` : cu.state === 'leer' ? 'bereit' : cu.state);
+
+    return th2;
+  }
+
+  _updateSingle(sim, t) {
+    const cu = sim.cutter, mk = sim.marker, x0 = -11.5 + 0.3;
+    // Stoffbahn: vom Abwickler bis an das Schnittfenster; beim Vorschub läuft das Fenster ein
+    const feed = cu.state === 'vorschub' ? Math.min(1, cu.t / Math.max(0.1, cu.T)) : 1;
+    const winX = x0 + mk.length / 2 - (1 - feed) * mk.length;
+    const webStart = -11.65, webEnd = winX - mk.length / 2;
+    this.web.visible = webEnd > webStart + 0.01;
+    this.web.scale.x = Math.max(0.01, webEnd - webStart); this.web.position.set((webStart + webEnd) / 2, H + 0.001, 0);
+    const r = 0.06 + 0.14 * Math.sqrt(1 - Math.min(1, sim.fabricUsed / sim.cfg.rollLen));
+    this.unwinder.userData.roll.scale.set(r / 0.2, 1, r / 0.2);
+    // Schnittfenster (läuft nach dem Schneiden auf das Abnahmeband)
+    const onBelt = cu.state === 'abgabe' ? Math.min(1, cu.t / Math.max(0.1, cu.T)) : 0;
+    this.cutSheet.visible = cu.state !== 'abgabe' || onBelt < 1;
+    this.cutSheet.position.set(winX + onBelt * 3.2, H + 0.0015, 0);
+    const cp = cu.state === 'schneiden' ? cu.progress : cu.state === 'abgabe' ? 1 : 0;
+    const sCut = cp * this.cutCum[this.cutCum.length - 1];
+    let k = 1; while (k < this.cutCum.length - 1 && this.cutCum[k] < sCut) k++;
+    this.cutDone.geometry.setDrawRange(0, cp > 0 ? k + 1 : 0);
+    const P = this.cutPath[Math.min(k, this.cutPath.length - 1)];
+    const gan = this.cutterM.userData.gantry, head = this.cutterM.userData.head;
+    if (cu.state === 'schneiden') { gan.position.x = 0.3 + P[1]; head.position.z = P[0] - mk.width / 2; }
+    this.cutterM.userData.knife.position.y = 0.03 + (cu.state === 'schneiden' ? 0.004 * Math.sin(t * 120) : 0.03);
+    // Abnahmeband: vorderstes Schnittbild am Bandende, Teile entnommener Shirts verschwinden
+    const endX = -8.3 + 4.8 - mk.length / 2 - 0.05;
+    this.beltMarkers.forEach((g, i) => {
+      const b = sim.belt[i];
+      g.visible = !!b;
+      if (!b) return;
+      g.position.set(endX - i * (mk.length + 0.12), H + 0.0015, 0);
+      g.userData.shirts.forEach((parts, sh) => parts.forEach((pg) => { pg.visible = sh < b.left; }));
+    });
+    this.labelCut.userData.update('Förderband-Cutter', cu.paused ? 'Rollenwechsel' : cu.state === 'schneiden' ? `${Math.round(cu.progress * 100)} % geschnitten` : cu.state === 'vorschub' ? 'Vorschub' : sim.belt.length >= sim.cfg.beltMarkers ? 'Band voll' : 'Übergabe');
+    return 0;
+  }
+
   // Bewegung des Kleidungsstücks und des Roboters in einer Station
   _stationAnim(st, slotIdx, f, gm, carrierWorld, rotOnCarrier, stage, t) {
     const sv = this.stationViews[this.sim.stations.indexOf(st)], v = sv.slots[slotIdx];
+    if (st.noRobot) { gm.root.position.copy(carrierWorld); gm.root.rotation.set(0, rotOnCarrier, 0); return; }
     const sewing = v.mach?.userData.needle && v.table;
     // Arbeitsposition an der Maschine
-    let work = { p: new THREE.Vector3(st.s + slotIdx * 1.45 + 0.35, 0.86, MACH_Z + 0.05), yaw: 0 };
+    let work = { p: new THREE.Vector3(st.s + slotIdx * 1.45 + 0.35, st.machine === 'etikett' ? 0.885 : 0.86, MACH_Z + 0.05), yaw: stage >= 13 || st.machine === 'wender' || st.machine === 'presse' || st.machine === 'verpackung' ? 0 : Math.PI / 2 };
     let seamPose = null;
     const path = this.kit.paths[st.id];
     if (sewing && path) {
@@ -6245,17 +6612,12 @@ class LineView {
       pos = from.clone().lerp(carrierWorld, u); pos.y += Math.sin(Math.PI * u) * 0.35; yaw = lerpYaw(seamPose ? seamPose.yaw : work.yaw, rotOnCarrier, u);
     }
     gm.root.position.copy(pos); gm.root.rotation.set(0, yaw, 0);
-    // Falten: Vorderseite klappt über die Schulterlinie
-    if (gm.front && st.machine === 'falttisch') {
-      const u = Math.max(0, Math.min(1, (f - 0.3) / 0.45));
-      gm.front.rotation.x = f >= 0.85 ? Math.PI : Math.PI * ease(u); gm.front.position.y = 0.004 * ease(u);
-    }
     // Roboter greift das Teil (Werkzeug über dem Greifpunkt), außer während reiner Maschinenarbeit
     const grip = (gm.grip || new THREE.Vector3()).clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw).add(pos);
     grip.y += 0.06;
     const rob = v.rob;
     const local = rob.worldToLocal(grip.clone());
-    const holdDuringWork = sewing || st.machine === 'falttisch';
+    const holdDuringWork = sewing || st.machine === 'etikett';
     if (f < 0.22 || f >= 0.85 || holdDuringWork) rob.userData.reach(local, yaw);
     else rob.userData.reach(new THREE.Vector3(0.1, 0.6, 0.45), 0);
   }
@@ -6389,7 +6751,7 @@ return { MODEL_INFO };
 // ---- src/ui/lineui.js ----
 const __M_ui_lineui = (() => {
 // Bedienung der Produktionsstraße (Konfiguration, Kennzahlen, Kamera).
-const { LineSim, defaultLineConfig, STAGES } = __M_line_des;
+const { LineSim, defaultLineConfig, applySpeedPreset } = __M_line_des;
 const { LineView } = __M_line_lineview;
 const $ = (id) => document.getElementById(id);
 const fmt = (x, d = 1) => (Number.isFinite(x) ? x.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d }) : '–');
@@ -6409,11 +6771,22 @@ class LineUI {
 
   _bind() {
     const C = this.cfg;
-    const fields = [['lnWidth', 'width', 100], ['lnShirts', 'shirtsPerMarker', 1], ['lnLayers', 'layers', 1], ['lnCut', 'cutSpeed', 1], ['lnCarriers', 'carriers', 1], ['lnConv', 'conveyorSpeed', 1], ['lnKit', 'kitRobots', 1], ['lnRpmS', 'rpmStraight', 1], ['lnRpmC', 'rpmCurveMax', 1], ['lnOmega', 'omegaMax', 1]];
+    const fields = [['lnWidth', 'width', 100], ['lnShirts', 'shirtsPerMarker', 1], ['lnLayers', 'layers', 1], ['lnCarriers', 'carriers', 1], ['lnConv', 'conveyorSpeed', 1], ['lnKit', 'kitRobots', 1], ['lnOmega', 'omegaMax', 1]];
     for (const [id, key, sc] of fields) {
       $(id).value = +(C[key] * sc).toFixed(3);
       $(id).onchange = () => { C[key] = +$(id).value / sc; this.rebuild(); };
     }
+    // Schnittgeschwindigkeit gehört zum gewählten Verfahren
+    const cutKey = () => (C.cutMode === 'stapel' ? 'cutSpeed' : 'cutSpeed1');
+    $('lnCut').onchange = () => { C[cutKey()] = +$('lnCut').value; this.rebuild(); };
+    $('lnCutMode').value = C.cutMode;
+    $('lnCutMode').onchange = (e) => { C.cutMode = e.target.value; this.rebuild(); };
+    // Drehzahlstufe; Änderung der Drehzahlfelder schaltet auf „eigene Werte“
+    $('lnSpeedPreset').value = C.speed;
+    $('lnSpeedPreset').onchange = (e) => { if (e.target.value !== 'eigen') applySpeedPreset(C, e.target.value); else C.speed = 'eigen'; this.rebuild(); };
+    for (const [id, key] of [['lnRpmS', 'rpmStraight'], ['lnRpmC', 'rpmCurveMax']]) $(id).onchange = () => { C[key] = +$(id).value; C.speed = 'eigen'; this.rebuild(); };
+    $('lnFaults').checked = C.faults;
+    $('lnFaults').onchange = (e) => { C.faults = e.target.checked; this.rebuild(); };
     $('lineRun').onclick = () => { this.running = !this.running; $('lineRun').textContent = this.running ? 'Pause' : 'Weiter'; };
     $('lineReset').onclick = () => this.rebuild();
     $('lineSpeed').onchange = (e) => { this.speed = +e.target.value; };
@@ -6425,11 +6798,24 @@ class LineUI {
     this.sim = new LineSim(this.cfg);
     this.view.build(this.sim);
     this.lastLog = 0; $('lkLog').innerHTML = '';
-    const M = this.sim.marker;
-    $('lnMarker').textContent = `Schnittbild ${fmt(M.length * 100, 0)} cm × ${fmt(M.width * 100, 0)} cm, Ausnutzung ${fmt(M.utilization * 100, 0)} %, Schnittkontur ${fmt(M.contour, 1)} m. Ein Stapel = ${this.cfg.layers * this.cfg.shirtsPerMarker} Shirts.`;
+    const M = this.sim.marker, C = this.cfg, S = this.sim;
+    const stack = C.cutMode === 'stapel';
+    $('lnLayersRow').hidden = !stack;
+    $('lnCut').value = stack ? C.cutSpeed : C.cutSpeed1;
+    $('lnRpmS').value = C.rpmStraight; $('lnRpmC').value = C.rpmCurveMax; $('lnSpeedPreset').value = C.speed;
+    $('lnMarker').textContent = `Schnittbild ${fmt(M.length * 100, 0)} cm × ${fmt(M.width * 100, 0)} cm (Vorder-, Rückenteil, Ärmel; Bündchen von der Rolle), Ausnutzung ${fmt(M.utilization * 100, 0)} %, Schnittkontur ${fmt(M.contour, 1)} m. `
+      + (stack ? `Ein Stapel = ${C.layers * C.shirtsPerMarker} Shirts.` : `Zuschnitt ${fmt(S.cutPerShirt(), 1)} s je Shirt.`);
+    $('lnCutNote').textContent = stack
+      ? `Vereinzeln aus dem Stapel mit Nadelgreifern: ${fmt(C.pickTimeStack, 1)} s je Teil, ${fmt(C.doublePick * 100, 0)} % Doppelgriffe. Technisch das größte Risiko der Linie.`
+      : `Jede Lage wird einzeln geschnitten; die Teile liegen getrennt auf dem Abnahmeband und werden mit Vakuum gegriffen (${fmt(C.pickTime, 1)} s je Teil). Kein Vereinzeln aus dem Stapel.`;
+    $('lnSpeedNote').textContent = C.speed === 'validiert' ? 'Je Naht die in der Nähzelle nachgewiesene Drehzahl (Ärmel 400, Seite 500, gerade 600 min⁻¹). Belegt, aber langsam.'
+      : C.speed === 'ziel' ? 'Realistisches Ziel nach Prototyp und Regelungsentwicklung; noch nicht physikalisch nachgewiesen.'
+      : C.speed === 'optimistisch' ? 'Übliche Drehzahlen manueller Nähplätze. Für robotergeführtes Nähen biegeschlaffer Teile nicht belegt.'
+      : 'Eigene Drehzahlen.';
     // Stationstabelle
-    const rows = this.sim.stations.map((st) => `<tr><td>${st.name}${st.note ? `<span class="note">${st.note}</span>` : ''}</td>
-      <td title="Zykluszeit einer Maschine">${fmt(st.ct, 1)} s</td>
+    const proofLbl = { zelle: 'Zelle', analog: 'analog', plan: 'Plan' };
+    const rows = this.sim.stations.map((st) => `<tr><td>${st.name}<span class="proof ${st.proof}">${proofLbl[st.proof]}</span>${st.note ? `<span class="note">${st.note}</span>` : ''}</td>
+      <td title="Zykluszeit einer Maschine">${fmt(st.ct, 1)} s${st.rpm.length ? `<span class="rpm">${[...new Set(st.rpm.map((r) => Math.round(r)))].join('/')} min⁻¹</span>` : ''}</td>
       <td><input type="number" min="1" max="3" step="1" value="${st.cap}" data-cap="${st.id}" style="width:48px" aria-label="Maschinen ${st.name}"></td>
       <td>${st.physics ? `<button class="btn small" data-phys="${st.physics}" type="button">Physik</button>` : ''}</td></tr>`).join('');
     $('lnStations').innerHTML = '<colgroup><col><col class="c2"><col class="c3"><col class="c4"></colgroup><tr><th>Station</th><th>Zyklus</th><th>Masch.</th><th></th></tr>' + rows;
@@ -6457,9 +6843,9 @@ class LineUI {
     const s = this.sim, k = s.kpis();
     $('clock').textContent = `t = ${hms(s.t)}`;
     $('lkRate').textContent = s.t > 120 ? fmt(k.rate, 0) : '–';
-    $('lkRateSub').textContent = `Stück/h (theoretisch ${fmt(k.theo, 0)})`;
+    $('lkRateSub').textContent = `Stück/h (Takt ohne Störungen: ${fmt(k.theo, 0)})`;
     $('lkDone').textContent = k.done;
-    $('lkTime').textContent = `Laufzeit ${hms(s.t)}`;
+    $('lkTime').textContent = `Laufzeit ${hms(s.t)} · Nacharbeit ${k.rejects}${k.rejects ? ` (${fmt(k.rejectRate * 100, 1)} %)` : ''} · Störungen ${k.faults}`;
     $('lkTakt').textContent = `${fmt(k.takt, 1)} s`;
     $('lkBneck').textContent = `Engpass: ${k.bottleneck.name}`;
     $('lkFlow').textContent = k.flow ? `${fmt(k.flow / 60, 1)} min` : '–';

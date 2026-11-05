@@ -487,3 +487,122 @@ export function fabricRollRack() {
   }
   return g;
 }
+
+// ---------------------------------------------------------------- Klappträger mit Formbrett
+// Zwei Hälften mit Nadelleisten, Scharnier quer zur Förderrichtung (x = 0). Die Hälfte x > 0
+// (Vorderteil) klappt um +z-Achse auf die Hälfte x < 0. Formbrett für die Teile nach dem Wenden.
+export function klappTraeger(w = 0.66, d = 0.56) {
+  const m = mats();
+  const g = new THREE.Group();
+  g.add(rbox(w, 0.025, d, 0.006, m.aluDark, 0, 0.0125, 0));
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(0.012, 0.03, m.chrome, sx * (w / 2 - 0.04), 0.015, sz * (d / 2 - 0.04), 12));
+  g.add(box(0.05, 0.012, 0.03, m.safetyYellow, -w / 2 + 0.05, 0.03, -d / 2 + 0.03));  // RFID-Tag
+  const half = (sign, solid) => {
+    const h = new THREE.Group();
+    if (solid) h.add(box(w / 2 - 0.03, 0.003, d - 0.04, m.steel, sign * (w / 4 - 0.005), 0.0015, 0));
+    else { // Klapphälfte als Rahmen, damit das Teil sichtbar und für die Nadel zugänglich bleibt
+      for (const sz of [-1, 1]) h.add(box(w / 2 - 0.03, 0.004, 0.03, m.alu, sign * (w / 4 - 0.005), 0.002, sz * (d / 2 - 0.035)));
+      h.add(box(0.03, 0.004, d - 0.04, m.alu, sign * (w / 2 - 0.035), 0.002, 0));
+      h.add(box(0.02, 0.004, d - 0.04, m.alu, sign * 0.02, 0.002, 0));
+    }
+    for (const sz of [-1, 1]) h.add(box(w / 2 - 0.08, 0.007, 0.012, m.blackSteel, sign * (w / 4), 0.0045, sz * (d / 2 - 0.05))); // Nadelleisten
+    h.add(box(0.012, 0.007, d - 0.16, m.blackSteel, sign * (w / 2 - 0.05), 0.0045, 0));
+    return h;
+  };
+  const fixed = half(-1, true); fixed.position.y = 0.026; g.add(fixed);
+  const fixedR = half(1, true); fixedR.position.y = 0.026; g.add(fixedR); // Auflage unter der Klapphälfte
+  const flap = new THREE.Group(); flap.position.set(0, 0.03, 0); g.add(flap);
+  const fh = half(1, false); fh.position.y = -0.0005; flap.add(fh);
+  for (const z of [-0.2, 0, 0.2]) g.add(cyl(0.008, 0.06, m.chrome, 0, 0.03, z, 12, 'z'));   // Scharnier
+  // Formbrett (nach dem Wenden): flaches Brett mit Schulterform
+  const board = new THREE.Group();
+  const sh = new THREE.Shape();
+  const bw = 0.15, bl = 0.24;
+  sh.moveTo(-bw, -bl); sh.lineTo(bw, -bl); sh.lineTo(bw, bl - 0.06); sh.quadraticCurveTo(bw, bl, bw - 0.06, bl); sh.lineTo(-bw + 0.06, bl); sh.quadraticCurveTo(-bw, bl, -bw, bl - 0.06); sh.closePath();
+  const bg = new THREE.ExtrudeGeometry(sh, { depth: 0.008, bevelEnabled: true, bevelSize: 0.003, bevelThickness: 0.002, bevelSegments: 2 });
+  bg.rotateX(-Math.PI / 2);
+  const bm = new THREE.Mesh(bg, std2(0xdfe3e6, 0.4, 0.1)); bm.castShadow = bm.receiveShadow = true;
+  board.add(bm); board.add(box(0.06, 0.02, 0.04, m.paintDark, 0, 0.0, 0.2));
+  board.position.set(0, 0.03, 0); board.rotation.y = Math.PI / 2; board.visible = false; g.add(board);
+  g.userData = { flap, board, top: 0.03 };
+  return g;
+}
+const std2 = (color, r, mt) => new THREE.MeshStandardMaterial({ color, roughness: r, metalness: mt });
+
+// Etikettierer: Etikettenband von der Rolle, Ultraschall-Schneiden, Falten, Heftriegel-Kopf
+export function labelTacker(h = 0.85) {
+  const m = mats();
+  const g = new THREE.Group();
+  g.add(rbox(0.8, h - 0.05, 0.6, 0.02, m.paintWhite, 0, (h - 0.05) / 2, 0));
+  g.add(rbox(0.7, 0.03, 0.5, 0.01, m.paintGrey, 0, h, 0));
+  g.add(cyl(0.07, 0.03, std2(0xf4f4f0, 0.6, 0), -0.25, h + 0.2, -0.15, 28, 'z'));     // Etikettenrolle
+  g.add(cyl(0.015, 0.06, m.steel, -0.25, h + 0.2, -0.15, 12, 'z'));
+  g.add(box(0.02, 0.18, 0.02, m.alu, -0.25, h + 0.09, -0.15));
+  g.add(rbox(0.16, 0.1, 0.1, 0.01, m.paintDark, -0.08, h + 0.12, -0.15));            // Schneid-/Falteinheit
+  g.add(box(0.002, 0.09, 0.02, std2(0xf4f4f0, 0.6, 0), -0.17, h + 0.16, -0.15));       // Band
+  // Heftriegel-Kopf (kurzer Arm mit Nadel)
+  g.add(rbox(0.1, 0.32, 0.12, 0.015, m.paintWhite, 0.25, h + 0.16, -0.12));
+  g.add(rbox(0.3, 0.08, 0.1, 0.015, m.paintWhite, 0.12, h + 0.3, -0.12));
+  const nb = group(cyl(0.004, 0.08, m.chrome, 0, 0, 0, 10), cyl(0.0008, 0.03, m.chrome, 0, -0.05, 0, 6));
+  nb.position.set(0.0, h + 0.22, -0.12); g.add(nb);
+  g.add(box(0.08, 0.003, 0.08, m.steel, 0.0, h + 0.017, -0.12));
+  g.userData = { needle: nb, y0: h + 0.22 };
+  return g;
+}
+
+// Klappstation: Schwenkantrieb, der in das Trägerscharnier greift, und Kamerabrücke
+export function klappDrive(h = 0.85) {
+  const m = mats();
+  const g = new THREE.Group();
+  g.add(rbox(0.3, h - 0.1, 0.3, 0.02, m.paintGrey, 0, (h - 0.1) / 2, 0));
+  g.add(rbox(0.18, 0.14, 0.18, 0.02, m.paintDark, 0, h - 0.02, 0));
+  g.add(cyl(0.03, 0.2, m.chrome, 0, h - 0.02, 0.18, 16, 'z'));                       // Mitnehmerwelle
+  for (const sx of [-1, 1]) g.add(profile(1.0, 'y', sx * 0.45, h + 0.5 - 0.15, 0.62, m.alu));
+  g.add(profile(0.94, 'x', 0, h + 0.85, 0.62, m.alu));
+  for (const x of [-0.2, 0.2]) { g.add(rbox(0.07, 0.09, 0.07, 0.01, m.blackSteel, x, h + 0.78, 0.62)); g.add(cyl(0.02, 0.03, m.chrome, x, h + 0.72, 0.62, 14)); }
+  g.add(box(0.8, 0.01, 0.06, m.lamp, 0, h + 0.82, 0.5));
+  return g;
+}
+
+// Bündchenzuführung: Rippstrick-Rolle, Tänzer, Faltapparat und Abzugswalzen vor dem Nähfuß
+export function ribFeeder(color = 0xe9c46a) {
+  const m = mats();
+  const g = new THREE.Group();
+  const rib = std2(color, 0.85, 0);
+  g.add(box(0.03, 0.42, 0.03, m.alu, 0, 0.21, 0));
+  g.add(cyl(0.08, 0.05, rib, 0, 0.42, 0.05, 32, 'z'));                                 // Rolle
+  g.add(cyl(0.012, 0.12, m.steel, 0, 0.42, 0.04, 12, 'z'));
+  g.add(cyl(0.008, 0.08, m.chrome, 0.12, 0.3, 0.05, 10, 'z'));                         // Tänzerwalze
+  g.add(box(0.14, 0.012, 0.012, m.alu, 0.06, 0.3, 0.02));
+  g.add(rbox(0.07, 0.03, 0.05, 0.008, m.chrome, 0.22, 0.08, 0.05));                    // Faltapparat
+  g.add(cyl(0.012, 0.04, m.rubber, 0.29, 0.06, 0.05, 14, 'z'));                       // Abzugswalzen
+  g.add(cyl(0.012, 0.04, m.rubber, 0.29, 0.085, 0.05, 14, 'z'));
+  g.add(rbox(0.06, 0.06, 0.06, 0.008, m.paintDark, 0.29, 0.12, 0.0));                 // Servo
+  const band = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.002, 0.018), rib); band.position.set(0.15, 0.2, 0.05); band.rotation.z = -0.9; g.add(band);
+  return g;
+}
+
+// Abwickler für die Stoffrolle (einlagiger Zuschnitt) mit Kantensteuerung
+export function unwinder(W = 1.8, h = 0.85, color = 0xe9c46a) {
+  const m = mats();
+  const g = new THREE.Group();
+  for (const sz of [-1, 1]) { g.add(rbox(0.12, h + 0.25, 0.1, 0.01, m.machineGreen, 0, (h + 0.25) / 2, sz * (W / 2 + 0.08))); }
+  const roll = cyl(0.2, W - 0.1, std2(color, 0.9, 0), 0, h + 0.05, 0, 40, 'z'); g.add(roll);
+  g.add(cyl(0.03, W + 0.25, m.steel, 0, h + 0.05, 0, 16, 'z'));
+  g.add(cyl(0.03, W, m.chrome, 0.35, h + 0.12, 0, 16, 'z'));                         // Umlenkwalze
+  g.add(rbox(0.1, 0.06, 0.1, 0.01, m.paintDark, 0.35, h + 0.2, -W / 2 + 0.1));       // Kantensensor
+  g.add(rbox(0.25, 0.25, 0.2, 0.02, m.paintDark, 0, 0.3, W / 2 + 0.25));            // Antrieb
+  g.userData = { roll };
+  return g;
+}
+
+// Abnahmeband (Vakuum-Förderband) hinter dem Cutter
+export function takeoffBelt(L = 4.5, W = 1.8, h = 0.85) {
+  const m = mats();
+  const g = new THREE.Group();
+  g.add(box(L, 0.04, W, m.belt, L / 2, h - 0.02, 0));
+  g.add(rbox(L + 0.06, 0.12, W + 0.06, 0.01, m.paintGrey, L / 2, h - 0.1, 0));
+  for (const x of [0, L]) g.add(cyl(0.06, W, m.alu, x, h - 0.05, 0, 20, 'z'));
+  for (let x = 0.2; x < L; x += 1.1) for (const sz of [-1, 1]) g.add(profile(h - 0.16, 'y', x, (h - 0.16) / 2, sz * (W / 2 - 0.08), m.aluDark));
+  return g;
+}

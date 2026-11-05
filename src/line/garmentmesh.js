@@ -113,7 +113,8 @@ export class GarmentKit {
       [[bw - 0.005, len - 0.012], [-bw + 0.005, len - 0.012]],
       [[-bw + 0.005, -len + 0.012], [bw - 0.005, -len + 0.012]],
     ];
-    P.saum = makePath(P.saumParts.flat());
+    P.saumA = makePath(P.saumParts.slice(0, 2).flat());   // Ärmelsäume
+    P.saumK = makePath(P.saumParts.slice(2).flat());      // Saum Vorder- und Rückenteil
     // Seitennaht im gefalteten Zustand: Saum → Seite → Achsel → Ärmelunterkante → Ärmelsaum
     const side = [];
     for (let z = -len + 0.004; z <= -ua - 0.02; z += 0.01) side.push([-bw + 0.01, z]);
@@ -138,53 +139,61 @@ export class GarmentKit {
     return g;
   }
 
-  // Zustand → Gruppe; liefert { root, front (klappbar), grip }
+  // Pflegeetikett am Seitenrand des Rückenteils (links, 6 cm über dem Saum)
+  _label() {
+    const g = new THREE.Group();
+    const lab = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.0008, 0.032), new THREE.MeshStandardMaterial({ color: 0xf7f7f2, roughness: 0.5 }));
+    lab.position.set(-DIM.bw + 0.009, 0, -DIM.len + 0.07); g.add(lab);
+    for (let k = 0; k < 3; k++) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.0009, 0.0015), new THREE.MeshStandardMaterial({ color: 0x3a3f43 })); l.position.set(-DIM.bw + 0.011, 0, -DIM.len + 0.06 + k * 0.007); g.add(l); }
+    g.add(stitchLine([[-DIM.bw + 0.003, -DIM.len + 0.058], [-DIM.bw + 0.003, -DIM.len + 0.082]], this.thread, 0.0005, 0.002));
+    return g;
+  }
+
+  _hems(stage, y, filter = null) {
+    const g = new THREE.Group(), parts = this.paths.saumParts;
+    const use = stage >= 7 ? [0, 1, 2, 3] : stage >= 6 ? [0, 1] : [];
+    for (const i of use) for (const d of [-0.003, 0.003]) {
+      let pts = offsetPolyline(parts[i], d);
+      if (filter) pts = pts.filter(filter);
+      g.add(stitchLine(pts, this.cover, y));
+    }
+    return g;
+  }
+
+  // Zustand (Index in STAGES) → Gruppe; liefert { root, front (klappbar), grip }
+  // 0–12 auf dem Klappträger (Schulterlinie = Scharnier), 13–15 auf dem Formbrett.
   build(stage) {
     const root = new THREE.Group(), G = this.G;
     const face = this.matFace, backM = this.matBack;
     if (stage < 0) return { root };
-    if (stage === 0) {
-      // Kit: links Rücken- und Vorderteil gestapelt, rechts Ärmel und Bündchen
-      const pile = new THREE.Group();
-      const b = flatPiece(G.back.outline, backM); b.position.z = 0.15; pile.add(b);
-      const f = flatPiece(G.front.outline, face); f.position.set(0.004, 0.0013, -0.15 + 0.002); pile.add(f);
-      pile.position.set(-0.17, 0, 0); root.add(pile);
-      const s1 = flatPiece(G.sleeveL.outline, face); s1.position.set(0.18, 0, 0.03); root.add(s1);
-      const s2 = flatPiece(G.sleeveR.outline, face); s2.position.set(0.18, 0.0013, 0.035); root.add(s2);
-      const r = flatPiece(G.rib.outline, this.matRib); r.rotation.y = Math.PI / 2; r.position.set(0.25, 0.0026, -0.15); root.add(r);
-      return { root, grip: new THREE.Vector3(0, 0, 0) };
-    }
-    if (stage <= 6) {
-      // aufgeklappter Körper (Vorderteil vorn, Rückenteil hinten), linke Seite oben
+    if (stage <= 8) {
+      // aufgeklappter Körper (Vorderteil z > 0, Rückenteil z < 0), linke Seite oben
       const bodyG = new THREE.Group();
-      bodyG.add(flatPiece(G.front.outline, backM));
-      const bk = flatPiece(G.back.outline, backM); bk.position.y = 0.0001; bodyG.add(bk);
+      const fr = flatPiece(G.front.outline, backM), bk = flatPiece(G.back.outline, backM);
+      if (stage === 0) { fr.position.z = 0.006; bk.position.z = -0.006; } // noch getrennt, in Nählage
+      bk.position.y = 0.0001; bodyG.add(fr, bk);
       root.add(bodyG);
       const y = 0.0016;
-      root.add(stitchLine(this.paths.schulter1.points, this.thread, y));
+      if (stage >= 1) root.add(stitchLine(this.paths.schulter1.points, this.thread, y));
       if (stage >= 3) root.add(stitchLine(this.paths.schulter2.points, this.thread, y));
       if (stage >= 2) {
-        // Bündchen als Band entlang der Halskante (6 mm Naht, 18 mm breit)
+        // Bündchen als Band entlang der Halskante (6 mm Naht, 12 mm sichtbar)
         const inner = offsetPolyline(this.paths.hals.points, -0.012);
         const band = [...this.paths.hals.points, ...inner.reverse()];
-        const rm = flatPiece(offsetPolyline(band, 0), this.matRib, [], 0.002); rm.position.y = 0.0006; root.add(rm);
+        const rm = flatPiece(band, this.matRib, [], 0.002); rm.position.y = 0.0006; root.add(rm);
         root.add(stitchLine(this.paths.hals.points, this.thread, y + 0.002));
       }
-      if (stage < 4) {
-        // Ärmel und (vor Stufe 2) Bündchen liegen noch neben dem Körper
-        const s1 = flatPiece(G.sleeveL.outline, face); s1.rotation.y = Math.PI / 2; s1.position.set(0.26, 0, 0.16); root.add(s1);
-        const s2 = flatPiece(G.sleeveR.outline, face); s2.rotation.y = Math.PI / 2; s2.position.set(0.26, 0.0013, -0.12); root.add(s2);
-        if (stage < 2) { const r = flatPiece(G.rib.outline, this.matRib); r.rotation.y = Math.PI / 2; r.position.set(-0.24, 0.0, 0); root.add(r); }
-      }
+      // Ärmel: vor dem Einsetzen neben dem Körper auf dem Träger
+      if (stage < 4) { const s1 = flatPiece(G.sleeveL.outline, face); s1.rotation.y = Math.PI / 2; s1.position.set(0.26, 0, 0.16); root.add(s1); }
+      if (stage < 5) { const s2 = flatPiece(G.sleeveR.outline, face); s2.rotation.y = Math.PI / 2; s2.position.set(0.26, 0.0013, -0.12); root.add(s2); }
       if (stage >= 4) { root.add(this._sleeve(false, backM)); root.add(stitchLine(this.paths.aermelL.points, this.thread, y + 0.001)); }
       if (stage >= 5) { root.add(this._sleeve(true, backM)); root.add(stitchLine(this.paths.aermelR.points, this.thread, y + 0.001)); }
-      if (stage === 4) { const s2 = flatPiece(G.sleeveR.outline, face); s2.rotation.y = Math.PI / 2; s2.position.set(0.26, 0.0013, -0.12); root.add(s2); }
-      if (stage >= 6) for (const seg of this.paths.saumParts) for (const d of [-0.003, 0.003]) root.add(stitchLine(offsetPolyline(seg, d), this.cover, y + 0.0015));
+      root.add(this._hems(stage, y + 0.0015));
+      if (stage >= 8) { const l = this._label(); l.position.y = y; root.add(l); }
       return { root, grip: new THREE.Vector3(0, 0, 0) };
     }
-    if (stage <= 9) {
-      // gefaltet: Vorderseite (Vorderteil, vordere Ärmelhälften, vorderes Bündchen) liegt auf dem Rücken.
-      // Rechter Ärmel (um +90° gedreht): lokale x > 0 → Welt z < 0 (hinten); linker Ärmel umgekehrt.
+    if (stage <= 12) {
+      // geklappt: Vorderseite (Vorderteil, vordere Ärmelhälften, vorderes Bündchen) liegt auf dem Rücken.
       const backSide = new THREE.Group(), frontSide = new THREE.Group();
       backSide.add(flatPiece(G.back.outline, backM));
       backSide.add(this._sleeve(false, backM, 'neg'));
@@ -193,16 +202,9 @@ export class GarmentKit {
       frontSide.add(this._sleeve(false, backM, 'pos'));
       frontSide.add(this._sleeve(true, backM, 'neg'));
       const y = 0.0016;
-      const [hl, hr, hf, hb] = this.paths.saumParts;
-      for (const d of [-0.003, 0.003]) {
-        for (const seg of [hl, hr]) {
-          const pts = offsetPolyline(seg, d);
-          backSide.add(stitchLine(pts.filter(([, z]) => z <= 0.0005), this.cover, y));
-          frontSide.add(stitchLine(pts.filter(([, z]) => z >= -0.0005), this.cover, y));
-        }
-        frontSide.add(stitchLine(offsetPolyline(hf, d), this.cover, y));
-        backSide.add(stitchLine(offsetPolyline(hb, d), this.cover, y));
-      }
+      backSide.add(this._hems(stage, y, ([, z]) => z <= 0.0005));
+      frontSide.add(this._hems(stage, y, ([, z]) => z >= -0.0005));
+      const l = this._label(); l.position.y = y; backSide.add(l);
       // Bündchen: hinterer und vorderer Teil des Bandes
       const inner = offsetPolyline(this.paths.hals.points, -0.012);
       const band = [...this.paths.hals.points, ...inner.slice().reverse()];
@@ -210,13 +212,18 @@ export class GarmentKit {
       if (backBand.length > 3) { const r = flatPiece(backBand, this.matRib, [], 0.002); r.position.y = 0.0006; backSide.add(r); }
       if (frontBand.length > 3) { const r = flatPiece(frontBand, this.matRib, [], 0.002); r.position.y = 0.0006; frontSide.add(r); }
       const pivot = new THREE.Group(); pivot.add(frontSide); root.add(backSide, pivot);
-      pivot.rotation.x = stage >= 7 ? Math.PI : 0; pivot.position.y = stage >= 7 ? 0.004 : 0;
-      if (stage >= 8) root.add(stitchLine(this.paths.seiteL.points, this.thread, 0.006));
-      if (stage >= 9) root.add(stitchLine(this.paths.seiteR.points, this.thread, 0.006));
+      // Klappen nach oben über die Schulterlinie (negative Drehung um x hebt z > 0 an)
+      pivot.rotation.x = -Math.PI; pivot.position.y = 0.004;
+      if (stage >= 10) root.add(stitchLine(this.paths.seiteL.points, this.thread, 0.006));
+      if (stage >= 11) root.add(stitchLine(this.paths.seiteR.points, this.thread, 0.006));
+      if (stage >= 12) {
+        const ok = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.002, 16), new THREE.MeshStandardMaterial({ color: 0x22c55e, emissive: 0x22c55e, emissiveIntensity: 0.4 }));
+        ok.position.set(0.06, 0.007, -0.22); root.add(ok);
+      }
       return { root, front: pivot, grip: new THREE.Vector3(0, 0, -0.12) };
     }
-    if (stage <= 11) {
-      // gewendet: rechte Seite außen, leicht aufgebauscht; Bündchen als Wulst
+    if (stage === 13) {
+      // gewendet auf dem Formbrett: rechte Seite außen, leicht aufgebauscht; Bündchen als Wulst
       const g = new THREE.Group();
       g.add(puffyPiece(G.back.outline, face, [], 0.014));
       for (const right of [false, true]) {
@@ -233,15 +240,11 @@ export class GarmentKit {
         for (const seg of [hl, hr]) g.add(stitchLine(offsetPolyline(seg, d).filter(([, z]) => z <= 0.0005), this.cover, 0.021));
         g.add(stitchLine(offsetPolyline(hb, d), this.cover, 0.021));
       }
-      if (stage === 11) {
-        const ok = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.002, 16), new THREE.MeshStandardMaterial({ color: 0x22c55e, emissive: 0x22c55e, emissiveIntensity: 0.4 }));
-        ok.position.set(0.09, 0.024, -0.25); g.add(ok);
-      }
       root.add(g);
       return { root, grip: new THREE.Vector3(0, 0, -0.12) };
     }
-    if (stage === 12) {
-      // gebügelt und gefaltet (Ärmel und Seiten eingeschlagen, einmal gelegt)
+    if (stage === 14) {
+      // gedämpft und gefaltet (Ärmel und Seiten eingeschlagen, einmal gelegt)
       const p = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.022, 0.2), face); p.position.set(0, 0.011, -0.1); p.castShadow = true; root.add(p);
       const ring = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.005, 8, 24, Math.PI), this.matRib); ring.rotation.x = -Math.PI / 2; ring.position.set(0, 0.023, -0.19); root.add(ring);
       return { root, grip: new THREE.Vector3(0, 0, -0.1) };

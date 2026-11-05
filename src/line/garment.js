@@ -57,14 +57,15 @@ export function buildGarment() {
 
 // Schnittbild: Regal-Packung der Hüllrechtecke, Fadenlauf längs (z) bleibt erhalten.
 // width: Stoffbreite [m], shirts: Shirts je Schnittbild. Rückgabe: Teile mit Lage im Schnittbild.
-export function nestMarker(G, width = 1.5, shirts = 6, gap = 0.008) {
+// Das Halsbündchen kommt in der Linie von der Rolle (withRib = false) und ist nicht im Schnittbild.
+export function nestMarker(G, width = 1.5, shirts = 6, gap = 0.008, withRib = false) {
   const parts = [];
   for (let k = 0; k < shirts; k++) {
     parts.push({ name: 'Vorderteil', shirt: k, outline: G.front.outline });
     parts.push({ name: 'Rückenteil', shirt: k, outline: G.back.outline });
     parts.push({ name: 'Ärmel links', shirt: k, outline: G.sleeveL.outline });
     parts.push({ name: 'Ärmel rechts', shirt: k, outline: G.sleeveR.outline });
-    parts.push({ name: 'Bündchen', shirt: k, outline: G.rib.outline, rot: true });
+    if (withRib) parts.push({ name: 'Bündchen', shirt: k, outline: G.rib.outline, rot: true });
   }
   for (const p of parts) {
     // Bündchen quer legen (Rippen laufen beim Bündchen quer)

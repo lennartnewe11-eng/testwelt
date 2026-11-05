@@ -107,6 +107,8 @@ section.block + section.block { border-top: 1px solid var(--line); padding-top: 
 .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
 label.row, .row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; }
 .row > span:first-child { color: var(--ink-2); }
+.row.stack { grid-template-columns: 1fr; gap: 4px; }
+.row.stack select { width: 100%; }
 select, input[type="number"], input[type="text"] { height: 30px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel-2); padding: 0 8px; min-width: 0; }
 select { width: 100%; }
 input[type="number"] { width: 92px; text-align: right; font-family: var(--font-mono); font-size: 13px; }
@@ -158,6 +160,11 @@ table.stations { width: 100%; border-collapse: collapse; font-size: 12.5px; tabl
 table.stations th { text-align: left; font: 600 11px var(--font-display); letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); padding: 4px; border-bottom: 1px solid var(--line); }
 table.stations td { padding: 6px 4px; border-bottom: 1px dashed var(--line); vertical-align: top; }
 table.stations td:nth-child(2) { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.stations .proof { display: inline-block; font: 600 10px var(--font-display); letter-spacing: 0.04em; text-transform: uppercase; padding: 1px 5px; border-radius: 4px; margin-left: 4px; vertical-align: 1px; }
+table.stations .proof.zelle { background: var(--good-soft); color: var(--good); }
+table.stations .proof.analog { background: var(--line); color: var(--ink-2); }
+table.stations .proof.plan { background: var(--warn-soft); color: var(--warn); }
+table.stations .rpm { display: block; color: var(--ink-3); font-size: 11px; }
 table.stations .note { display: block; color: var(--ink-3); font-size: 11.5px; line-height: 1.35; margin-top: 2px; }
 table.stations col.c2 { width: 58px; } table.stations col.c3 { width: 52px; } table.stations col.c4 { width: 62px; }
 table.plies { width: 100%; border-collapse: collapse; font-size: 12.5px; }
@@ -348,7 +355,7 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
       <div id="lineLeft" hidden>
         <section class="block">
           <h2>Produktionsstraße</h2>
-          <p class="note">T-Shirt Gr. 86 aus Single Jersey: von der Stoffrolle bis zum verpackten Shirt. Materialfluss als ereignisdiskrete Simulation; Zykluszeiten aus den Nahtlängen der Schnittteile und den in der Nähzelle validierten Prozessparametern.</p>
+          <p class="note">T-Shirt Gr. 86 aus Single Jersey: von der Stoffrolle bis zum verpackten Shirt. Materialfluss als ereignisdiskrete Simulation. Nähzeiten aus den Nahtlängen der Schnittteile und der gewählten Drehzahlstufe; Handhabungszeiten und Störraten sind Planwerte.</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn primary" id="lineRun" type="button">Pause</button>
             <button class="btn" id="lineReset" type="button">Neu starten</button>
@@ -357,10 +364,12 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
         </section>
         <section class="block">
           <h2>Zuschnitt</h2>
+          <label class="row stack"><span>Zuschnittverfahren</span><select id="lnCutMode"><option value="einlagig">einlagig (Förderband-Cutter)</option><option value="stapel">Stapel (Legen + Cutter)</option></select></label>
+          <p class="note" id="lnCutNote"></p>
           <label class="row"><span>Stoffbreite [cm]</span><input type="number" id="lnWidth" min="100" max="200" step="5"></label>
           <label class="row"><span>Shirts je Schnittbild</span><input type="number" id="lnShirts" min="1" max="12" step="1"></label>
-          <label class="row"><span>Lagen je Stapel</span><input type="number" id="lnLayers" min="1" max="60" step="1"></label>
-          <label class="row"><span>Schnittgeschwindigkeit [m/s]</span><input type="number" id="lnCut" min="0.05" max="0.6" step="0.01"></label>
+          <label class="row" id="lnLayersRow"><span>Lagen je Stapel</span><input type="number" id="lnLayers" min="1" max="60" step="1"></label>
+          <label class="row"><span>Schnittgeschwindigkeit [m/s]</span><input type="number" id="lnCut" min="0.05" max="2" step="0.01"></label>
           <p class="note" id="lnMarker"></p>
         </section>
         <section class="block">
@@ -368,14 +377,17 @@ dialog td.num { font-family: var(--font-mono); text-align: right; white-space: n
           <label class="row"><span>Werkstückträger</span><input type="number" id="lnCarriers" min="4" max="60" step="1"></label>
           <label class="row"><span>Bandgeschwindigkeit [m/s]</span><input type="number" id="lnConv" min="0.05" max="0.6" step="0.05"></label>
           <label class="row"><span>Kommissionier-Roboter</span><input type="number" id="lnKit" min="1" max="2" step="1"></label>
+          <label class="row stack"><span>Nähgeschwindigkeit (Drehzahlstufe)</span><select id="lnSpeedPreset"><option value="validiert">in der Zelle validiert</option><option value="ziel">Entwicklungsziel</option><option value="optimistisch">optimistisch</option><option value="eigen">eigene Werte</option></select></label>
+          <p class="note" id="lnSpeedNote"></p>
           <label class="row"><span>Drehzahl gerade Nähte [1/min]</span><input type="number" id="lnRpmS" min="500" max="6000" step="100"></label>
           <label class="row"><span>Max. Drehzahl Kurven [1/min]</span><input type="number" id="lnRpmC" min="300" max="5000" step="100"></label>
           <label class="row"><span>Drehgeschw. C-Achse [rad/s]</span><input type="number" id="lnOmega" min="0.2" max="8" step="0.1"></label>
+          <label class="row"><span>Störungen und Ausschuss</span><input type="checkbox" id="lnFaults" style="width:auto"></label>
         </section>
         <section class="block">
           <h2>Stationen</h2>
           <div class="tablewrap"><table class="stations" id="lnStations"></table></div>
-          <p class="note">Maschinenzahl ändern, um den Engpass zu entlasten. „Physik“ öffnet die Station in der Nähzelle.</p>
+          <p class="note">Nachweis: <b>Zelle</b> = in der Nähzelle physikalisch simuliert, <b>analog</b> = gerade robotergeführte Naht wie der Grundfall der Zelle, <b>Plan</b> = Planwert ohne Nachweis. Maschinenzahl ändern, um den Engpass zu entlasten. „Physik“ öffnet die Station in der Nähzelle.</p>
         </section>
       </div>
     </aside>
