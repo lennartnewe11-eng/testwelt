@@ -6,94 +6,96 @@
   "mehrweite_prozent": 2.88,
   "schlitz_mm": 16,
   "freigabe_mm": 18,
-  "saugkammern": 15,
-  "kammern_schaltbar": [
-    {
-      "ventil": "V1",
-      "aus_bei_stich": 0,
-      "abheben": true
-    },
-    {
-      "ventil": "V2",
-      "aus_bei_stich": 0,
-      "abheben": false
-    },
-    {
-      "ventil": "V3",
-      "aus_bei_stich": 1,
-      "abheben": false
-    },
-    {
-      "ventil": "V4",
-      "aus_bei_stich": 2,
-      "abheben": true
-    },
-    {
-      "ventil": "V5",
-      "aus_bei_stich": 9,
-      "abheben": false
-    },
-    {
-      "ventil": "V6",
-      "aus_bei_stich": 16,
-      "abheben": true
-    },
-    {
-      "ventil": "V7",
-      "aus_bei_stich": 22,
-      "abheben": false
-    },
-    {
-      "ventil": "V8",
-      "aus_bei_stich": 28,
-      "abheben": false
-    },
-    {
-      "ventil": "V9",
-      "aus_bei_stich": 32,
-      "abheben": true
-    },
-    {
-      "ventil": "V10",
-      "aus_bei_stich": 48,
-      "abheben": true
-    },
-    {
-      "ventil": "V11",
-      "aus_bei_stich": 50,
-      "abheben": false
-    },
-    {
-      "ventil": "V12",
-      "aus_bei_stich": 54,
-      "abheben": false
-    },
-    {
-      "ventil": "V13",
-      "aus_bei_stich": 64,
-      "abheben": true
-    },
-    {
-      "ventil": "V14",
-      "aus_bei_stich": 69,
-      "abheben": false
-    },
-    {
-      "ventil": "V15",
-      "aus_bei_stich": 77,
-      "abheben": false
-    }
-  ],
+  "trennblech_hinterkante_mm": 16,
+  "drehung_koerper_grad": -50.67,
+  "drehung_aermel_grad": 55.64,
   "griffpunkt_traeger_mm": [
-    -110,
-    -270
+    -170,
+    200
   ],
-  "griff_abstand_min_mm": 93,
+  "griff_lasche_mm": 40,
+  "griff_abstand_min_mm": 51,
+  "griff_hebelarm_max_mm": 304,
+  "griff_weg_x_mm": [
+    3,
+    174
+  ],
+  "griff_weg_y_mm": [
+    111,
+    249
+  ],
   "anlenkpunkt_platte_mm": [
     0,
-    85
+    110
   ],
-  "anlenk_abstand_min_mm": 47,
-  "drehung_koerper_grad": -50.7,
-  "drehung_aermel_grad": 55.6
+  "anlenk_abstand_kopf_min_mm": 72,
+  "anlenk_weg_x_mm": [
+    -139,
+    -132
+  ],
+  "anlenk_weg_y_mm": [
+    -42,
+    41
+  ],
+  "traeger_ueberstreicht_x_mm": [
+    -311,
+    187
+  ],
+  "traeger_ueberstreicht_y_mm": [
+    -469,
+    467
+  ],
+  "staender_frei": true,
+  "v_max_bei_400": {
+    "portal_mm_s": 23.9,
+    "koerper_grad_s": 6.35,
+    "zufuehrung_mm_s": 16.6,
+    "aermel_grad_s": 9.41
+  },
+  "klappfinger": [
+    {
+      "finger": "F1",
+      "hoch_bei_stich": 0
+    },
+    {
+      "finger": "F2",
+      "hoch_bei_stich": 1
+    },
+    {
+      "finger": "F3",
+      "hoch_bei_stich": 9
+    },
+    {
+      "finger": "F4",
+      "hoch_bei_stich": 17
+    },
+    {
+      "finger": "F5",
+      "hoch_bei_stich": 25
+    },
+    {
+      "finger": "F6",
+      "hoch_bei_stich": 33
+    },
+    {
+      "finger": "F7",
+      "hoch_bei_stich": 40
+    },
+    {
+      "finger": "F8",
+      "hoch_bei_stich": 48
+    },
+    {
+      "finger": "F9",
+      "hoch_bei_stich": 55
+    },
+    {
+      "finger": "F10",
+      "hoch_bei_stich": 63
+    },
+    {
+      "finger": "F11",
+      "hoch_bei_stich": 71
+    }
+  ]
 }

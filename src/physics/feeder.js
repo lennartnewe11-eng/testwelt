@@ -14,7 +14,14 @@ const invert = (A) => { const [rx, rz] = rotY(A.tx, A.tz, -A.theta); return { th
 const apply = (A, u, v) => { const [x, z] = rotY(u, v, A.theta); return [x + A.tx, z + A.tz]; };
 
 export class SleeveFeeder {
-  constructor({ cloth, path, pathAt, needle, slot = 0, release = 0.018, holdY = null, parkY = null }) {
+  constructor({ cloth, path, pathAt, needle, slot = 0, release = 0.018, holdY = null, parkY = null, cell = 0, fingerW = 0, fingerDepth = 0.018 }) {
+    // cell > 0: Platte aus Saugkammern im Raster cell [m]; eine Kammer gibt als Ganzes frei, sobald
+    // ihr Mittelpunkt die Freigabelinie erreicht (Hardware-Nachbildung statt ideal feiner Freigabe)
+    this.cell = cell;
+    // fingerW > 0: der Streifen bis fingerDepth neben der Naht wird von Klappfingern der Breite
+    // fingerW (entlang der Naht) gehalten. Ein Finger klappt als Ganzes hoch, sobald sein vorderes
+    // Ende die Freigabelinie erreicht – sein hinterer Teil gibt also bis zu fingerW früher frei.
+    this.fingerW = fingerW; this.fingerDepth = fingerDepth;
     this.parkY = parkY;        // Bereitstellhöhe (Bündchen: Faltapparat hält den Anfang über der Nadel)
     this.parked = false;
     this.curY = holdY;
@@ -146,6 +153,32 @@ export class SleeveFeeder {
     // Plattenvorderkante: Linie quer zur Transportrichtung, release vor der Nadel.
     // Stoff, der diese Linie passiert hat (oder im Nahtschlitz liegt), wird freigegeben.
     const keep = [], p = this.cloth.pos, zLine = this.needle[2] + this.release;
+    if (this.fingerW > 0) {
+      const c = this.cloth, W = this.fingerW;
+      for (const v of this.att) {
+        const finger = this.dist[v] < this.fingerDepth;
+        // Finger j hält die Naht von j·W bis (j+1)·W; klappt hoch, wenn j·W die Freigabelinie erreicht
+        const off = finger ? this.s > Math.floor(this.param[v] / W) * W - this.release : p[3 * v + 2] < zLine;
+        if (off) c.attached[v] = -1; else keep.push(v);
+      }
+      this.att = keep;
+      return;
+    }
+    if (this.cell > 0) {
+      const c = this.cloth, h = this.cell;
+      if (!this.cellOrigin) { let mu = Infinity, mw = Infinity; for (let v = 0; v < c.n; v++) { mu = Math.min(mu, c.rest[2 * v]); mw = Math.min(mw, c.rest[2 * v + 1]); } this.cellOrigin = [mu, mw]; this.cellOff = new Set(); }
+      const [ou, ow] = this.cellOrigin;
+      for (const v of this.att) {
+        const iu = Math.floor((c.rest[2 * v] - ou) / h), iw = Math.floor((c.rest[2 * v + 1] - ow) / h), key = iu * 1000 + iw;
+        if (!this.cellOff.has(key)) {
+          const [, cz] = apply(this.frame, ou + (iu + 0.5) * h, ow + (iw + 0.5) * h);
+          if (cz < zLine) this.cellOff.add(key);
+        }
+        if (this.cellOff.has(key)) c.attached[v] = -1; else keep.push(v);
+      }
+      this.att = keep;
+      return;
+    }
     for (const v of this.att) {
       if (p[3 * v + 2] < zLine) this.cloth.attached[v] = -1;
       else keep.push(v);

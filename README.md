@@ -39,9 +39,15 @@ Wie man darauf aufbauend ein komplettes T-Shirt automatisiert, beschreibt
 ## Prototyp an der eigenen Nähmaschine
 
 Bauanleitung für einen ersten Prototyp „Ärmel einsetzen“ an einer Zoje A6000 (Flachbett-Steppstich,
-nur Untertransport): [docs/prototyp-aermel-a6000.md](docs/prototyp-aermel-a6000.md). Die
-Fertigungsunterlagen (Schnittteile, Werkstückträger, Trennblech, Vakuumplatte als 1:1-SVG,
-Bahntabelle als CSV) erzeugt `node tools/prototyp-export.mjs` im Ordner `prototyp/`.
+nur Untertransport): [docs/prototyp-aermel-a6000.md](docs/prototyp-aermel-a6000.md), mit acht
+Abbildungen, einer Bewertung der kritischen Punkte und einer
+[Einkaufsliste](docs/prototyp-einkaufsliste.md) mit 80 Positionen.
+
+| Skript | erzeugt |
+|---|---|
+| `node tools/prototyp-export.mjs` | Zeichnungen 1:1 (Schnittteile, Träger, Kalibrierplatte, Trennblech, Ärmelplatte), Bahntabelle, Kennwerte in `prototyp/`; maßstäbliche Abbildungen |
+| `node tools/prototyp-skizzen.mjs` | Prinzipskizzen in `docs/bilder/prototyp/` |
+| `node tools/einkaufsliste.mjs` | `prototyp/einkaufsliste.csv` und `docs/prototyp-einkaufsliste.md` |
 
 ## Produktionsstraße
 
@@ -193,6 +199,6 @@ src/render/                Three.js-Darstellung (models.js: detaillierte Maschin
 src/line/                  Produktionsstraße: Schnittteile, Schnittbild, ereignisdiskrete Simulation, 3D-Ansicht
 src/ui/                    Bedienung, Diagramm, Modellbeschreibung, Linienbedienung
 tests/                     Validierung, Szenario-Lauf, Linientests, Halsbündchen
-tools/prototyp-export.mjs  Fertigungsunterlagen für den Prototyp (→ prototyp/)
+tools/                     Fertigungsunterlagen, Abbildungen und Einkaufsliste für den Prototyp (→ prototyp/, docs/bilder/)
 scripts/build-single.mjs   Ein-Datei-Version
 ```

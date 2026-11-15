@@ -386,7 +386,7 @@ export class World {
       const slOut = this.garment.sleeve.outline;
       this.machine.setEdgeGuide({ cloth: this.sleeveCloth, path: this.paths.aermelkugel, capEdge: this.capEdge, bodyPath: path, bodyCloth: this.bodyCloth, inside: (u, v) => pointInPolygon(slOut, u, v) });
       // Platte hält den Ärmel auf Trennblechhöhe (Körper + 0,4 mm Blech)
-      this.feeder = new SleeveFeeder({ cloth: this.sleeveCloth, path: this.paths.aermelkugel, pathAt, needle: NEEDLE, holdY: NEEDLE[1] + 2 * this.bodyCloth.radius + 0.4e-3 + this.sleeveCloth.radius });
+      this.feeder = new SleeveFeeder({ cloth: this.sleeveCloth, path: this.paths.aermelkugel, pathAt, needle: NEEDLE, holdY: NEEDLE[1] + 2 * this.bodyCloth.radius + 0.4e-3 + this.sleeveCloth.radius, cell: c.feederCell || 0, slot: c.feederSlot || 0, release: c.feederRelease ?? 0.018, fingerW: c.feederFingerW || 0, fingerDepth: c.feederFingerDepth ?? 0.018 });
       this.machine.feeder = this.feeder;
     } else {
       const pathName = tshirt ? 'seite_links' : 'kante_rechts';

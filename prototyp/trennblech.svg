@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="290mm" height="336mm" viewBox="0 0 290 336">
-<text x="10" y="8" font-size="5" font-family="sans-serif" font-weight="bold">Trennblech (Federstahl 0,3 mm, poliert) – Draufsicht in Maschinenkoordinaten</text><text x="10" y="14" font-size="3.2" font-family="sans-serif">Ursprung = Nadel. Oben = hinten (Transportrichtung). Kanten entgraten, Vorderkante zur Nadel 30° anfasen, 2,5 mm über dem Tisch.</text>
-<path d="M20,286 L270,286 L270,60 L260,52 L30,52 L20,62 Z" fill="none" stroke="#000" stroke-width="0.4"/><text x="70" y="156" font-size="4" font-family="sans-serif">Trennblech</text>
-<path d="M211,20 L229,20 L229,52 L211,52 Z" fill="none" stroke="#c00" stroke-width="0.3"/><text x="232" y="36" font-size="4" font-family="sans-serif">Nähfuß</text>
-<path d="M215,36 L225,36 M220,31 L220,41" stroke="#c00" stroke-width="0.3"/><text x="222" y="34" font-size="3" fill="#c00" font-family="sans-serif">Ursprung</text>
-<path d="M10,324 L110,324" stroke="#000" stroke-width="0.6"/><path d="M10,322 L10,326 M110,322 L110,326" stroke="#000" stroke-width="0.4"/><text x="10" y="321" font-size="3.5" font-family="sans-serif">100 mm (Ausdruck in Originalgröße prüfen)</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="229.34mm" height="294.96mm" viewBox="0 0 229.34 294.96">
+<rect width="100%" height="100%" fill="#fff"/>
+<text x="10" y="8" font-size="5" font-weight="bold" font-family="Arial, Helvetica, sans-serif">Trennblech (Federstahl 1.4310, 0,3 mm, poliert) – Draufsicht in Maschinenkoordinaten</text><text x="10" y="14" font-size="3.2" font-family="Arial, Helvetica, sans-serif">Ursprung = Nadel, oben = hinten. Kontur = vom Ärmel überstrichene Fläche + 8 mm. Hinterkante 16 mm vor der Nadel, 30° angefast. Befestigung an der Vorderkante von oben.</text>
+<path d="M21.48,64 L20,185.57 L96.89,246.96 L108.59,239.61 L119.66,232.15 L130.15,224.55 L140.13,216.82 L149.68,208.9 L158.98,200.68 L168.23,191.87 L177.44,181.84 L185.74,169.98 L191.74,157.16 L196.21,145.12 L199.6,133.57 L202.37,122.23 L204.68,110.81 L206.55,99.15 L207.96,87.14 L208.93,74.73 L209.34,64 Z" fill="none" stroke="#000" stroke-width="0.4"/><text x="61.48" y="148" font-size="4" fill="#000" font-family="Arial, Helvetica, sans-serif">Trennblech</text>
+<path d="M186.01,32 L204.01,32 L204.01,64 L186.01,64 Z" fill="none" stroke="#c00" stroke-width="0.3"/><text x="207.01" y="48" font-size="4" fill="#c00" font-family="Arial, Helvetica, sans-serif">Nähfuß</text>
+<path d="M190.01,48 L200.01,48 M195.01,43 L195.01,53" stroke="#c00" stroke-width="0.3"/><text x="197.01" y="46" font-size="3" fill="#c00" font-family="Arial, Helvetica, sans-serif">Ursprung</text>
+<path d="M10,284.96 L110,284.96" stroke="#000" stroke-width="0.6"/><path d="M10,282.96 L10,286.96 M110,282.96 L110,286.96" stroke="#000" stroke-width="0.4"/><text x="10" y="281.96" font-size="3.5" font-family="Arial, Helvetica, sans-serif">100 mm (Ausdruck in Originalgröße prüfen)</text>
 </svg>
