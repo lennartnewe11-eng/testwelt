@@ -69,7 +69,13 @@ M = dict(
     tasche_x=4.5,           # Abstand Tasche von der vorderen Mitte
     tasche_breite=14.0,
     tasche_tiefe=14.0,      # ab Passennaht
-    eingriff_rand=0.75,     # Eingriff beginnt/endet so weit innerhalb der Taschenkante  # Oberärmel an der hinteren Naht länger -> Ärmel biegt nach vorn
+    eingriff_rand=0.75,     # Eingriff beginnt/endet so weit innerhalb der Taschenkante
+    # Kragen (einteilig, angeschnittener Steg)
+    kragen_breite=7.0,      # in der hinteren Mitte, Ansatz bis Außenkante
+    kragen_steg=2.8,        # Steghöhe bis zur Umbruchlinie (hintere Mitte)
+    kragen_hub=1.5,         # Ansatzkante steigt zur vorderen Mitte um so viel an (Steg legt sich an den Hals)
+    kragen_spitze=7.5,      # Länge der Vorderkante (Spitze)
+    kragen_spitze_aus=2.0,  # Spitze steht so weit über die vordere Mitte hinaus  # Oberärmel an der hinteren Naht länger -> Ärmel biegt nach vorn
 )
 # Seitennaht: halbe Weiten auf Rücken / Vorderteil verteilt (Rücken etwas breiter)
 SEITE_H = dict(brust=29.0, saum=26.5)
@@ -301,6 +307,36 @@ def taschenbeutel():
     T.kante("Unterkante", seg((b, t), (0, t)), NZ)
     T.kante("Seite vorn", seg((0, t), (0, 0)), NZ)
     return T
+
+
+def kragen(l_hinten, l_vorn):
+    """Halber Kragen, hintere Mitte im Stoffbruch; Ansatzkante = halbes Halsloch."""
+    L = l_hinten + l_vorn
+    r = M["kragen_hub"]
+
+    def ansatz(xe):
+        return cat(seg((0, 0), (l_hinten, 0)),
+                   bez((l_hinten, 0), (l_hinten + 5, 0), (xe - 3.5, -r * 0.6), (xe, -r)))
+
+    lo, hi = l_vorn * 0.7, l_vorn * 1.2 + l_hinten
+    for _ in range(60):
+        xe = (lo + hi) / 2
+        if laenge(ansatz(xe)) < L:
+            lo = xe
+        else:
+            hi = xe
+    an = ansatz(xe)
+    e = an[-1]
+    aus, sp = M["kragen_spitze_aus"], M["kragen_spitze"]
+    p = e + np.array([aus, -math.sqrt(sp ** 2 - aus ** 2)])
+    b = M["kragen_breite"]
+    K = Teil("Kragen")
+    K.kante("Ansatz", an, NZ)
+    K.kante("Vorderkante", seg(e, p), 1.0)
+    K.kante("Außenkante", seg(p, (0, -b)), 1.0)
+    K.kante("Stoffbruch", seg((0, -b), (0, 0)), 0)
+    K.punkte = dict(e=e, p=p, L=L, lh=l_hinten)
+    return K
 
 
 # ---------------------------------------------------------------- Ärmel
@@ -639,6 +675,31 @@ def bauen(variante="zweiteilig"):
     masslinie(TB, (1.2, 0), (1.2, tt), f"{zahl(tt)}", t=0.5, g=0.6, unten=True)
     masslinie(TB, (er, 1.2), (tb - er, 1.2), f"Eingriff {zahl(tb - 2 * er)}", t=0.5, g=0.55)
 
+    # Kragen
+    K = kragen(laenge(R.k("Halsloch")), laenge(V.k("Halsloch")))
+    kp = K.punkte
+    st = M["kragen_steg"]
+    umb = LineString(K.k("Ansatz")).offset_curve(st, join_style="round")
+    up = np.array(umb.coords)
+    if up[:, 1].mean() > 0:
+        up = np.array(LineString(K.k("Ansatz")).offset_curve(-st, join_style="round").coords)
+    if np.linalg.norm(up[0]) > np.linalg.norm(up[-1]):
+        up = up[::-1]
+    up = up[up[:, 0] <= kp["e"][0] - 0.3]
+    hilfslinie(K, up, "Umbruchlinie", (6.0, -st - 0.35), groesse=0.55)
+    knips(K, "Ansatz", kp["lh"])  # Schulternaht
+    fadenlauf(K, (3.0, -5.4), (13.0, -5.4))
+    text(K, (17.5, -4.6), "KRAGEN", 1.1, gewicht="bold")
+    text(K, (11.0, -1.7), "2× im Stoffbruch (Ober- und Unterkragen)", 0.55)
+    text(K, (11.0, -0.8), "NZ Ansatz 1,5 cm · Kanten 1 cm", 0.5)
+    text(K, (-0.6, -3.5), "STOFFBRUCH · hintere Mitte", 0.55, rot=-90)
+    text(K, (kp["lh"] + 2.2, 0.75), "Schulter", 0.5)
+    masslinie(K, (0.6, 0), (0.6, -M["kragen_breite"]), f"Breite {zahl(M['kragen_breite'])}", t=0.5, g=0.55, unten=True)
+    masslinie(K, (4.5, 0), (4.5, -st), f"Steg {zahl(st)}", t=0.5, g=0.45, unten=True)
+    nahtmass(K, "Ansatz", "Ansatz", f=0.88, g=0.55)
+    nahtmass(K, "Vorderkante", "Spitze", f=0.5, g=0.55)
+    nahtmass(K, "Außenkante", "Außenkante", f=0.35, g=0.55)
+
     kontrolle = {
         "Brustweite Jacke": M["brust"],
         "Weite in Taillenhöhe": round(2 * (x_bei_y(R.k("Seitennaht"), M["taille_y"]) + x_bei_y(V.k("Seitennaht"), M["taille_y"])), 1),
@@ -656,6 +717,9 @@ def bauen(variante="zweiteilig"):
         "Passennaht vorne": round(laenge(VU.k("Passennaht")), 1),
         "Brusttasche (fertig)": f"{zahl(tb)} × {zahl(tt)}",
         "Taschen-Eingriff": round(e1 - e0, 1),
+        "Kragenbreite hintere Mitte": M["kragen_breite"],
+        "Kragensteg bis Umbruch": M["kragen_steg"],
+        "Kragenspitze": M["kragen_spitze"],
     }
 
     if variante == "einteilig":
@@ -684,7 +748,7 @@ def bauen(variante="zweiteilig"):
         nahtmass(A, "Armkugel", "Kugel hinten", s0=s_schulter)
         nahtmass(A, "Unterarmnaht vorne", "Unterarmnaht", f=0.3)
         nahtmass(A, "Unterarmnaht hinten", "Unterarmnaht", f=0.7)
-        teile = [[R], [VP, VU], [A], ["quadrat", TB]]
+        teile = [[R], [VP, VU], [A], ["quadrat", TB, (K, "quer")]]
         kontrolle.update({
             "Armkugel gesamt": round(kv, 1),
             "Mehrweite Kugel": round(kv - ah, 1),
@@ -752,7 +816,7 @@ def bauen(variante="zweiteilig"):
         nahtmass(AH, "Armkugel", "Kugel", g=0.55, f=0.4)
         nahtmass(AH, "Unterarmnaht", "Unterarmnaht", f=0.6, g=0.6)
         nahtmass(AH, "Hintere Ärmelnaht", "Hintere Naht", f=0.25, g=0.6)
-        teile = [[R], [VP, VU], [AO], [AH], ["quadrat", TB]]
+        teile = [[R], [VP, VU], [AO], [AH], ["quadrat", TB, (K, "quer")]]
         kontrolle.update({
             "Armkugel gesamt": round(kv, 1),
             "Mehrweite Kugel": round(kv - ah, 1),
@@ -789,17 +853,25 @@ def layout(spalten):
                 y += 10 + 2.5 + gap
                 breite = max(breite, 10.0)
                 continue
-            cut = T.schnitt()
+            quer = isinstance(T, tuple)
+            if quer:
+                T = T[0]
+            # quer: 90° im Uhrzeigersinn drehen (x, y) -> (-y, x)
+            dreh = (lambda a: np.stack([-a[..., 1], a[..., 0]], axis=-1)) if quer else (lambda a: a)
+            cut = dreh(T.schnitt())
             minx, miny = cut.min(axis=0)
             maxx, maxy = cut.max(axis=0)
             off = np.array([x - minx, y - miny])
             elemente.append(("schnitt", cut + off))
-            elemente.append(("naht", T.naht() + off))
+            elemente.append(("naht", dreh(T.naht()) + off))
             for e in T.innen:
                 if e[0] == "text":
-                    elemente.append(("text", e[1] + off) + e[2:])
+                    rot = e[5] + (90 if quer else 0)
+                    if rot > 90:
+                        rot -= 180
+                    elemente.append(("text", dreh(e[1]) + off) + e[2:5] + (rot,) + e[6:])
                 else:
-                    elemente.append((e[0], e[1] + off))
+                    elemente.append((e[0], dreh(e[1]) + off))
             y += (maxy - miny) + gap
             breite = max(breite, maxx - minx)
         unten = max(unten, y - gap)

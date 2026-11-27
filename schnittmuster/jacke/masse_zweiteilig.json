@@ -51,7 +51,12 @@
     "tasche_x": 4.5,
     "tasche_breite": 14.0,
     "tasche_tiefe": 14.0,
-    "eingriff_rand": 0.75
+    "eingriff_rand": 0.75,
+    "kragen_breite": 7.0,
+    "kragen_steg": 2.8,
+    "kragen_hub": 1.5,
+    "kragen_spitze": 7.5,
+    "kragen_spitze_aus": 2.0
   },
   "kontrollmasse": {
     "Brustweite Jacke": 114.0,
@@ -70,6 +75,9 @@
     "Passennaht vorne": 20.7,
     "Brusttasche (fertig)": "14 × 14",
     "Taschen-Eingriff": 12.5,
+    "Kragenbreite hintere Mitte": 7.0,
+    "Kragensteg bis Umbruch": 2.8,
+    "Kragenspitze": 7.5,
     "Armkugel gesamt": 56.2,
     "Mehrweite Kugel": 1.2,
     "Kugelhöhe": 17.5,

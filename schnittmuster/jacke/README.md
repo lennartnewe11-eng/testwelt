@@ -4,14 +4,14 @@ Zwei Varianten, Rumpf identisch:
 
 | Variante | Teile |
 |---|---|
-| **zweiteilig** – hintere Ärmelnaht, Ärmel biegt leicht nach vorn | Rücken (1× im Stoffbruch), vordere Passe (2×), Vorderteil (2×), Oberärmel (2×), Hinterärmel (2×), Taschenbeutel (2×) |
-| **einteilig** – ohne hintere Ärmelnaht | Rücken (1× im Stoffbruch), vordere Passe (2×), Vorderteil (2×), Ärmel (2×), Taschenbeutel (2×) |
+| **zweiteilig** – hintere Ärmelnaht, Ärmel biegt leicht nach vorn | Rücken (1× im Stoffbruch), vordere Passe (2×), Vorderteil (2×), Oberärmel (2×), Hinterärmel (2×), Taschenbeutel (2×), Kragen (2× im Stoffbruch) |
+| **einteilig** – ohne hintere Ärmelnaht | Rücken (1× im Stoffbruch), vordere Passe (2×), Vorderteil (2×), Ärmel (2×), Taschenbeutel (2×), Kragen (2× im Stoffbruch) |
 
-Weitere Details (Übertritt, Knopfleiste, Kragen, Bund, Manschetten) folgen im nächsten Schritt.
+Weitere Details (Übertritt, Knopfleiste, Bund, Manschetten) folgen im nächsten Schritt.
 
 | Datei (je Variante `zweiteilig` / `einteilig`) | Zweck |
 |---|---|
-| `grundschnitt_<variante>_A4.pdf` | Seite 1 Übersicht + Kontrollmaße, danach A4-Seiten zum Zusammenkleben (23 bzw. 22) |
+| `grundschnitt_<variante>_A4.pdf` | Seite 1 Übersicht + Kontrollmaße, danach A4-Seiten zum Zusammenkleben (24 bzw. 23) |
 | `grundschnitt_<variante>_A0.pdf` | eine große Seite 1:1 für Copyshop / Plotter |
 | `grundschnitt_<variante>_1zu1.svg` | dasselbe als SVG 1:1 |
 | `masse_<variante>.json` | alle verwendeten Maße und Kontrollmaße |
@@ -37,6 +37,20 @@ Brusttasche nur auf dem **linken Vorderteil** (getragen links), 4,5 cm neben der
 Nähen: Beutel 1 rechts auf rechts an die Eingriffkante des Vorderteils nähen, nach innen wenden, Kante absteppen.
 Beutel 2 an die Nahtzugabe der Passe im Eingriffbereich nähen. Passennaht links und rechts vom Eingriff schließen,
 Beutelteile ringsum zusammennähen, dann den Beutel von außen auf der markierten Linie (14 × 14 cm) absteppen.
+
+## Kragen
+
+Einteiliger Hemdkragen mit angeschnittenem Steg, hintere Mitte im Stoffbruch, 2× zuschneiden (Ober- und Unterkragen).
+
+| | |
+|---|---|
+| Breite in der hinteren Mitte | 7 cm (2,8 cm Steg bis zur Umbruchlinie + 4,2 cm sichtbarer Kragen) |
+| Spitze | 7,5 cm lang, steht 2 cm über die vordere Mitte hinaus |
+| Ansatzkante | 21,3 cm je Hälfte = halbes Halsloch (Rücken 8,8 + vorne 12,5), Knips an der Schulternaht |
+| Nahtzugabe | Ansatz 1,5 cm, Außen- und Vorderkante 1 cm |
+
+Die Ansatzkante steigt zur vorderen Mitte um 1,5 cm an, damit sich der Steg an den Hals legt. Der Kragen endet an
+der vorderen Mitte; Unterkragen mit Einlage verstärken.
 
 ## Maße
 
