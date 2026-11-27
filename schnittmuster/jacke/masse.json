@@ -42,7 +42,10 @@
     "oberarm": 42.0,
     "aermelsaum": 27.0,
     "ellbogen": 35.0,
-    "kugel_mehrweite": 1.2
+    "kugel_mehrweite": 1.2,
+    "hinternaht_kugel": 14.0,
+    "hinternaht_saum": 0.45,
+    "ellbogen_mehrweite": 1.0
   },
   "kontrollmasse": {
     "Brustweite Jacke": 114.0,
@@ -64,6 +67,10 @@
     "Oberarmweite Ärmel": 42.0,
     "Saumweite Ärmel": 27.0,
     "Unterarmnaht": 47.1,
+    "Hintere Ärmelnaht Oberärmel": 56.7,
+    "Hintere Ärmelnaht Hinterärmel": 55.7,
+    "Ellbogen-Mehrweite (einhalten)": 1.0,
+    "Vorschub am Ärmelsaum": 1.1,
     "Halsloch gesamt (für Kragen)": 42.6
   }
 }

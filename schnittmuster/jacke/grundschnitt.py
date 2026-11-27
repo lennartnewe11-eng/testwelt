@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Grundschnitt Jacke (Trucker-Form, slim, Größe L): Vorderteil, Rücken, Ärmel.
+"""Grundschnitt Jacke (Trucker-Form, slim, Größe L): Vorderteil, Rücken, zweiteiliger Ärmel.
 
 Alle Maße in cm. Koordinaten: x nach rechts, y nach unten.
 Rücken:    Ursprung = hintere Mitte am Halsausschnitt, x nach außen zur Seitennaht.
@@ -60,6 +60,9 @@ M = dict(
     aermelsaum=27.0,     # Saumweite Ärmel
     ellbogen=35.0,       # Ellbogenhöhe ab Kugeloberkante
     kugel_mehrweite=1.2,  # Mehrweite Kugel gegenüber Armloch (Denim: wenig)
+    hinternaht_kugel=14.0,  # hintere Ärmelnaht beginnt so weit (Bogen) über der Unterarmnaht
+    hinternaht_saum=0.45,   # Lage am Saum: Anteil der halben Saumweite hinter der Mitte
+    ellbogen_mehrweite=1.0,  # Oberärmel an der hinteren Naht länger -> Ärmel biegt nach vorn
 )
 # Seitennaht: halbe Weiten auf Rücken / Vorderteil verteilt (Rücken etwas breiter)
 SEITE_H = dict(brust=29.0, saum=26.75)
@@ -162,11 +165,14 @@ class Teil:
         n = len(offs)
         for i in range(n):
             a, b = offs[i], offs[(i + 1) % n]
+            ecke = self.kanten[i][1][-1]
+            zmax = max(self.kanten[i][2], self.kanten[(i + 1) % n][2])
             p = schnittpunkt(a[-2], a[-1], b[0], b[1])
-            if p is not None:
+            # spitze Ecken nicht als lange Spitze auslaufen lassen, sondern gerade abschneiden
+            if p is not None and np.linalg.norm(p - ecke) <= 2.0 * zmax:
                 a[-1] = p
                 b[0] = p
-        return cat(*offs)
+        return np.vstack(offs)
 
 
 def schnittpunkt(a1, a2, b1, b2):
@@ -256,8 +262,29 @@ def kugel(h, w):
     return v, hi
 
 
+def rot_um(pts, P, th):
+    """Drehung um P; th > 0 schwenkt Punkte unterhalb von P nach vorne (−x)."""
+    c, sn = math.cos(th), math.sin(th)
+    d = np.asarray(pts, float) - P
+    return P + np.stack([d[..., 0] * c - d[..., 1] * sn, d[..., 0] * sn + d[..., 1] * c], axis=-1)
+
+
+def teilen(pts, s):
+    """Polylinie bei Bogenlänge s teilen."""
+    p, _ = bei(pts, s)
+    d = np.linalg.norm(np.diff(pts, axis=0), axis=1)
+    c = np.concatenate([[0], np.cumsum(d)])
+    i = int(np.searchsorted(c, s))
+    return np.vstack([pts[:i], p]), np.vstack([p, pts[i:]])
+
+
+def auf_linie(a, b, y):
+    a, b = np.asarray(a, float), np.asarray(b, float)
+    return a + (b - a) * (y - a[1]) / (b[1] - a[1])
+
+
 def aermel(ah_v, ah_h):
-    T = Teil("Ärmel")
+    """Zweiteiliger Ärmel: Oberärmel + Hinterärmel, hintere Naht mit Ellbogen-Mehrweite."""
     w = M["oberarm"] / 2
     ziel = ah_v + ah_h + M["kugel_mehrweite"]
     lo, hi = 8.0, 24.0
@@ -269,15 +296,52 @@ def aermel(ah_v, ah_h):
         else:
             hi = h
     v, b = kugel(h, w)
-    kurve = cat(v, b)
     L = M["aermellaenge"]
     s = M["aermelsaum"] / 2
-    T.kante("Unterarmnaht vorne", seg((-s, L), (-w, h))[::1], NZ)
-    T.kante("Armkugel", kurve, NZ)
-    T.kante("Unterarmnaht hinten", seg((w, h), (s, L)), NZ)
-    T.kante("Ärmelsaum", seg((s, L), (-s, L)), SAUMZ)
-    T.punkte = dict(h=h, w=w, s=s, L=L)
-    return T
+    ye = M["ellbogen"]
+
+    # hintere Naht: von der hinteren Kugel gerade zum Saum
+    b1, b2 = teilen(b, laenge(b) - M["hinternaht_kugel"])
+    ct = b2[0]
+    sh = np.array([M["hinternaht_saum"] * s, L])
+    su = auf_linie(ct, sh, ye)
+    fh, fa = np.array([-s, L]), np.array([-w, h])
+    pf = auf_linie(fa, fh, ye)  # Drehpunkt: Unterarmnaht vorne auf Ellbogenhöhe
+
+    def hinternaht(th):
+        sl, sb = rot_um(su, pf, th), rot_um(sh, pf, th)
+        du, dl = unit(su - ct), unit(sb - sl)
+        A, B = su - 5 * du, sl + 5 * dl
+        return cat(seg(ct, A), bez(A, A + 2.5 * du, B - 2.5 * dl, B), seg(B, sb)), A, B, sb
+
+    gerade = float(np.linalg.norm(sh - ct))
+    lo, hi = 0.0, 0.2
+    for _ in range(60):
+        th = (lo + hi) / 2
+        if laenge(hinternaht(th)[0]) - gerade < M["ellbogen_mehrweite"]:
+            lo = th
+        else:
+            hi = th
+    naht_o, A, B, sb = hinternaht(th)
+    fh2 = rot_um(fh, pf, th)
+    vorn = bez(fh2, fh2 + 2 / 3 * (pf - fh2), fa + 2 / 3 * (pf - fa), fa, n=96)
+
+    O = Teil("Oberärmel")
+    O.kante("Unterarmnaht", vorn, NZ)
+    O.kante("Armkugel", cat(v, b1), NZ)
+    O.kante("Hintere Ärmelnaht", naht_o, NZ)
+    O.kante("Ärmelsaum", seg(sb, fh2), SAUMZ)
+
+    H = Teil("Hinterärmel")
+    H.kante("Hintere Ärmelnaht", seg(sh, ct), NZ)
+    H.kante("Armkugel", b2, NZ)
+    H.kante("Unterarmnaht", seg((w, h), (s, L)), NZ)
+    H.kante("Ärmelsaum", seg((s, L), sh), SAUMZ)
+
+    info = dict(h=h, w=w, s=s, L=L, ye=ye, th=th, ct=ct, sh=sh, su=su, pf=pf,
+                a_oben=float(np.linalg.norm(A - ct)), b_unten=float(np.linalg.norm(sb - B)),
+                vorschub=float(-(rot_um(np.array([0.0, L]), pf, th)[0])))
+    return O, H, info
 
 
 # ---------------------------------------------------------------- Markierungen
@@ -339,10 +403,10 @@ def schnitt_bis_kante(poly, y, x0, x1):
 def bauen():
     R, V = ruecken(), vorderteil()
     ah_h, ah_v = laenge(R.k("Armloch")), laenge(V.k("Armloch"))
-    A = aermel(ah_v, ah_h)
+    AO, AH, ai = aermel(ah_v, ah_h)
     ah = ah_h + ah_v
     mw = M["kugel_mehrweite"]
-    kv = laenge(A.k("Armkugel"))
+    kv = laenge(AO.k("Armkugel")) + laenge(AH.k("Armkugel"))
     # Schulterknips auf der Kugel: Mehrweite anteilig auf vorne/hinten
     s_schulter = ah_v + mw * ah_v / ah
     KN_V, KN_H = 8.0, 9.0  # Knipse im Armloch ab Seitennaht
@@ -380,23 +444,38 @@ def bauen():
     knips(V, "Armloch", KN_V, von_ende=True)
     knips(V, "Seitennaht", bis_y(V.k("Seitennaht"), M["taille_y"]))
 
-    # Ärmel
-    p = A.punkte
-    fadenlauf(A, (0, p["h"] + 4), (0, p["L"] - 6))
-    hilfslinie(A, [(-p["w"], p["h"]), (p["w"], p["h"])], "Oberarmlinie", (-p["w"] + 1.5, p["h"] - 0.4), groesse=0.8)
-    ye = M["ellbogen"]
-    xe_v = -p["w"] + (p["w"] - p["s"]) * (ye - p["h"]) / (p["L"] - p["h"])
-    hilfslinie(A, [(xe_v, ye), (-xe_v, ye)], "Ellbogenlinie", (xe_v + 1.5, ye - 0.4), groesse=0.8)
-    text(A, (0, p["h"] + 12), "ÄRMEL", 1.8, gewicht="bold")
-    text(A, (0, p["h"] + 14.5), "2× zuschneiden (gegengleich)", 1.1)
-    text(A, (0, p["h"] + 16.5), "Grundschnitt Jacke · Gr. L slim", 0.8)
-    text(A, (-p["w"] + 4.5, p["h"] + 4), "vorne", 1.0)
-    text(A, (p["w"] - 4.5, p["h"] + 4), "hinten", 1.0)
-    kname = "Armkugel"
-    knips(A, kname, KN_V + 0.2)                       # vorne einfach
-    knips(A, kname, KN_H + 0.3, von_ende=True, doppelt=True)  # hinten doppelt
-    knips(A, kname, s_schulter)                        # Schulterpunkt
-    knips(A, "Unterarmnaht hinten", laenge(seg((p["w"], p["h"]), (p["s"], p["L"]))) * (ye - p["h"]) / (p["L"] - p["h"]))
+    # Oberärmel
+    p = ai
+    xs = lambda y: auf_linie(p["ct"], p["sh"], y)[0]
+    ye, h = p["ye"], p["h"]
+    fadenlauf(AO, (-3, h + 3), (-3, p["L"] - 7))
+    hilfslinie(AO, [(-p["w"], h), (xs(h), h)], "Oberarmlinie", (-p["w"] + 1.5, h - 0.4), groesse=0.8)
+    hilfslinie(AO, [p["pf"], p["su"]], "Ellbogenlinie", (p["pf"][0] + 1.5, ye - 0.4), groesse=0.8)
+    text(AO, (4, h + 12), "OBERÄRMEL", 1.8, gewicht="bold")
+    text(AO, (4, h + 14.5), "2× zuschneiden (gegengleich)", 1.1)
+    text(AO, (4, h + 16.5), "Grundschnitt Jacke · Gr. L slim", 0.8)
+    text(AO, (-p["w"] + 4.5, h + 4), "vorne", 1.0)
+    text(AO, (xs(ye + 6) - 2.0, ye + 6), "Mehrweite", 0.7, anker="end")
+    text(AO, (xs(ye + 6) - 2.0, ye + 7), "einhalten", 0.7, anker="end")
+    knips(AO, "Armkugel", KN_V + 0.2)                  # vorne einfach
+    knips(AO, "Armkugel", s_schulter)                  # Schulterpunkt
+    knips(AO, "Unterarmnaht", bis_y(AO.k("Unterarmnaht")[::-1], ye), von_ende=True)
+    knips(AO, "Hintere Ärmelnaht", p["a_oben"])
+    knips(AO, "Hintere Ärmelnaht", p["b_unten"], von_ende=True)
+
+    # Hinterärmel
+    xm = (xs(ye) + p["w"] - (p["w"] - p["s"]) * (ye - h) / (p["L"] - h)) / 2
+    fadenlauf(AH, (xm + 1.0, ye - 14), (xm + 1.0, ye + 16))
+    xb = lambda y: p["w"] - (p["w"] - p["s"]) * (y - h) / (p["L"] - h)
+    hilfslinie(AH, [(xs(h), h), (p["w"], h)])
+    hilfslinie(AH, [p["su"], (xb(ye), ye)])
+    text(AH, (xm - 1.6, ye + 4), "HINTERÄRMEL", 1.3, rot=-90, gewicht="bold")
+    text(AH, (xm - 0.2, ye + 4), "2× (gegengleich)", 0.8, rot=-90)
+    text(AH, (xb(h + 3) - 1.2, h + 3), "hinten", 0.9, anker="end")
+    knips(AH, "Armkugel", KN_H + 0.3, von_ende=True, doppelt=True)  # hinten doppelt
+    knips(AH, "Unterarmnaht", float(np.linalg.norm(np.array([xb(ye), ye]) - np.array([p["w"], h]))))
+    knips(AH, "Hintere Ärmelnaht", p["a_oben"], von_ende=True)
+    knips(AH, "Hintere Ärmelnaht", p["b_unten"])
 
     kontrolle = {
         "Brustweite Jacke": M["brust"],
@@ -413,14 +492,18 @@ def bauen():
         "Armloch hinten": round(ah_h, 1),
         "Armkugel gesamt": round(kv, 1),
         "Mehrweite Kugel": round(kv - ah, 1),
-        "Kugelhöhe": round(A.punkte["h"], 1),
+        "Kugelhöhe": round(ai["h"], 1),
         "Ärmellänge": M["aermellaenge"],
         "Oberarmweite Ärmel": M["oberarm"],
         "Saumweite Ärmel": M["aermelsaum"],
-        "Unterarmnaht": round(laenge(A.k("Unterarmnaht hinten")), 1),
+        "Unterarmnaht": round(laenge(AH.k("Unterarmnaht")), 1),
+        "Hintere Ärmelnaht Oberärmel": round(laenge(AO.k("Hintere Ärmelnaht")), 1),
+        "Hintere Ärmelnaht Hinterärmel": round(laenge(AH.k("Hintere Ärmelnaht")), 1),
+        "Ellbogen-Mehrweite (einhalten)": round(laenge(AO.k("Hintere Ärmelnaht")) - laenge(AH.k("Hintere Ärmelnaht")), 1),
+        "Vorschub am Ärmelsaum": round(ai["vorschub"], 1),
         "Halsloch gesamt (für Kragen)": round(2 * (laenge(V.k("Halsloch")) + laenge(R.k("Halsloch"))), 1),
     }
-    return [R, V, A], kontrolle
+    return [R, V, AO, AH], kontrolle
 
 
 # ---------------------------------------------------------------- Layout
@@ -560,7 +643,7 @@ def pdf_a4(elemente, W, H, pfad, kontrolle):
     c.drawString(2 * cm, (PH - 2.5) * cm, "Grundschnitt Jacke · Gr. L · slim")
     c.setFont("Helvetica", 10)
     zeilen = [
-        "Vorderteil, Rücken, Ärmel · Nahtzugabe 1,5 cm, Saumzugabe 3 cm enthalten.",
+        "Vorderteil, Rücken, Ober- und Hinterärmel · Nahtzugabe 1,5 cm, Saumzugabe 3 cm enthalten.",
         "Drucken mit 100 % / „Tatsächliche Größe“ (nicht „An Seite anpassen“).",
         "Danach das Kontrollquadrat nachmessen: es muss genau 10 × 10 cm groß sein.",
         "Seiten nach Raster zusammenlegen (Spalte A, B, … von links; Reihe 1, 2, … von oben).",
