@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Grundschnitt Jacke (Trucker-Form, slim, Größe L): Vorderteil, Rücken, zweiteiliger Ärmel.
+"""Grundschnitt Jacke (Trucker-Form, slim, Größe L): Vorderteil, Rücken, Ärmel
+in zwei Varianten: Ärmel zweiteilig (hintere Ärmelnaht) oder einteilig.
 
 Alle Maße in cm. Koordinaten: x nach rechts, y nach unten.
 Rücken:    Ursprung = hintere Mitte am Halsausschnitt, x nach außen zur Seitennaht.
@@ -7,11 +8,11 @@ Vorderteil: Ursprung = vordere Mitte auf Höhe hintere Halsmitte, x nach außen.
            Brustlinie und Saum liegen bei Vorder- und Rückenteil auf gleicher Höhe.
 Ärmel:     Ursprung = Kugelhöhe-Oberkante in der Ärmelmitte.
 
-Erzeugt im selben Ordner:
-  grundschnitt_1zu1.svg   alle Teile 1:1 (für Plotter / Copyshop)
-  grundschnitt_A4.pdf     Übersicht + zum Zusammenkleben gekachelte A4-Seiten
-  grundschnitt_A0.pdf     eine große Seite 1:1 (Copyshop / Plotter)
-  masse.json              verwendete Maße und Kontrollmaße der Teile
+Erzeugt im selben Ordner je Variante <v> = zweiteilig | einteilig:
+  grundschnitt_<v>_1zu1.svg   alle Teile 1:1 mit Maßen (für Plotter / Copyshop)
+  grundschnitt_<v>_A4.pdf     Übersicht + zum Zusammenkleben gekachelte A4-Seiten
+  grundschnitt_<v>_A0.pdf     eine große Seite 1:1 (Copyshop / Plotter)
+  masse_<v>.json              verwendete Maße und Kontrollmaße der Teile
 
 Aufruf: python3 grundschnitt.py
 Benötigt: numpy, shapely, reportlab
@@ -65,8 +66,8 @@ M = dict(
     ellbogen_mehrweite=1.0,  # Oberärmel an der hinteren Naht länger -> Ärmel biegt nach vorn
 )
 # Seitennaht: halbe Weiten auf Rücken / Vorderteil verteilt (Rücken etwas breiter)
-SEITE_H = dict(brust=29.0, saum=26.75)
-SEITE_V = dict(brust=M["brust"] / 2 - 29.0, saum=M["saum"] / 2 - 26.75)
+SEITE_H = dict(brust=29.0, saum=26.5)
+SEITE_V = dict(brust=M["brust"] / 2 - 29.0, saum=M["saum"] / 2 - 26.5)
 
 
 def seitennaht(sc, ss):
@@ -283,6 +284,33 @@ def auf_linie(a, b, y):
     return a + (b - a) * (y - a[1]) / (b[1] - a[1])
 
 
+def kugelhoehe(ah_v, ah_h, w):
+    ziel = ah_v + ah_h + M["kugel_mehrweite"]
+    lo, hi = 8.0, 24.0
+    for _ in range(60):
+        h = (lo + hi) / 2
+        v, b = kugel(h, w)
+        if laenge(v) + laenge(b) < ziel:
+            lo = h
+        else:
+            hi = h
+    return h
+
+
+def aermel_einteilig(ah_v, ah_h):
+    """Einteiliger Ärmel ohne hintere Naht."""
+    w = M["oberarm"] / 2
+    h = kugelhoehe(ah_v, ah_h, w)
+    v, b = kugel(h, w)
+    L, s = M["aermellaenge"], M["aermelsaum"] / 2
+    T = Teil("Ärmel")
+    T.kante("Unterarmnaht vorne", seg((-s, L), (-w, h)), NZ)
+    T.kante("Armkugel", cat(v, b), NZ)
+    T.kante("Unterarmnaht hinten", seg((w, h), (s, L)), NZ)
+    T.kante("Ärmelsaum", seg((s, L), (-s, L)), SAUMZ)
+    return T, dict(h=h, w=w, s=s, L=L, ye=M["ellbogen"])
+
+
 def aermel(ah_v, ah_h):
     """Zweiteiliger Ärmel: Oberärmel + Hinterärmel, hintere Naht mit Ellbogen-Mehrweite."""
     w = M["oberarm"] / 2
@@ -381,6 +409,64 @@ def text(T, at, s, groesse=1.2, anker="middle", rot=0, gewicht="normal"):
     T.innen.append(("text", np.array(at, float), s, groesse, anker, rot, gewicht))
 
 
+def zahl(v, d=1):
+    t = f"{round(v, d):.{d}f}"
+    if "." in t:
+        t = t.rstrip("0").rstrip(".")
+    return t.replace(".", ",")
+
+
+def lesbar(d):
+    a = math.degrees(math.atan2(d[1], d[0]))
+    if a > 90:
+        a -= 180
+    elif a < -90:
+        a += 180
+    return a
+
+
+def masslinie(T, a, b, txt, t=0.5, g=0.7, unten=False):
+    """Maßlinie mit Pfeilen; Text liest sich entlang der Linie."""
+    a, b = np.array(a, float), np.array(b, float)
+    d = unit(b - a)
+    n = perp(d)
+    T.innen.append(("mass", np.array([a, b])))
+    for p, dd in ((a, d), (b, -d)):
+        T.innen.append(("mass", np.array([p + 0.7 * dd + 0.25 * n, p, p + 0.7 * dd - 0.25 * n])))
+    ar = math.radians(lesbar(d))
+    u = np.array([math.sin(ar), -math.cos(ar)])  # "oben" des Textes
+    m = a + (b - a) * t
+    m = m - (0.25 + 0.75 * g) * u if unten else m + 0.25 * u
+    T.innen.append(("text", m, txt, g, "middle", math.degrees(ar), "mass"))
+
+
+def weite(T, y, txt, t=0.3, g=0.7, x0=-60, x1=60):
+    """Waagerechte Maßlinie über die ganze Breite des Teils (Nahtlinie) auf Höhe y."""
+    c = schnitt_bis_kante(T.poly(), y, x0, x1)
+    a, b = c[0], c[-1]
+    if a[0] > b[0]:
+        a, b = b, a
+    masslinie(T, a, b, f"{txt} {zahl(b[0] - a[0])}", t=t, g=g)
+    return b[0] - a[0]
+
+
+def nahtmass(T, kname, txt, f=0.5, rein=1.0, g=0.65, s0=None, s1=None):
+    """Länge einer Naht (oder eines Abschnitts s0..s1) als Text an der Naht."""
+    pts = T.k(kname)
+    s0 = 0.0 if s0 is None else s0
+    s1 = laenge(pts) if s1 is None else s1
+    p, tg = bei(pts, s0 + f * (s1 - s0))
+    n = perp(tg)
+    if not T.poly().contains(Point(p + 0.05 * n)):
+        n = -n
+    ar = math.radians(lesbar(tg))
+    u = np.array([math.sin(ar), -math.cos(ar)])
+    q = p + rein * n
+    if np.dot(u, n) > 0:  # Text wächst nach innen: Grundlinie näher an die Naht
+        q = p + 0.45 * n
+    T.innen.append(("text", q, f"{txt} {zahl(s1 - s0)}", g, "middle", math.degrees(ar), "mass"))
+
+
 def bis_y(pts, y):
     """Bogenlänge vom Anfang bis zur Höhe y."""
     i = int(np.argmax(pts[:, 1] >= y))
@@ -400,16 +486,21 @@ def schnitt_bis_kante(poly, y, x0, x1):
 
 
 # ---------------------------------------------------------------- Aufbau
-def bauen():
+VARIANTEN = {
+    "zweiteilig": "Ärmel zweiteilig (mit hinterer Ärmelnaht)",
+    "einteilig": "Ärmel einteilig (ohne hintere Ärmelnaht)",
+}
+
+
+def bauen(variante="zweiteilig"):
     R, V = ruecken(), vorderteil()
     ah_h, ah_v = laenge(R.k("Armloch")), laenge(V.k("Armloch"))
-    AO, AH, ai = aermel(ah_v, ah_h)
     ah = ah_h + ah_v
     mw = M["kugel_mehrweite"]
-    kv = laenge(AO.k("Armkugel")) + laenge(AH.k("Armkugel"))
     # Schulterknips auf der Kugel: Mehrweite anteilig auf vorne/hinten
     s_schulter = ah_v + mw * ah_v / ah
     KN_V, KN_H = 8.0, 9.0  # Knipse im Armloch ab Seitennaht
+    kopf = "Grundschnitt Jacke · Gr. L slim"
 
     # Rücken
     p = R.punkte
@@ -419,16 +510,24 @@ def bauen():
         hilfslinie(R, c, t, (c[0][0] + 9, y - 0.4), groesse=0.8)
     text(R, (15, 30.5), "RÜCKEN", 1.8, gewicht="bold")
     text(R, (15, 33.0), "1× im Stoffbruch", 1.1)
-    text(R, (15, 35.0), "Grundschnitt Jacke · Gr. L slim", 0.8)
+    text(R, (15, 35.0), kopf, 0.8)
     text(R, (15, 36.4), f"NZ {NZ:g} cm · Saum {SAUMZ:g} cm inkl.", 0.8)
+    text(R, (15, 37.8), f"Schulterbreite gesamt {zahl(M['schulterbreite'])} cm", 0.8)
     text(R, (-0.6, 40), "STOFFBRUCH  · hintere Mitte", 1.0, rot=-90)
     knips(R, "Armloch", KN_H, von_ende=True, doppelt=True)
     knips(R, "Seitennaht", bis_y(R.k("Seitennaht"), M["taille_y"]))
-    # Pfeile Stoffbruch
     for y in (12, p["y_saum"] - 12):
         R.innen.append(("faden", np.array([(4.0, y - 2.5), (1.2, y - 2.5), (1.2, y + 2.5), (4.0, y + 2.5)])))
         R.innen.append(("faden", np.array([(1.8, y - 3.0), (1.2, y - 2.5), (1.8, y - 2.0)])))
         R.innen.append(("faden", np.array([(1.8, y + 2.0), (1.2, y + 2.5), (1.8, y + 3.0)])))
+    masslinie(R, (0.6, 0), (0.6, p["y_saum"]), f"Rückenlänge {zahl(p['y_saum'])}", t=0.5, unten=True)
+    weite(R, p["y_brust"], "½ Brust", t=0.6, x0=0)
+    weite(R, M["taille_y"], "½ Weite Taillenhöhe", t=0.72, x0=0)
+    weite(R, p["y_saum"] - 2.0, "½ Saum", t=0.6, x0=0)
+    nahtmass(R, "Halsloch", "Halsloch", f=0.45)
+    nahtmass(R, "Schulter", "Schulter")
+    nahtmass(R, "Armloch", "Armloch", f=0.35)
+    nahtmass(R, "Seitennaht", "Seitennaht", f=0.75)
 
     # Vorderteil
     p = V.punkte
@@ -438,44 +537,19 @@ def bauen():
         hilfslinie(V, c, t, (c[0][0] + 10, y - 0.4), groesse=0.8)
     text(V, (14, 30.5), "VORDERTEIL", 1.8, gewicht="bold")
     text(V, (14, 33.0), "2× zuschneiden (gegengleich)", 1.1)
-    text(V, (14, 35.0), "Grundschnitt Jacke · Gr. L slim", 0.8)
+    text(V, (14, 35.0), kopf, 0.8)
     text(V, (14, 36.4), "Übertritt/Beleg folgen mit den Details", 0.8)
-    text(V, (0.9, 42), "VORDERE MITTE", 1.0, anker="middle", rot=-90)
+    text(V, (2.3, 42), "VORDERE MITTE", 1.0, anker="middle", rot=-90)
     knips(V, "Armloch", KN_V, von_ende=True)
     knips(V, "Seitennaht", bis_y(V.k("Seitennaht"), M["taille_y"]))
-
-    # Oberärmel
-    p = ai
-    xs = lambda y: auf_linie(p["ct"], p["sh"], y)[0]
-    ye, h = p["ye"], p["h"]
-    fadenlauf(AO, (-3, h + 3), (-3, p["L"] - 7))
-    hilfslinie(AO, [(-p["w"], h), (xs(h), h)], "Oberarmlinie", (-p["w"] + 1.5, h - 0.4), groesse=0.8)
-    hilfslinie(AO, [p["pf"], p["su"]], "Ellbogenlinie", (p["pf"][0] + 1.5, ye - 0.4), groesse=0.8)
-    text(AO, (4, h + 12), "OBERÄRMEL", 1.8, gewicht="bold")
-    text(AO, (4, h + 14.5), "2× zuschneiden (gegengleich)", 1.1)
-    text(AO, (4, h + 16.5), "Grundschnitt Jacke · Gr. L slim", 0.8)
-    text(AO, (-p["w"] + 4.5, h + 4), "vorne", 1.0)
-    text(AO, (xs(ye + 6) - 2.0, ye + 6), "Mehrweite", 0.7, anker="end")
-    text(AO, (xs(ye + 6) - 2.0, ye + 7), "einhalten", 0.7, anker="end")
-    knips(AO, "Armkugel", KN_V + 0.2)                  # vorne einfach
-    knips(AO, "Armkugel", s_schulter)                  # Schulterpunkt
-    knips(AO, "Unterarmnaht", bis_y(AO.k("Unterarmnaht")[::-1], ye), von_ende=True)
-    knips(AO, "Hintere Ärmelnaht", p["a_oben"])
-    knips(AO, "Hintere Ärmelnaht", p["b_unten"], von_ende=True)
-
-    # Hinterärmel
-    xm = (xs(ye) + p["w"] - (p["w"] - p["s"]) * (ye - h) / (p["L"] - h)) / 2
-    fadenlauf(AH, (xm + 1.0, ye - 14), (xm + 1.0, ye + 16))
-    xb = lambda y: p["w"] - (p["w"] - p["s"]) * (y - h) / (p["L"] - h)
-    hilfslinie(AH, [(xs(h), h), (p["w"], h)])
-    hilfslinie(AH, [p["su"], (xb(ye), ye)])
-    text(AH, (xm - 1.6, ye + 4), "HINTERÄRMEL", 1.3, rot=-90, gewicht="bold")
-    text(AH, (xm - 0.2, ye + 4), "2× (gegengleich)", 0.8, rot=-90)
-    text(AH, (xb(h + 3) - 1.2, h + 3), "hinten", 0.9, anker="end")
-    knips(AH, "Armkugel", KN_H + 0.3, von_ende=True, doppelt=True)  # hinten doppelt
-    knips(AH, "Unterarmnaht", float(np.linalg.norm(np.array([xb(ye), ye]) - np.array([p["w"], h]))))
-    knips(AH, "Hintere Ärmelnaht", p["a_oben"], von_ende=True)
-    knips(AH, "Hintere Ärmelnaht", p["b_unten"])
+    masslinie(V, (0.6, p["cfn"][1]), (0.6, p["y_saum"]), f"Vorderlänge {zahl(M['vl_cf'])}", t=0.25, unten=True)
+    weite(V, p["y_brust"], "½ Brust", t=0.6, x0=0)
+    weite(V, M["taille_y"], "½ Weite Taillenhöhe", t=0.72, x0=0)
+    weite(V, p["y_saum"] - 2.0, "½ Saum", t=0.6, x0=0)
+    nahtmass(V, "Halsloch", "Halsloch", f=0.6)
+    nahtmass(V, "Schulter", "Schulter")
+    nahtmass(V, "Armloch", "Armloch", f=0.35)
+    nahtmass(V, "Seitennaht", "Seitennaht", f=0.75)
 
     kontrolle = {
         "Brustweite Jacke": M["brust"],
@@ -490,20 +564,118 @@ def bauen():
         "Seitennaht hinten": round(laenge(R.k("Seitennaht")), 1),
         "Armloch vorne": round(ah_v, 1),
         "Armloch hinten": round(ah_h, 1),
-        "Armkugel gesamt": round(kv, 1),
-        "Mehrweite Kugel": round(kv - ah, 1),
-        "Kugelhöhe": round(ai["h"], 1),
-        "Ärmellänge": M["aermellaenge"],
-        "Oberarmweite Ärmel": M["oberarm"],
-        "Saumweite Ärmel": M["aermelsaum"],
-        "Unterarmnaht": round(laenge(AH.k("Unterarmnaht")), 1),
-        "Hintere Ärmelnaht Oberärmel": round(laenge(AO.k("Hintere Ärmelnaht")), 1),
-        "Hintere Ärmelnaht Hinterärmel": round(laenge(AH.k("Hintere Ärmelnaht")), 1),
-        "Ellbogen-Mehrweite (einhalten)": round(laenge(AO.k("Hintere Ärmelnaht")) - laenge(AH.k("Hintere Ärmelnaht")), 1),
-        "Vorschub am Ärmelsaum": round(ai["vorschub"], 1),
-        "Halsloch gesamt (für Kragen)": round(2 * (laenge(V.k("Halsloch")) + laenge(R.k("Halsloch"))), 1),
     }
-    return [R, V, AO, AH], kontrolle
+
+    if variante == "einteilig":
+        A, p = aermel_einteilig(ah_v, ah_h)
+        h, ye, w, sh, L = p["h"], p["ye"], p["w"], p["s"], p["L"]
+        kv = laenge(A.k("Armkugel"))
+        fadenlauf(A, (6, h + 3), (6, L - 7))
+        hilfslinie(A, [(-w, h), (w, h)], "Oberarmlinie", (-w + 1.5, h - 0.4), groesse=0.8)
+        xe = w - (w - sh) * (ye - h) / (L - h)
+        hilfslinie(A, [(-xe, ye), (xe, ye)], "Ellbogenlinie", (-xe + 1.5, ye - 0.4), groesse=0.8)
+        text(A, (-10.5, h + 9), "ÄRMEL", 1.8, gewicht="bold")
+        text(A, (-10.5, h + 11.5), "2× zuschneiden (gegengleich)", 1.0)
+        text(A, (-10.5, h + 13.3), kopf, 0.8)
+        text(A, (-w + 4.5, h + 4), "vorne", 1.0)
+        text(A, (w - 4.5, h + 4), "hinten", 1.0)
+        knips(A, "Armkugel", KN_V + 0.2)
+        knips(A, "Armkugel", KN_H + 0.3, von_ende=True, doppelt=True)
+        knips(A, "Armkugel", s_schulter)
+        knips(A, "Unterarmnaht hinten", laenge(seg((w, h), (sh, L))) * (ye - h) / (L - h))
+        masslinie(A, (-0.8, 0), (-0.8, L), f"Ärmellänge {zahl(L)}", t=0.82)
+        masslinie(A, (0.8, 0), (0.8, h), f"Kugelhöhe {zahl(h)}", t=0.55, unten=True)
+        weite(A, h, "Oberarmweite", t=0.6)
+        weite(A, ye, "Ellbogenweite", t=0.6)
+        masslinie(A, (-sh, L), (sh, L), f"Saumweite {zahl(2 * sh)}", t=0.3)
+        nahtmass(A, "Armkugel", "Kugel vorne", s1=s_schulter)
+        nahtmass(A, "Armkugel", "Kugel hinten", s0=s_schulter)
+        nahtmass(A, "Unterarmnaht vorne", "Unterarmnaht", f=0.3)
+        nahtmass(A, "Unterarmnaht hinten", "Unterarmnaht", f=0.7)
+        teile = [R, V, A]
+        kontrolle.update({
+            "Armkugel gesamt": round(kv, 1),
+            "Mehrweite Kugel": round(kv - ah, 1),
+            "Kugelhöhe": round(h, 1),
+            "Ärmellänge": M["aermellaenge"],
+            "Oberarmweite Ärmel": M["oberarm"],
+            "Saumweite Ärmel": M["aermelsaum"],
+            "Unterarmnaht": round(laenge(A.k("Unterarmnaht hinten")), 1),
+        })
+    else:
+        AO, AH, p = aermel(ah_v, ah_h)
+        kv = laenge(AO.k("Armkugel")) + laenge(AH.k("Armkugel"))
+        xs = lambda y: auf_linie(p["ct"], p["sh"], y)[0]
+        xb = lambda y: p["w"] - (p["w"] - p["s"]) * (y - p["h"]) / (p["L"] - p["h"])
+        ye, h, L = p["ye"], p["h"], p["L"]
+
+        # Oberärmel
+        fadenlauf(AO, (3.2, h + 3), (3.2, L - 8))
+        hilfslinie(AO, [(-p["w"], h), (xs(h), h)], "Oberarmlinie", (-p["w"] + 1.5, h - 0.4), groesse=0.8)
+        hilfslinie(AO, [p["pf"], p["su"]], "Ellbogenlinie", (p["pf"][0] + 1.5, ye - 0.4), groesse=0.8)
+        text(AO, (-10.5, h + 9), "OBERÄRMEL", 1.8, gewicht="bold")
+        text(AO, (-10.5, h + 11.5), "2× zuschneiden (gegengleich)", 1.0)
+        text(AO, (-10.5, h + 13.3), kopf, 0.8)
+        text(AO, (-p["w"] + 4.5, h + 4), "vorne", 1.0)
+        text(AO, (xs(ye + 4) - 1.2, ye + 4), "Mehrweite", 0.7, anker="end")
+        text(AO, (xs(ye + 5) - 1.2, ye + 5), "einhalten", 0.7, anker="end")
+        knips(AO, "Armkugel", KN_V + 0.2)
+        knips(AO, "Armkugel", s_schulter)
+        knips(AO, "Unterarmnaht", bis_y(AO.k("Unterarmnaht")[::-1], ye), von_ende=True)
+        knips(AO, "Hintere Ärmelnaht", p["a_oben"])
+        knips(AO, "Hintere Ärmelnaht", p["b_unten"], von_ende=True)
+        knick = np.array([-0.8, ye])
+        unten = rot_um(np.array([-0.8, L]), p["pf"], p["th"])
+        masslinie(AO, (-0.8, 0), knick, "", t=0.5)
+        masslinie(AO, knick, unten, f"Ärmellänge Mitte {zahl(ye + np.linalg.norm(unten - knick))} (64 + Ellbogenweite)", t=0.7)
+        AO.innen = [e for e in AO.innen if not (e[0] == "text" and e[2] == "")]
+        masslinie(AO, (0.8, 0), (0.8, h), f"Kugelhöhe {zahl(h)}", t=0.55, unten=True)
+        weite(AO, h, "Oberarm", t=0.6)
+        weite(AO, ye, "Ellbogen", t=0.6)
+        sb, fh2 = AO.k("Ärmelsaum")[0], AO.k("Ärmelsaum")[-1]
+        nn = perp(unit(sb - fh2))
+        if not AO.poly().contains(Point((sb + fh2) / 2 + 0.1 * nn)):
+            nn = -nn
+        masslinie(AO, fh2, sb, f"Saum {zahl(np.linalg.norm(sb - fh2))}", t=0.25)
+        nahtmass(AO, "Armkugel", "Kugel vorne", s1=s_schulter)
+        nahtmass(AO, "Armkugel", "Kugel hinten", s0=s_schulter, f=0.45)
+        nahtmass(AO, "Unterarmnaht", "Unterarmnaht", f=0.3)
+        nahtmass(AO, "Hintere Ärmelnaht", "Hintere Naht", f=0.8)
+
+        # Hinterärmel
+        xm = (xs(ye) + xb(ye)) / 2
+        fadenlauf(AH, (xm + 1.0, ye - 14), (xm + 1.0, ye + 20))
+        hilfslinie(AH, [(xs(h), h), (p["w"], h)])
+        hilfslinie(AH, [p["su"], (xb(ye), ye)])
+        text(AH, (xm - 1.6, ye + 12), "HINTERÄRMEL", 1.3, rot=-90, gewicht="bold")
+        text(AH, (xm - 0.2, ye + 12), "2× (gegengleich)", 0.8, rot=-90)
+        text(AH, (xb(h + 3) - 1.2, h + 3), "hinten", 0.9, anker="end")
+        knips(AH, "Armkugel", KN_H + 0.3, von_ende=True, doppelt=True)
+        knips(AH, "Unterarmnaht", float(np.linalg.norm(np.array([xb(ye), ye]) - np.array([p["w"], h]))))
+        knips(AH, "Hintere Ärmelnaht", p["a_oben"], von_ende=True)
+        knips(AH, "Hintere Ärmelnaht", p["b_unten"])
+        weite(AH, h, "Oberarm", t=0.5, g=0.55)
+        weite(AH, ye, "Ellbogen", t=0.5, g=0.55)
+        masslinie(AH, p["sh"], (p["s"], L), f"Saum {zahl(p['s'] - p['sh'][0])}", t=0.5, g=0.55)
+        nahtmass(AH, "Armkugel", "Kugel", g=0.55, f=0.4)
+        nahtmass(AH, "Unterarmnaht", "Unterarmnaht", f=0.6, g=0.6)
+        nahtmass(AH, "Hintere Ärmelnaht", "Hintere Naht", f=0.25, g=0.6)
+        teile = [R, V, AO, AH]
+        kontrolle.update({
+            "Armkugel gesamt": round(kv, 1),
+            "Mehrweite Kugel": round(kv - ah, 1),
+            "Kugelhöhe": round(h, 1),
+            "Ärmellänge": M["aermellaenge"],
+            "Oberarmweite Ärmel": M["oberarm"],
+            "Saumweite Ärmel": M["aermelsaum"],
+            "Unterarmnaht": round(laenge(AH.k("Unterarmnaht")), 1),
+            "Hintere Ärmelnaht Oberärmel": round(laenge(AO.k("Hintere Ärmelnaht")), 1),
+            "Hintere Ärmelnaht Hinterärmel": round(laenge(AH.k("Hintere Ärmelnaht")), 1),
+            "Ellbogen-Mehrweite (einhalten)": round(laenge(AO.k("Hintere Ärmelnaht")) - laenge(AH.k("Hintere Ärmelnaht")), 1),
+            "Vorschub am Ärmelsaum": round(p["vorschub"], 1),
+        })
+    kontrolle["Halsloch gesamt (für Kragen)"] = round(2 * (laenge(V.k("Halsloch")) + laenge(R.k("Halsloch"))), 1)
+    return teile, kontrolle
 
 
 # ---------------------------------------------------------------- Layout
@@ -546,6 +718,7 @@ STIL = {
     "faden": dict(w=0.035, dash=None, col=(0, 0, 0)),
     "knips": dict(w=0.05, dash=None, col=(0, 0, 0)),
     "quadrat": dict(w=0.04, dash=None, col=(0, 0, 0)),
+    "mass": dict(w=0.02, dash=None, col=(0.72, 0.1, 0.1)),
 }
 
 
@@ -557,8 +730,10 @@ def svg(elemente, W, H, pfad):
         if e[0] == "text":
             _, p, s, g, anker, rot, gew = e
             tr = f' transform="rotate({rot} {p[0]:.3f} {p[1]:.3f})"' if rot else ""
+            fill = ' fill="rgb(184,26,26)"' if gew == "mass" else ""
+            gw = "normal" if gew == "mass" else gew
             out.append(f'<text x="{p[0]:.3f}" y="{p[1]:.3f}" font-family="Helvetica, Arial, sans-serif" '
-                       f'font-size="{g}" font-weight="{gew}" text-anchor="{anker}"{tr}>{s}</text>')
+                       f'font-size="{g}" font-weight="{gw}" text-anchor="{anker}"{fill}{tr}>{s}</text>')
             continue
         st = STIL[e[0]]
         pts = " ".join(f"{x:.3f},{y:.3f}" for x, y in e[1])
@@ -580,7 +755,7 @@ def pdf_zeichnen(c, elemente, H):
             c.saveState()
             c.translate(p[0] * cm, (H - p[1]) * cm)
             c.rotate(-rot)
-            c.setFillColorRGB(0, 0, 0)
+            c.setFillColorRGB(*((0.72, 0.1, 0.1) if gew == "mass" else (0, 0, 0)))
             c.setFont("Helvetica-Bold" if gew == "bold" else "Helvetica", g * cm)
             {"start": c.drawString, "middle": c.drawCentredString, "end": c.drawRightString}[anker](0, 0, s)
             c.restoreState()
@@ -601,17 +776,17 @@ def pdf_zeichnen(c, elemente, H):
     c.setDash([])
 
 
-def pdf_gross(elemente, W, H, pfad):
+def pdf_gross(elemente, W, H, pfad, titel):
     from reportlab.lib.units import cm
     from reportlab.pdfgen import canvas
     c = canvas.Canvas(pfad, pagesize=(W * cm, H * cm))
-    c.setTitle("Grundschnitt Jacke 1:1")
+    c.setTitle(f"Grundschnitt Jacke 1:1 – {titel}")
     pdf_zeichnen(c, elemente, H)
     c.showPage()
     c.save()
 
 
-def pdf_a4(elemente, W, H, pfad, kontrolle):
+def pdf_a4(elemente, W, H, pfad, kontrolle, titel):
     from reportlab.lib.units import cm
     from reportlab.pdfgen import canvas
     PW, PH = 21.0, 29.7
@@ -635,7 +810,7 @@ def pdf_a4(elemente, W, H, pfad, kontrolle):
                 belegt.add((int(x // TW), int(y // TH)))
     kacheln = [(i, j) for j in range(ny) for i in range(nx) if (i, j) in belegt]
     c = canvas.Canvas(pfad, pagesize=(PW * cm, PH * cm))
-    c.setTitle("Grundschnitt Jacke – A4 zum Zusammenkleben")
+    c.setTitle(f"Grundschnitt Jacke – {titel} – A4 zum Zusammenkleben")
     spalten = "ABCDEFGHIJKLMNOP"
 
     # Seite 1: Übersicht
@@ -643,7 +818,8 @@ def pdf_a4(elemente, W, H, pfad, kontrolle):
     c.drawString(2 * cm, (PH - 2.5) * cm, "Grundschnitt Jacke · Gr. L · slim")
     c.setFont("Helvetica", 10)
     zeilen = [
-        "Vorderteil, Rücken, Ober- und Hinterärmel · Nahtzugabe 1,5 cm, Saumzugabe 3 cm enthalten.",
+        f"{titel} · Nahtzugabe 1,5 cm, Saumzugabe 3 cm enthalten.",
+        "Rote Maße = Nahtlinie (ohne Zugaben), in cm.",
         "Drucken mit 100 % / „Tatsächliche Größe“ (nicht „An Seite anpassen“).",
         "Danach das Kontrollquadrat nachmessen: es muss genau 10 × 10 cm groß sein.",
         "Seiten nach Raster zusammenlegen (Spalte A, B, … von links; Reihe 1, 2, … von oben).",
@@ -723,17 +899,20 @@ def pdf_a4(elemente, W, H, pfad, kontrolle):
 
 
 def main():
-    teile, kontrolle = bauen()
-    elemente, W, H = layout(teile)
-    svg(elemente, W, H, os.path.join(HERE, "grundschnitt_1zu1.svg"))
-    pdf_gross(elemente, W, H, os.path.join(HERE, "grundschnitt_A0.pdf"))
-    n, nx, ny = pdf_a4(elemente, W, H, os.path.join(HERE, "grundschnitt_A4.pdf"), kontrolle)
-    with open(os.path.join(HERE, "masse.json"), "w", encoding="utf-8") as f:
-        json.dump(dict(koerper={k: {"wert": v, "quelle": q} for k, (v, q) in KOERPER.items()},
-                       konstruktion=M, kontrollmasse=kontrolle), f, ensure_ascii=False, indent=2)
-    print(f"Blatt {W:.1f} × {H:.1f} cm, A4: {n} Seiten (Raster {nx}×{ny})")
-    for k, v in kontrolle.items():
-        print(f"  {k:32s} {v:6.1f} cm")
+    for v, titel in VARIANTEN.items():
+        teile, kontrolle = bauen(v)
+        elemente, W, H = layout(teile)
+        basis = os.path.join(HERE, f"grundschnitt_{v}")
+        svg(elemente, W, H, basis + "_1zu1.svg")
+        pdf_gross(elemente, W, H, basis + "_A0.pdf", titel)
+        n, nx, ny = pdf_a4(elemente, W, H, basis + "_A4.pdf", kontrolle, titel)
+        with open(os.path.join(HERE, f"masse_{v}.json"), "w", encoding="utf-8") as f:
+            json.dump(dict(variante=titel,
+                           koerper={k: {"wert": w, "quelle": q} for k, (w, q) in KOERPER.items()},
+                           konstruktion=M, kontrollmasse=kontrolle), f, ensure_ascii=False, indent=2)
+        print(f"{titel}: Blatt {W:.1f} × {H:.1f} cm, A4: {n} Seiten (Raster {nx}×{ny})")
+        for k, w in kontrolle.items():
+            print(f"  {k:32s} {w:6.1f} cm")
 
 
 if __name__ == "__main__":

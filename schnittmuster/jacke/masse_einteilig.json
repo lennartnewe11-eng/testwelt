@@ -1,0 +1,73 @@
+{
+  "variante": "Ärmel einteilig (ohne hintere Ärmelnaht)",
+  "koerper": {
+    "Umfang auf Saumhöhe (dort endet die Jacke)": {
+      "wert": 96,
+      "quelle": "vorgabe"
+    },
+    "Brustumfang": {
+      "wert": 106,
+      "quelle": "annahme"
+    },
+    "Halsumfang": {
+      "wert": 41,
+      "quelle": "annahme"
+    },
+    "Oberarmumfang": {
+      "wert": 34,
+      "quelle": "annahme"
+    },
+    "Körpergröße": {
+      "wert": 180,
+      "quelle": "annahme"
+    }
+  },
+  "konstruktion": {
+    "vl_cf": 59.0,
+    "schulterbreite": 50.0,
+    "brust": 114.0,
+    "saum": 105.0,
+    "halsweite_h": 8.2,
+    "halsweite_v": 7.9,
+    "hals_hoch_h": 2.3,
+    "vorn_mehr": 1.0,
+    "halstiefe_v": 8.7,
+    "schulterneig_h": 17.0,
+    "schulterneig_v": 22.0,
+    "schulter_mehr_h": 0.5,
+    "armloch_tiefe": 26.0,
+    "rueckenbreite": 22.0,
+    "brustbreite": 20.5,
+    "taille_y": 46.0,
+    "aermellaenge": 64.0,
+    "oberarm": 42.0,
+    "aermelsaum": 27.0,
+    "ellbogen": 35.0,
+    "kugel_mehrweite": 1.2,
+    "hinternaht_kugel": 14.0,
+    "hinternaht_saum": 0.45,
+    "ellbogen_mehrweite": 1.0
+  },
+  "kontrollmasse": {
+    "Brustweite Jacke": 114.0,
+    "Weite in Taillenhöhe": 108.9,
+    "Saumweite Jacke": 105.0,
+    "Schulterbreite": 50.0,
+    "Vorderlänge ab Halsloch Mitte": 59.0,
+    "Rückenlänge ab Halsloch Mitte": 64.4,
+    "Schulternaht vorne": 17.1,
+    "Schulternaht hinten": 17.6,
+    "Seitennaht vorne": 38.5,
+    "Seitennaht hinten": 38.5,
+    "Armloch vorne": 27.6,
+    "Armloch hinten": 27.4,
+    "Armkugel gesamt": 56.2,
+    "Mehrweite Kugel": 1.2,
+    "Kugelhöhe": 17.5,
+    "Ärmellänge": 64.0,
+    "Oberarmweite Ärmel": 42.0,
+    "Saumweite Ärmel": 27.0,
+    "Unterarmnaht": 47.1,
+    "Halsloch gesamt (für Kragen)": 42.6
+  }
+}
