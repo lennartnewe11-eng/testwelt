@@ -4,14 +4,14 @@ Zwei Varianten, Rumpf identisch:
 
 | Variante | Teile |
 |---|---|
-| **zweiteilig** – hintere Ärmelnaht, Ärmel biegt leicht nach vorn | Rücken (1× im Stoffbruch), Vorderteil (2×), Oberärmel (2×), Hinterärmel (2×) |
-| **einteilig** – ohne hintere Ärmelnaht | Rücken (1× im Stoffbruch), Vorderteil (2×), Ärmel (2×) |
+| **zweiteilig** – hintere Ärmelnaht, Ärmel biegt leicht nach vorn | Rücken (1× im Stoffbruch), vordere Passe (2×), Vorderteil (2×), Oberärmel (2×), Hinterärmel (2×), Taschenbeutel (2×) |
+| **einteilig** – ohne hintere Ärmelnaht | Rücken (1× im Stoffbruch), vordere Passe (2×), Vorderteil (2×), Ärmel (2×), Taschenbeutel (2×) |
 
-Details (Übertritt, Knopfleiste, Kragen, Passe, Taschen, Bund, Manschetten) folgen im nächsten Schritt.
+Weitere Details (Übertritt, Knopfleiste, Kragen, Bund, Manschetten) folgen im nächsten Schritt.
 
 | Datei (je Variante `zweiteilig` / `einteilig`) | Zweck |
 |---|---|
-| `grundschnitt_<variante>_A4.pdf` | Seite 1 Übersicht + Kontrollmaße, danach A4-Seiten zum Zusammenkleben (22 bzw. 20) |
+| `grundschnitt_<variante>_A4.pdf` | Seite 1 Übersicht + Kontrollmaße, danach A4-Seiten zum Zusammenkleben (23 bzw. 22) |
 | `grundschnitt_<variante>_A0.pdf` | eine große Seite 1:1 für Copyshop / Plotter |
 | `grundschnitt_<variante>_1zu1.svg` | dasselbe als SVG 1:1 |
 | `masse_<variante>.json` | alle verwendeten Maße und Kontrollmaße |
@@ -21,8 +21,22 @@ Details (Übertritt, Knopfleiste, Kragen, Passe, Taschen, Bund, Manschetten) fol
 Kugelhöhe), Weiten auf Brust-, Taillen-, Oberarm- und Ellbogenlinie und am Saum (Rumpf als halbe Weiten),
 Nahtlängen (Halsloch, Schulter, Armloch, Seitennaht, Kugel vorne/hinten, Unterarmnaht, hintere Ärmelnaht).
 
-**Drucken:** 100 % / „Tatsächliche Größe“. Kontrollquadrat (10 × 10 cm, oben rechts) nachmessen.
+**Drucken:** 100 % / „Tatsächliche Größe“. Kontrollquadrat (10 × 10 cm, oben rechts, Seite H1) nachmessen.
 Nahtzugabe 1,5 cm und Saumzugabe 3 cm sind enthalten. Durchgezogene Linie = Schnittkante, gestrichelt = Nahtlinie.
+
+## Vordere Passe und Brusttasche
+
+Waagerechte Passennaht vorne, 8,1 cm unter der vorderen Mitte am Halsloch, von der vorderen Mitte bis ins Armloch
+(Passennaht 20,7 cm). Die Passe wird 2× (gegengleich) zugeschnitten, das Vorderteil darunter ebenfalls.
+
+Brusttasche nur auf dem **linken Vorderteil** (getragen links), 4,5 cm neben der vorderen Mitte:
+
+- Eingriff 12,5 cm **in der Passennaht** (zwischen den beiden Knipsen an Passe und Vorderteil),
+- Taschenbeutel 14 × 14 cm (fertig), 2× zuschneiden, am besten aus dem Jackenstoff, da er am Eingriff sichtbar wird.
+
+Nähen: Beutel 1 rechts auf rechts an die Eingriffkante des Vorderteils nähen, nach innen wenden, Kante absteppen.
+Beutel 2 an die Nahtzugabe der Passe im Eingriffbereich nähen. Passennaht links und rechts vom Eingriff schließen,
+Beutelteile ringsum zusammennähen, dann den Beutel von außen auf der markierten Linie (14 × 14 cm) absteppen.
 
 ## Maße
 

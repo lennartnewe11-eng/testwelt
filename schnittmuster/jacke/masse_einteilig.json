@@ -46,7 +46,12 @@
     "kugel_mehrweite": 1.2,
     "hinternaht_kugel": 14.0,
     "hinternaht_saum": 0.45,
-    "ellbogen_mehrweite": 1.0
+    "ellbogen_mehrweite": 1.0,
+    "passe_unter_hals": 8.1,
+    "tasche_x": 4.5,
+    "tasche_breite": 14.0,
+    "tasche_tiefe": 14.0,
+    "eingriff_rand": 0.75
   },
   "kontrollmasse": {
     "Brustweite Jacke": 114.0,
@@ -61,6 +66,10 @@
     "Seitennaht hinten": 38.5,
     "Armloch vorne": 27.6,
     "Armloch hinten": 27.4,
+    "Passe vorne ab Halsloch Mitte": 8.1,
+    "Passennaht vorne": 20.7,
+    "Brusttasche (fertig)": "14 × 14",
+    "Taschen-Eingriff": 12.5,
     "Armkugel gesamt": 56.2,
     "Mehrweite Kugel": 1.2,
     "Kugelhöhe": 17.5,

@@ -63,7 +63,13 @@ M = dict(
     kugel_mehrweite=1.2,  # Mehrweite Kugel gegenüber Armloch (Denim: wenig)
     hinternaht_kugel=14.0,  # hintere Ärmelnaht beginnt so weit (Bogen) über der Unterarmnaht
     hinternaht_saum=0.45,   # Lage am Saum: Anteil der halben Saumweite hinter der Mitte
-    ellbogen_mehrweite=1.0,  # Oberärmel an der hinteren Naht länger -> Ärmel biegt nach vorn
+    ellbogen_mehrweite=1.0,
+    # Passe und Brusttasche (Vorderteil)
+    passe_unter_hals=8.1,   # Passennaht: so weit unter der vorderen Mitte am Halsloch (waagerecht)
+    tasche_x=4.5,           # Abstand Tasche von der vorderen Mitte
+    tasche_breite=14.0,
+    tasche_tiefe=14.0,      # ab Passennaht
+    eingriff_rand=0.75,     # Eingriff beginnt/endet so weit innerhalb der Taschenkante  # Oberärmel an der hinteren Naht länger -> Ärmel biegt nach vorn
 )
 # Seitennaht: halbe Weiten auf Rücken / Vorderteil verteilt (Rücken etwas breiter)
 SEITE_H = dict(brust=29.0, saum=26.5)
@@ -252,6 +258,48 @@ def vorderteil():
     T.kante("Vordere Mitte", vm, NZ)
     T.kante("Halsloch", hals, NZ)
     T.punkte = dict(hps=hps, sp=sp, sc=sc, ss=ss, cfn=cfn, y_brust=y_brust, y_saum=y_saum, yb=yb)
+    return T
+
+
+# ---------------------------------------------------------------- Passe + Tasche
+def y_teilen(pts, y):
+    """Polylinie (y steigend) an der Höhe y teilen."""
+    i = int(np.argmax(pts[:, 1] >= y))
+    a, b = pts[i - 1], pts[i]
+    p = a + (b - a) * (y - a[1]) / (b[1] - a[1])
+    return np.vstack([pts[:i], p]), np.vstack([p, pts[i:]])
+
+
+def vorne_teilen(V):
+    """Vorderteil an der waagerechten Passennaht in Passe und unteres Vorderteil teilen."""
+    yp = V.punkte["cfn"][1] + M["passe_unter_hals"]
+    arm_o, arm_u = y_teilen(V.k("Armloch"), yp)
+    pa = arm_o[-1]
+    vm = V.k("Vordere Mitte")  # Saum -> Halsloch
+    P = Teil("Vordere Passe")
+    P.kante("Schulter", V.k("Schulter"), NZ)
+    P.kante("Armloch", arm_o, NZ)
+    P.kante("Passennaht", seg(pa, (0, yp)), NZ)
+    P.kante("Vordere Mitte", seg((0, yp), vm[-1]), NZ)
+    P.kante("Halsloch", V.k("Halsloch"), NZ)
+    U = Teil("Vorderteil")
+    U.kante("Passennaht", seg((0, yp), pa), NZ)
+    U.kante("Armloch", arm_u, NZ)
+    U.kante("Seitennaht", V.k("Seitennaht"), NZ)
+    U.kante("Saum", V.k("Saum"), SAUMZ)
+    U.kante("Vordere Mitte", seg(vm[0], (0, yp)), NZ)
+    U.punkte = dict(V.punkte, yp=yp, pa=pa)
+    P.punkte = dict(V.punkte, yp=yp, pa=pa)
+    return P, U
+
+
+def taschenbeutel():
+    b, t = M["tasche_breite"], M["tasche_tiefe"]
+    T = Teil("Taschenbeutel")
+    T.kante("Oberkante", seg((0, 0), (b, 0)), NZ)
+    T.kante("Seite hinten", seg((b, 0), (b, t)), NZ)
+    T.kante("Unterkante", seg((b, t), (0, t)), NZ)
+    T.kante("Seite vorn", seg((0, t), (0, 0)), NZ)
     return T
 
 
@@ -529,27 +577,67 @@ def bauen(variante="zweiteilig"):
     nahtmass(R, "Armloch", "Armloch", f=0.35)
     nahtmass(R, "Seitennaht", "Seitennaht", f=0.75)
 
-    # Vorderteil
-    p = V.punkte
-    fadenlauf(V, (4.5, 18), (4.5, p["y_saum"] - 8))
+    # Vorderteil: Passe + unteres Vorderteil mit Brusttasche
+    VP, VU = vorne_teilen(V)
+    p = VU.punkte
+    yp = p["yp"]
+    tx, tb, tt, er = M["tasche_x"], M["tasche_breite"], M["tasche_tiefe"], M["eingriff_rand"]
+    e0, e1 = tx + er, tx + tb - er
+
+    fadenlauf(VP, (13, 1.0), (13, yp - 1.5))
+    text(VP, (6.5, yp - 4.2), "VORDERE PASSE", 1.1, gewicht="bold")
+    text(VP, (6.5, yp - 2.8), "2× (gegengleich)", 0.75)
+    text(VP, (2.3, yp - 1.0), "VM", 0.7, anker="middle", rot=-90)
+    masslinie(VP, (0.6, p["cfn"][1]), (0.6, yp), f"{zahl(yp - p['cfn'][1])}", t=0.5, g=0.6, unten=True)
+    nahtmass(VP, "Halsloch", "Halsloch", f=0.6)
+    nahtmass(VP, "Schulter", "Schulter")
+    nahtmass(VP, "Armloch", "Armloch", f=0.5, g=0.55)
+    nahtmass(VP, "Passennaht", "Passennaht", f=0.3, g=0.6)
+    for x in (e0, e1):  # Eingriff (nur linkes Vorderteil)
+        knips(VP, "Passennaht", x, von_ende=True)
+
+    fadenlauf(VU, (3.4, tt + yp + 3), (3.4, p["y_saum"] - 8))
     for y, t in ((p["y_brust"], "Brustlinie"), (M["taille_y"], "Taillenlinie")):
-        c = schnitt_bis_kante(V.poly(), y, 0, 40)
-        hilfslinie(V, c, t, (c[0][0] + 10, y - 0.4), groesse=0.8)
-    text(V, (14, 30.5), "VORDERTEIL", 1.8, gewicht="bold")
-    text(V, (14, 33.0), "2× zuschneiden (gegengleich)", 1.1)
-    text(V, (14, 35.0), kopf, 0.8)
-    text(V, (14, 36.4), "Übertritt/Beleg folgen mit den Details", 0.8)
-    text(V, (2.3, 42), "VORDERE MITTE", 1.0, anker="middle", rot=-90)
-    knips(V, "Armloch", KN_V, von_ende=True)
-    knips(V, "Seitennaht", bis_y(V.k("Seitennaht"), M["taille_y"]))
-    masslinie(V, (0.6, p["cfn"][1]), (0.6, p["y_saum"]), f"Vorderlänge {zahl(M['vl_cf'])}", t=0.25, unten=True)
-    weite(V, p["y_brust"], "½ Brust", t=0.6, x0=0)
-    weite(V, M["taille_y"], "½ Weite Taillenhöhe", t=0.72, x0=0)
-    weite(V, p["y_saum"] - 2.0, "½ Saum", t=0.6, x0=0)
-    nahtmass(V, "Halsloch", "Halsloch", f=0.6)
-    nahtmass(V, "Schulter", "Schulter")
-    nahtmass(V, "Armloch", "Armloch", f=0.35)
-    nahtmass(V, "Seitennaht", "Seitennaht", f=0.75)
+        c = schnitt_bis_kante(VU.poly(), y, 0, 40)
+        hilfslinie(VU, c, t, (c[0][0] + 19.6 if y == p["y_brust"] else c[0][0] + 10, y - 0.4), groesse=0.8)
+    text(VU, (14.5, 33.0), "VORDERTEIL", 1.8, gewicht="bold")
+    text(VU, (14.5, 35.5), "2× zuschneiden (gegengleich)", 1.1)
+    text(VU, (14.5, 37.5), kopf, 0.8)
+    text(VU, (14.5, 38.9), "Übertritt/Beleg folgen mit den Details", 0.8)
+    text(VU, (2.3, 48), "VORDERE MITTE", 1.0, anker="middle", rot=-90)
+    knips(VU, "Armloch", KN_V, von_ende=True)
+    knips(VU, "Seitennaht", bis_y(VU.k("Seitennaht"), M["taille_y"]))
+    for x in (e0, e1):
+        knips(VU, "Passennaht", x)
+    # Taschenposition = Absteppung des Beutels
+    VU.innen.append(("stepp", np.array([(tx, yp), (tx, yp + tt), (tx + tb, yp + tt), (tx + tb, yp)])))
+    VU.innen.append(("stepp", np.array([(e0, yp + 0.5), (e1, yp + 0.5)])))
+    text(VU, (tx + tb / 2, yp + 5.0), "BRUSTTASCHE", 0.9, gewicht="bold")
+    text(VU, (tx + tb / 2, yp + 6.2), "nur linkes Vorderteil (getragen)", 0.6)
+    text(VU, (tx + tb / 2, yp + 7.1), "Eingriff in der Passennaht,", 0.6)
+    text(VU, (tx + tb / 2, yp + 7.9), "Beutel auf dieser Linie absteppen", 0.6)
+    masslinie(VU, (e0, yp + 1.6), (e1, yp + 1.6), f"Eingriff {zahl(e1 - e0)}", g=0.6)
+    masslinie(VU, (tx, yp + tt + 1.0), (tx + tb, yp + tt + 1.0), f"Tasche {zahl(tb)}", t=0.5, g=0.6)
+    masslinie(VU, (tx + tb - 1.2, yp), (tx + tb - 1.2, yp + tt), f"{zahl(tt)}", t=0.3, g=0.6, unten=True)
+    masslinie(VU, (0.6, yp), (0.6, p["y_saum"]), f"Vorderlänge ab Passe {zahl(p['y_saum'] - yp)} (gesamt {zahl(p['y_saum'] - p['cfn'][1])})", t=0.55, unten=True)
+    weite(VU, p["y_brust"], "½ Brust", t=0.5, x0=0)
+    weite(VU, M["taille_y"], "½ Weite Taillenhöhe", t=0.72, x0=0)
+    weite(VU, p["y_saum"] - 2.0, "½ Saum", t=0.6, x0=0)
+    nahtmass(VU, "Armloch", "Armloch", f=0.35)
+    nahtmass(VU, "Seitennaht", "Seitennaht", f=0.75)
+
+    TB = taschenbeutel()
+    fadenlauf(TB, (tb - 2.0, 2.5), (tb - 2.0, tt - 2.5))
+    text(TB, (tb / 2 - 1.0, tt / 2 - 2.0), "TASCHENBEUTEL", 0.9, gewicht="bold")
+    text(TB, (tb / 2 - 1.0, tt / 2 - 0.8), "2× für die eine Tasche", 0.65)
+    text(TB, (tb / 2 - 1.0, tt / 2 + 0.2), "(Denim oder fester Baumwollstoff)", 0.55)
+    text(TB, (tb / 2 - 1.0, tt / 2 + 1.2), "Oberkante: 1× an die Passe,", 0.55)
+    text(TB, (tb / 2 - 1.0, tt / 2 + 2.0), "1× an das Vorderteil (Eingriff)", 0.55)
+    for x in (er, tb - er):
+        knips(TB, "Oberkante", x)
+    masslinie(TB, (0, tt - 1.2), (tb, tt - 1.2), f"{zahl(tb)}", t=0.5, g=0.6)
+    masslinie(TB, (1.2, 0), (1.2, tt), f"{zahl(tt)}", t=0.5, g=0.6, unten=True)
+    masslinie(TB, (er, 1.2), (tb - er, 1.2), f"Eingriff {zahl(tb - 2 * er)}", t=0.5, g=0.55)
 
     kontrolle = {
         "Brustweite Jacke": M["brust"],
@@ -564,6 +652,10 @@ def bauen(variante="zweiteilig"):
         "Seitennaht hinten": round(laenge(R.k("Seitennaht")), 1),
         "Armloch vorne": round(ah_v, 1),
         "Armloch hinten": round(ah_h, 1),
+        "Passe vorne ab Halsloch Mitte": round(M["passe_unter_hals"], 1),
+        "Passennaht vorne": round(laenge(VU.k("Passennaht")), 1),
+        "Brusttasche (fertig)": f"{zahl(tb)} × {zahl(tt)}",
+        "Taschen-Eingriff": round(e1 - e0, 1),
     }
 
     if variante == "einteilig":
@@ -592,7 +684,7 @@ def bauen(variante="zweiteilig"):
         nahtmass(A, "Armkugel", "Kugel hinten", s0=s_schulter)
         nahtmass(A, "Unterarmnaht vorne", "Unterarmnaht", f=0.3)
         nahtmass(A, "Unterarmnaht hinten", "Unterarmnaht", f=0.7)
-        teile = [R, V, A]
+        teile = [[R], [VP, VU], [A], ["quadrat", TB]]
         kontrolle.update({
             "Armkugel gesamt": round(kv, 1),
             "Mehrweite Kugel": round(kv - ah, 1),
@@ -660,7 +752,7 @@ def bauen(variante="zweiteilig"):
         nahtmass(AH, "Armkugel", "Kugel", g=0.55, f=0.4)
         nahtmass(AH, "Unterarmnaht", "Unterarmnaht", f=0.6, g=0.6)
         nahtmass(AH, "Hintere Ärmelnaht", "Hintere Naht", f=0.25, g=0.6)
-        teile = [R, V, AO, AH]
+        teile = [[R], [VP, VU], [AO], [AH], ["quadrat", TB]]
         kontrolle.update({
             "Armkugel gesamt": round(kv, 1),
             "Mehrweite Kugel": round(kv - ah, 1),
@@ -679,35 +771,41 @@ def bauen(variante="zweiteilig"):
 
 
 # ---------------------------------------------------------------- Layout
-def layout(teile):
-    """Teile nebeneinander anordnen; liefert Liste von Grafikelementen in Blattkoordinaten."""
-    gap = 4.0
-    x = 2.0
+def layout(spalten):
+    """Spalten nebeneinander, Teile einer Spalte untereinander; "quadrat" = Kontrollquadrat."""
+    gap = 3.0
+    x = 2.4  # links Platz für die Beschriftung am Stoffbruch
     elemente = []
-    boxen = []
-    for T in teile:
-        cut = T.schnitt()
-        minx, miny = cut.min(axis=0)
-        maxx, maxy = cut.max(axis=0)
-        off = np.array([x - minx, 2.0 - miny])
-        elemente.append(("schnitt", cut + off))
-        elemente.append(("naht", T.naht() + off))
-        for e in T.innen:
-            if e[0] == "text":
-                elemente.append(("text", e[1] + off) + e[2:])
-            else:
-                elemente.append((e[0], e[1] + off))
-        boxen.append((x, 2.0, maxx - minx, maxy - miny))
-        x += (maxx - minx) + gap
-    # Kontrollquadrat 10 × 10 cm
-    qx, qy = x - 2.0, 2.0
-    q = np.array([(qx, qy), (qx + 10, qy), (qx + 10, qy + 10), (qx, qy + 10), (qx, qy)])
-    elemente.append(("quadrat", q))
-    elemente.append(("text", np.array([qx + 5, qy + 5.3]), "10 × 10 cm", 1.0, "middle", 0, "bold"))
-    elemente.append(("text", np.array([qx + 5, qy + 12]), "nach dem Druck", 0.7, "middle", 0, "normal"))
-    elemente.append(("text", np.array([qx + 5, qy + 13]), "nachmessen!", 0.7, "middle", 0, "normal"))
-    W = x + 9.0
-    H = max(b[1] + b[3] for b in boxen) + 2
+    unten = 0.0
+    for spalte in spalten:
+        y = 1.0
+        breite = 0.0
+        for T in spalte:
+            if T == "quadrat":
+                q = np.array([(x, y), (x + 10, y), (x + 10, y + 10), (x, y + 10), (x, y)])
+                elemente.append(("quadrat", q))
+                elemente.append(("text", np.array([x + 5, y + 5.3]), "10 × 10 cm", 1.0, "middle", 0, "bold"))
+                elemente.append(("text", np.array([x + 5, y + 11.5]), "nach dem Druck nachmessen!", 0.6, "middle", 0, "normal"))
+                y += 10 + 2.5 + gap
+                breite = max(breite, 10.0)
+                continue
+            cut = T.schnitt()
+            minx, miny = cut.min(axis=0)
+            maxx, maxy = cut.max(axis=0)
+            off = np.array([x - minx, y - miny])
+            elemente.append(("schnitt", cut + off))
+            elemente.append(("naht", T.naht() + off))
+            for e in T.innen:
+                if e[0] == "text":
+                    elemente.append(("text", e[1] + off) + e[2:])
+                else:
+                    elemente.append((e[0], e[1] + off))
+            y += (maxy - miny) + gap
+            breite = max(breite, maxx - minx)
+        unten = max(unten, y - gap)
+        x += breite + gap
+    W = x - gap + 1.0
+    H = unten + 1.0
     return elemente, W, H
 
 
@@ -719,6 +817,7 @@ STIL = {
     "knips": dict(w=0.05, dash=None, col=(0, 0, 0)),
     "quadrat": dict(w=0.04, dash=None, col=(0, 0, 0)),
     "mass": dict(w=0.02, dash=None, col=(0.72, 0.1, 0.1)),
+    "stepp": dict(w=0.025, dash=(0.25, 0.15), col=(0.1, 0.1, 0.1)),
 }
 
 
@@ -861,7 +960,8 @@ def pdf_a4(elemente, W, H, pfad, kontrolle, titel):
     for k, (n, v) in enumerate(items):
         col, row = divmod(k, (len(items) + 1) // 2)
         c.drawString((2 + 9 * col) * cm, (ytab - 0.7 - 0.5 * row) * cm, n)
-        c.drawRightString((10 + 9 * col) * cm, (ytab - 0.7 - 0.5 * row) * cm, f"{v:g} cm".replace(".", ","))
+        c.drawRightString((10 + 9 * col) * cm, (ytab - 0.7 - 0.5 * row) * cm,
+                          (f"{v:g} cm" if not isinstance(v, str) else f"{v} cm").replace(".", ","))
     c.setFont("Helvetica", 8)
     c.drawString(2 * cm, 1.5 * cm, f"Erstellt {date.today().strftime('%d.%m.%Y')} · {len(kacheln)} Druckseiten folgen")
     c.showPage()
@@ -912,7 +1012,7 @@ def main():
                            konstruktion=M, kontrollmasse=kontrolle), f, ensure_ascii=False, indent=2)
         print(f"{titel}: Blatt {W:.1f} × {H:.1f} cm, A4: {n} Seiten (Raster {nx}×{ny})")
         for k, w in kontrolle.items():
-            print(f"  {k:32s} {w:6.1f} cm")
+            print(f"  {k:32s} {w if isinstance(w, str) else f'{w:6.1f}'} cm")
 
 
 if __name__ == "__main__":
