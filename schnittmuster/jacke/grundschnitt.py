@@ -41,7 +41,7 @@ M = dict(
     vl_cf=59.0,          # Vorderlänge: vordere Mitte Halsausschnitt bis Saum (vorgabe)
     schulterbreite=50.0,  # Schulterpunkt zu Schulterpunkt, gerade gemessen (vorgabe 49–51)
     brust=114.0,         # Brustweite Jacke (Körper 106 + 8)
-    saum=102.0,          # Saumweite (Körper auf Saumhöhe 96 + 6, schließt eng ab)
+    saum=105.0,          # Saumweite (Körper auf Saumhöhe 96 + 9)
     halsweite_h=8.2,     # hintere Halslochbreite
     halsweite_v=7.9,     # vordere Halslochbreite
     hals_hoch_h=2.3,     # hintere Halslochhöhe (HPS über hinterer Mitte)
@@ -62,8 +62,8 @@ M = dict(
     kugel_mehrweite=1.2,  # Mehrweite Kugel gegenüber Armloch (Denim: wenig)
 )
 # Seitennaht: halbe Weiten auf Rücken / Vorderteil verteilt (Rücken etwas breiter)
-SEITE_H = dict(brust=29.0, saum=26.0)
-SEITE_V = dict(brust=M["brust"] / 2 - 29.0, saum=M["saum"] / 2 - 26.0)
+SEITE_H = dict(brust=29.0, saum=26.75)
+SEITE_V = dict(brust=M["brust"] / 2 - 29.0, saum=M["saum"] / 2 - 26.75)
 
 
 def seitennaht(sc, ss):

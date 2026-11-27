@@ -31,8 +31,8 @@ Nahtzugabe 1,5 cm und Saumzugabe 3 cm sind enthalten. Durchgezogene Linie = Schn
 | | Jacke | Mehrweite |
 |---|---|---|
 | Brust | 114 cm | + 8 cm |
-| in Taillenlinie (Orientierung) | 107,2 cm | – |
-| Saum | 102 cm | + 6 cm (schließt eng ab) |
+| in Taillenlinie (Orientierung) | 108,9 cm | – |
+| Saum | 105 cm | + 9 cm |
 | Oberarm | 42 cm | + 8 cm |
 | Ärmelsaum | 27 cm | – |
 | Rückenlänge hintere Mitte | 64,4 cm | – |
