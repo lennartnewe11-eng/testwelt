@@ -29,9 +29,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # ---------------------------------------------------------------- Maße
 # "vorgabe": von dir genannt; "annahme": Größe L (Herren, DE 52/54) bis du nachmisst
 KOERPER = {
-    "Taillenumfang": (96, "vorgabe"),
+    "Umfang auf Saumhöhe (dort endet die Jacke)": (96, "vorgabe"),
     "Brustumfang": (106, "annahme"),
-    "Hüftumfang (obere Hüfte, Saumhöhe)": (104, "annahme"),
     "Halsumfang": (41, "annahme"),
     "Oberarmumfang": (34, "annahme"),
     "Körpergröße": (180, "annahme"),
@@ -42,8 +41,7 @@ M = dict(
     vl_cf=59.0,          # Vorderlänge: vordere Mitte Halsausschnitt bis Saum (vorgabe)
     schulterbreite=50.0,  # Schulterpunkt zu Schulterpunkt, gerade gemessen (vorgabe 49–51)
     brust=114.0,         # Brustweite Jacke (Körper 106 + 8)
-    taille=109.6,        # Weite in Taillenhöhe (Körper 96 + 13,6)
-    saum=111.0,          # Saumweite (obere Hüfte 104 + 7)
+    saum=102.0,          # Saumweite (Körper auf Saumhöhe 96 + 6, schließt eng ab)
     halsweite_h=8.2,     # hintere Halslochbreite
     halsweite_v=7.9,     # vordere Halslochbreite
     hals_hoch_h=2.3,     # hintere Halslochhöhe (HPS über hinterer Mitte)
@@ -55,7 +53,7 @@ M = dict(
     armloch_tiefe=26.0,  # hintere Mitte Hals bis Brustlinie
     rueckenbreite=22.0,  # halbe Rückenbreite Jacke
     brustbreite=20.5,    # halbe Brustbreite Jacke
-    taille_y=46.0,       # Taillenlinie ab hinterer Mitte Hals
+    taille_y=46.0,       # Taillenlinie ab hinterer Mitte Hals (Orientierung, Knips)
     # Ärmel
     aermellaenge=64.0,   # Kugeloberkante bis Saum (Ärmelmitte)
     oberarm=42.0,        # Oberarmweite Ärmel
@@ -64,8 +62,13 @@ M = dict(
     kugel_mehrweite=1.2,  # Mehrweite Kugel gegenüber Armloch (Denim: wenig)
 )
 # Seitennaht: halbe Weiten auf Rücken / Vorderteil verteilt (Rücken etwas breiter)
-SEITE_H = dict(brust=29.0, taille=27.8, saum=28.3)
-SEITE_V = dict(brust=M["brust"] / 2 - 29.0, taille=M["taille"] / 2 - 27.8, saum=M["saum"] / 2 - 28.3)
+SEITE_H = dict(brust=29.0, saum=26.0)
+SEITE_V = dict(brust=M["brust"] / 2 - 29.0, saum=M["saum"] / 2 - 26.0)
+
+
+def seitennaht(sc, ss):
+    """Von der Brustlinie gleichmäßig zum engeren Saum; oben und unten senkrecht."""
+    return bez(sc, sc + (0, 13), ss - (0, 15), ss, n=96)
 
 NZ = 1.5    # Nahtzugabe
 SAUMZ = 3.0  # Saumzugabe
@@ -187,7 +190,6 @@ def ruecken():
     y_saum = M["halstiefe_v"] - M["hals_hoch_h"] - M["vorn_mehr"] + M["vl_cf"]
     rb = M["rueckenbreite"]
     sc = np.array([SEITE_H["brust"], y_brust])
-    sw = np.array([SEITE_H["taille"], M["taille_y"]])
     ss = np.array([SEITE_H["saum"], y_saum])
     yb = (sp[1] + y_brust) / 2 + 0.5
 
@@ -197,7 +199,7 @@ def ruecken():
     a_dir = np.array([-sd[1], sd[0]])  # rechtwinklig zur Schulter, nach unten
     arm = cat(bez(sp, sp + 4 * a_dir, (rb, yb - 4), (rb, yb)),
               bez((rb, yb), (rb, y_brust - 4), (rb + 2.0, y_brust), sc))
-    seite = cat(bez(sc, sc + (0, 7), sw - (0, 7), sw), bez(sw, sw + (0, 6), ss - (0, 6), ss))
+    seite = seitennaht(sc, ss)
     saum = seg(ss, (0, y_saum))
     bruch = seg((0, y_saum), cbn)
 
@@ -224,7 +226,6 @@ def vorderteil():
     y_brust = M["armloch_tiefe"]
     bb = M["brustbreite"]
     sc = np.array([SEITE_V["brust"], y_brust])
-    sw = np.array([SEITE_V["taille"], M["taille_y"]])
     ss = np.array([SEITE_V["saum"], y_saum])
     yb = (sp[1] + y_brust) / 2 + 1.5
     a_dir = np.array([-sd[1], sd[0]])
@@ -232,7 +233,7 @@ def vorderteil():
     schulter = seg(hps, sp)
     arm = cat(bez(sp, sp + 4 * a_dir, (bb, yb - 4), (bb, yb)),
               bez((bb, yb), (bb, y_brust - 4), (bb + 2.0, y_brust), sc))
-    seite = cat(bez(sc, sc + (0, 7), sw - (0, 7), sw), bez(sw, sw + (0, 6), ss - (0, 6), ss))
+    seite = seitennaht(sc, ss)
     saum = seg(ss, (0, y_saum))
     vm = seg((0, y_saum), cfn)
     hals = bez(cfn, (4.6, cfn[1]), hps + 3.0 * a_dir, hps)
@@ -316,6 +317,18 @@ def text(T, at, s, groesse=1.2, anker="middle", rot=0, gewicht="normal"):
     T.innen.append(("text", np.array(at, float), s, groesse, anker, rot, gewicht))
 
 
+def bis_y(pts, y):
+    """Bogenlänge vom Anfang bis zur Höhe y."""
+    i = int(np.argmax(pts[:, 1] >= y))
+    return laenge(pts[: i + 1])
+
+
+def x_bei_y(pts, y):
+    i = int(np.argmax(pts[:, 1] >= y))
+    a, b = pts[i - 1], pts[i]
+    return float(a[0] + (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]))
+
+
 def schnitt_bis_kante(poly, y, x0, x1):
     ln = LineString([(x0, y), (x1, y)]).intersection(poly)
     c = np.array(ln.coords) if ln.geom_type == "LineString" else np.array(list(ln.geoms)[0].coords)
@@ -346,7 +359,7 @@ def bauen():
     text(R, (15, 36.4), f"NZ {NZ:g} cm · Saum {SAUMZ:g} cm inkl.", 0.8)
     text(R, (-0.6, 40), "STOFFBRUCH  · hintere Mitte", 1.0, rot=-90)
     knips(R, "Armloch", KN_H, von_ende=True, doppelt=True)
-    knips(R, "Seitennaht", laenge(R.k("Seitennaht")[:48]))
+    knips(R, "Seitennaht", bis_y(R.k("Seitennaht"), M["taille_y"]))
     # Pfeile Stoffbruch
     for y in (12, p["y_saum"] - 12):
         R.innen.append(("faden", np.array([(4.0, y - 2.5), (1.2, y - 2.5), (1.2, y + 2.5), (4.0, y + 2.5)])))
@@ -365,7 +378,7 @@ def bauen():
     text(V, (14, 36.4), "Übertritt/Beleg folgen mit den Details", 0.8)
     text(V, (0.9, 42), "VORDERE MITTE", 1.0, anker="middle", rot=-90)
     knips(V, "Armloch", KN_V, von_ende=True)
-    knips(V, "Seitennaht", laenge(V.k("Seitennaht")[:48]))
+    knips(V, "Seitennaht", bis_y(V.k("Seitennaht"), M["taille_y"]))
 
     # Ärmel
     p = A.punkte
@@ -387,7 +400,7 @@ def bauen():
 
     kontrolle = {
         "Brustweite Jacke": M["brust"],
-        "Taillenweite Jacke": M["taille"],
+        "Weite in Taillenhöhe": round(2 * (x_bei_y(R.k("Seitennaht"), M["taille_y"]) + x_bei_y(V.k("Seitennaht"), M["taille_y"])), 1),
         "Saumweite Jacke": M["saum"],
         "Schulterbreite": M["schulterbreite"],
         "Vorderlänge ab Halsloch Mitte": round(laenge(V.k("Vordere Mitte")), 1),

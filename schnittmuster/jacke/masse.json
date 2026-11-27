@@ -1,15 +1,11 @@
 {
   "koerper": {
-    "Taillenumfang": {
+    "Umfang auf Saumhöhe (dort endet die Jacke)": {
       "wert": 96,
       "quelle": "vorgabe"
     },
     "Brustumfang": {
       "wert": 106,
-      "quelle": "annahme"
-    },
-    "Hüftumfang (obere Hüfte, Saumhöhe)": {
-      "wert": 104,
       "quelle": "annahme"
     },
     "Halsumfang": {
@@ -29,8 +25,7 @@
     "vl_cf": 59.0,
     "schulterbreite": 50.0,
     "brust": 114.0,
-    "taille": 109.6,
-    "saum": 111.0,
+    "saum": 102.0,
     "halsweite_h": 8.2,
     "halsweite_v": 7.9,
     "hals_hoch_h": 2.3,
@@ -51,14 +46,14 @@
   },
   "kontrollmasse": {
     "Brustweite Jacke": 114.0,
-    "Taillenweite Jacke": 109.6,
-    "Saumweite Jacke": 111.0,
+    "Weite in Taillenhöhe": 107.2,
+    "Saumweite Jacke": 102.0,
     "Schulterbreite": 50.0,
     "Vorderlänge ab Halsloch Mitte": 59.0,
     "Rückenlänge ab Halsloch Mitte": 64.4,
     "Schulternaht vorne": 17.1,
     "Schulternaht hinten": 17.6,
-    "Seitennaht vorne": 38.4,
+    "Seitennaht vorne": 38.5,
     "Seitennaht hinten": 38.5,
     "Armloch vorne": 27.6,
     "Armloch hinten": 27.4,

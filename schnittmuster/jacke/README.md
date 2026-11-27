@@ -20,9 +20,8 @@ Nahtzugabe 1,5 cm und Saumzugabe 3 cm sind enthalten. Durchgezogene Linie = Schn
 |---|---|---|
 | Vorderlänge, Halsloch vordere Mitte bis Saum | 59 cm | deine Vorgabe |
 | Schulterbreite Jacke | 50 cm | deine Vorgabe (49–51) |
-| Taillenumfang Körper | 96 cm | deine Vorgabe |
+| Körperumfang auf Saumhöhe (dort endet die Jacke) | 96 cm | deine Vorgabe |
 | Brustumfang Körper | 106 cm | **Annahme Gr. L** |
-| obere Hüfte (Saumhöhe) Körper | 104 cm | **Annahme Gr. L** |
 | Halsumfang | 41 cm | **Annahme Gr. L** |
 | Oberarmumfang | 34 cm | **Annahme Gr. L** |
 | Ärmellänge ab Schulterpunkt | 64 cm | **Annahme Gr. L** |
@@ -32,8 +31,8 @@ Nahtzugabe 1,5 cm und Saumzugabe 3 cm sind enthalten. Durchgezogene Linie = Schn
 | | Jacke | Mehrweite |
 |---|---|---|
 | Brust | 114 cm | + 8 cm |
-| Taille | 109,6 cm | + 13,6 cm |
-| Saum | 111 cm | + 7 cm |
+| in Taillenlinie (Orientierung) | 107,2 cm | – |
+| Saum | 102 cm | + 6 cm (schließt eng ab) |
 | Oberarm | 42 cm | + 8 cm |
 | Ärmelsaum | 27 cm | – |
 | Rückenlänge hintere Mitte | 64,4 cm | – |
