@@ -63,19 +63,24 @@ M = dict(
     kugel_mehrweite=1.2,  # Mehrweite Kugel gegenüber Armloch (Denim: wenig)
     hinternaht_kugel=14.0,  # hintere Ärmelnaht beginnt so weit (Bogen) über der Unterarmnaht
     hinternaht_saum=0.45,   # Lage am Saum: Anteil der halben Saumweite hinter der Mitte
-    ellbogen_mehrweite=1.0,
+    ellbogen_mehrweite=1.0,  # Oberärmel an der hinteren Naht länger -> Ärmel biegt nach vorn
     # Passe und Brusttasche (Vorderteil)
     passe_unter_hals=8.1,   # Passennaht: so weit unter der vorderen Mitte am Halsloch (waagerecht)
     tasche_x=4.5,           # Abstand Tasche von der vorderen Mitte
     tasche_breite=14.0,
     tasche_tiefe=14.0,      # ab Passennaht
     eingriff_rand=0.75,     # Eingriff beginnt/endet so weit innerhalb der Taschenkante
-    # Kragen (einteilig, angeschnittener Steg)
-    kragen_breite=7.0,      # in der hinteren Mitte, Ansatz bis Außenkante
-    kragen_steg=2.8,        # Steghöhe bis zur Umbruchlinie (hintere Mitte)
-    kragen_hub=1.5,         # Ansatzkante steigt zur vorderen Mitte um so viel an (Steg legt sich an den Hals)
-    kragen_spitze=7.5,      # Länge der Vorderkante (Spitze)
-    kragen_spitze_aus=2.0,  # Spitze steht so weit über die vordere Mitte hinaus  # Oberärmel an der hinteren Naht länger -> Ärmel biegt nach vorn
+    # Kragen mit abgetrenntem Steg (nach Konstruktionszeichnung)
+    kragen_ansatz_hm=3.5,   # Grundlinie bis Ansatz in der hinteren Mitte
+    kragen_steg=4.0,        # Steghöhe hintere Mitte (Ansatz bis Stegnaht)
+    kragen_umbruch=0.5,     # Umbruchlinie über der Stegnaht (hintere Mitte)
+    kragen_fall=5.5,        # Umbruchlinie bis Außenkante (hintere Mitte)
+    kragen_vorn_hoch=0.7,   # vorderes Ende des Ansatzes über der Grundlinie
+    kragen_minus=0.5,       # Waagerechte = halbes Halsloch ./. 0,5 (wird auf exakte Ansatzlänge nachgeführt)
+    kragen_spitze=10.0,     # Vorderkante
+    kragen_spitze_aus=3.5,  # Spitze steht so weit vor dem vorderen Ansatzende
+    kragen_steg_vorn=3.0,   # Stegnaht beginnt so weit (Bogen) hinter dem vorderen Ansatzende
+    kragen_einschub=0.2,    # je Schnitt an der Stegnaht zusammenschieben (Steg und Fall)
 )
 # Seitennaht: halbe Weiten auf Rücken / Vorderteil verteilt (Rücken etwas breiter)
 SEITE_H = dict(brust=29.0, saum=26.5)
@@ -309,34 +314,184 @@ def taschenbeutel():
     return T
 
 
+def chaikin(pts, n=2):
+    for _ in range(n):
+        q = [pts[0]]
+        for a, b in zip(pts[:-1], pts[1:]):
+            q += [0.75 * a + 0.25 * b, 0.25 * a + 0.75 * b]
+        q.append(pts[-1])
+        pts = np.array(q)
+    return pts
+
+
+def ohne_ruecklauf(pts):
+    """Punkte entfernen, die gegen die Laufrichtung zurückspringen (Reste vom Zusammenschieben)."""
+    out = [pts[0]]
+    for p in pts[1:]:
+        if np.linalg.norm(p - out[-1]) < 1e-4:
+            continue
+        if len(out) >= 2 and np.dot(p - out[-1], out[-1] - out[-2]) <= 0:
+            continue
+        out.append(p)
+    return np.array(out)
+
+
+def formen(kanten, schnitte, scharnier, delta, ueberlapp):
+    """Schnitte (unten→oben, von der hinteren Mitte nach vorn) anlegen und an der Kante `ueberlapp`
+    je Schnitt um delta zusammenschieben. Drehpunkt: Schnittende unten ("unten") oder oben ("oben")."""
+    vorn_ref = np.array([60.0, 5.0])
+
+    def seite(c, p):
+        b, t = c
+        d = t - b
+        cr = lambda q: d[0] * (q[1] - b[1]) - d[1] * (q[0] - b[0])
+        return np.sign(cr(p)) == np.sign(cr(vorn_ref))
+
+    over = LineString(dict((n, p) for n, p, _ in kanten)[ueberlapp])
+    rots = []
+    for b, t in schnitte:
+        m = LineString([b, t]).intersection(over)
+        m = np.array(m.coords[0]) if m.geom_type == "Point" else np.array(list(m.geoms)[0].coords[0])
+        piv = b if scharnier == "unten" else t
+        r = float(np.linalg.norm(m - piv))
+        th = delta / r * (1 if scharnier == "unten" else -1)
+        rots.append((piv, th, m))
+
+    def drehe(p, k):  # Region k: hinter k Schnitten
+        for piv, th, _ in reversed(rots[:k]):
+            c, sn = math.cos(th), math.sin(th)
+            d = p - piv
+            p = piv + np.array([d[0] * c - d[1] * sn, d[0] * sn + d[1] * c])
+        return p
+
+    def region(p):
+        return sum(1 for c in schnitte if seite(c, p))
+
+    neu = []
+    for name, pts, z in kanten:
+        # Schnittpunkte einfügen
+        ls = LineString(pts)
+        punkte = [(0.0, pts[0])] + [(ls.project(Point(q)), q) for q in pts[1:]]
+        for b, t in schnitte:
+            ip = LineString([b - (t - b) * 0.2, t + (t - b) * 0.2]).intersection(ls)
+            for g in (getattr(ip, "geoms", None) or ([ip] if not ip.is_empty else [])):
+                q = np.array(g.coords[0])
+                punkte.append((ls.project(Point(q)), q))
+        punkte.sort(key=lambda u: u[0])
+        teile, akt, reg = [], [], None
+        for _, q in punkte:
+            # Punkt auf einem Schnitt gehört zu beiden Seiten
+            auf = any(abs((t - b)[0] * (q[1] - b[1]) - (t - b)[1] * (q[0] - b[0])) / np.linalg.norm(t - b) < 1e-6
+                      for b, t in schnitte)
+            rq = region(q)
+            if auf:
+                rq_vor = rq if reg is None else reg
+                akt.append(drehe(q, rq_vor))
+                if reg is not None and akt:
+                    teile.append(np.array(akt))
+                    akt = []
+                reg = None
+                akt.append(("offen", q))
+                continue
+            if akt and isinstance(akt[0], tuple):
+                akt = [drehe(akt[0][1], rq)]
+            if reg is not None and rq != reg and akt:
+                teile.append(np.array(akt))
+                akt = []
+            reg = rq
+            akt.append(drehe(q, rq))
+        if akt:
+            if isinstance(akt[0], tuple):
+                akt = [drehe(akt[0][1], region(akt[0][1]))]
+            teile.append(np.array(akt))
+        teile = [t for t in teile if len(t) >= 1]
+        # zusammensetzen; an der Überlappkante an der Kreuzung kürzen
+        out = teile[0]
+        for t in teile[1:]:
+            if name == ueberlapp and len(out) > 1 and len(t) > 1:
+                x = LineString(out).intersection(LineString(t))
+                if not x.is_empty:
+                    q = np.array((x if x.geom_type == "Point" else list(x.geoms)[0]).coords[0])
+                    i = int(np.argmin([LineString(out[: j + 2]).distance(Point(q)) for j in range(len(out) - 1)]))
+                    j = int(np.argmin([LineString(t[k:k + 2]).distance(Point(q)) for k in range(len(t) - 1)]))
+                    out = np.vstack([out[: i + 1], q])
+                    t = np.vstack([q, t[j + 1:]])
+            out = cat(out, t) if np.allclose(out[-1], t[0]) else np.vstack([out, t])
+        if name == ueberlapp:
+            out = ohne_ruecklauf(out)
+            n = max(int(laenge(out) / 0.4), 8)
+            out = np.array([bei(out, laenge(out) * i / n)[0] for i in range(n + 1)])
+            out = chaikin(out, 2)
+        neu.append((name, out, z))
+    marken = [drehe(m, i + 1) * 0 + drehe(m, i) for i, (_, _, m) in enumerate(rots)]
+    return neu, drehe, region, marken
+
+
 def kragen(l_hinten, l_vorn):
-    """Halber Kragen, hintere Mitte im Stoffbruch; Ansatzkante = halbes Halsloch."""
+    """Kragen mit abgetrenntem Steg nach Konstruktionszeichnung; hintere Mitte im Stoffbruch.
+    Konstruktion mit y nach oben, danach auf y nach unten gespiegelt."""
     L = l_hinten + l_vorn
-    r = M["kragen_hub"]
+    hm, steg, umb, fall = M["kragen_ansatz_hm"], M["kragen_steg"], M["kragen_umbruch"], M["kragen_fall"]
+    vh = M["kragen_vorn_hoch"]
 
-    def ansatz(xe):
-        return cat(seg((0, 0), (l_hinten, 0)),
-                   bez((l_hinten, 0), (l_hinten + 5, 0), (xe - 3.5, -r * 0.6), (xe, -r)))
+    def hals(Lh):  # vom vorderen Ende P1 zur hinteren Mitte A
+        P1, T, A = np.array([Lh, vh]), np.array([Lh - 4.0, 0.0]), np.array([0.0, hm])
+        return cat(bez(P1, P1 + (-1.3, -0.45), T + (1.3, 0), T, n=30),
+                   bez(T, T + (-5.0, 0), A + (5.5, 0), A, n=90))
 
-    lo, hi = l_vorn * 0.7, l_vorn * 1.2 + l_hinten
+    lo, hi = L - 3, L + 1
     for _ in range(60):
-        xe = (lo + hi) / 2
-        if laenge(ansatz(xe)) < L:
-            lo = xe
+        Lh = (lo + hi) / 2
+        if laenge(hals(Lh)) < L:
+            lo = Lh
         else:
-            hi = xe
-    an = ansatz(xe)
-    e = an[-1]
-    aus, sp = M["kragen_spitze_aus"], M["kragen_spitze"]
-    p = e + np.array([aus, -math.sqrt(sp ** 2 - aus ** 2)])
-    b = M["kragen_breite"]
-    K = Teil("Kragen")
-    K.kante("Ansatz", an, NZ)
-    K.kante("Vorderkante", seg(e, p), 1.0)
-    K.kante("Außenkante", seg(p, (0, -b)), 1.0)
-    K.kante("Stoffbruch", seg((0, -b), (0, 0)), 0)
-    K.punkte = dict(e=e, p=p, L=L, lh=l_hinten)
-    return K
+            hi = Lh
+    ha = hals(Lh)
+    P1 = ha[0]
+    B, C, D = np.array([0, hm + steg]), np.array([0, hm + steg + umb]), np.array([0, hm + steg + umb + fall])
+    ha_v, ha_h = teilen(ha, M["kragen_steg_vorn"])  # P1..S, S..A
+    S = ha_h[0]
+    aus = M["kragen_spitze_aus"]
+    Q = P1 + np.array([aus, math.sqrt(M["kragen_spitze"] ** 2 - aus ** 2)])
+    stegnaht = bez(S, S + (-2.2, 2.6), B + (6.5, 0), B, n=80)            # S -> B
+    umbruch = bez(P1, P1 + (-5.0, 2.8), C + (6.0, 0), C, n=80)          # P1 -> C
+    aussen = bez(Q, Q + (-7.0, 2.0), D + (7.0, 0), D, n=80)              # Q -> D
+
+    def x_auf(pts, x):
+        i = int(np.argmin(np.abs(pts[:, 0] - x)))
+        return pts[i].copy()
+
+    schnitte = [(x_auf(ha, xb), x_auf(aussen, xt)) for xb, xt in ((2.0, 2.5), (5.5, 7.0), (9.0, 12.0))]
+    d = M["kragen_einschub"]
+
+    # Steg: Ansatz A -> S, Stegnaht S -> B, Stoffbruch B -> A
+    steg_k = [("Ansatz", ha_h[::-1], NZ), ("Stegnaht", stegnaht, 1.0), ("Stoffbruch", seg(B, (0, hm)), 0)]
+    steg_k, _, _, _ = formen(steg_k, schnitte, "unten", d, "Stegnaht")
+    # Fall: Stegnaht B -> S, Ansatz S -> P1, Vorderkante P1 -> Q, Außenkante Q -> D, Stoffbruch D -> B
+    fall_k = [("Stegnaht", stegnaht[::-1], 1.0), ("Ansatz", ha_v[::-1], NZ), ("Vorderkante", seg(P1, Q), 1.0),
+              ("Außenkante", aussen, 1.0), ("Stoffbruch", seg(D, B), 0)]
+    fall_k, drehe_f, region_f, _ = formen(fall_k, schnitte, "oben", d, "Stegnaht")
+    umb_neu = np.array([drehe_f(p, region_f(p)) for p in umbruch])
+
+    flip = lambda p: np.asarray(p, float) * np.array([1.0, -1.0])
+    ST, FA = Teil("Kragensteg"), Teil("Kragen")
+    for T, ks in ((ST, steg_k), (FA, fall_k)):
+        for n, p, z in ks:
+            T.kante(n, flip(p), z)
+    # Passmarken Stegnaht: Schnittstellen, gemessen ab hinterer Mitte
+    def marken(T, von_hm):
+        ls = LineString(T.k("Stegnaht"))
+        out = []
+        for b, t in schnitte:
+            q = LineString(flip([b - (t - b) * 0.2, t + (t - b) * 0.2])).intersection(ls)
+            if not q.is_empty:
+                q = q if q.geom_type == "Point" else list(q.geoms)[0]
+                s_ = ls.project(q)
+                out.append(laenge(T.k("Stegnaht")) - s_ if von_hm else s_)
+        return out
+    info = dict(Lh=Lh, umbruch=flip(umb_neu), P1=flip(P1), Q=flip(Q), S=flip(S),
+                marken_steg=marken(ST, True), marken_fall=marken(FA, False))
+    return ST, FA, info
 
 
 # ---------------------------------------------------------------- Ärmel
@@ -472,13 +627,13 @@ def knips(T, kname, s, von_ende=False, doppelt=False, zug=NZ):
     return out
 
 
-def fadenlauf(T, a, b):
+def fadenlauf(T, a, b, g=0.8):
     a, b = np.array(a, float), np.array(b, float)
     d = unit(b - a)
     n = perp(d)
     T.innen.append(("faden", np.array([a, b])))
     m = (a + b) / 2 + 0.6 * n
-    T.innen.append(("text", m, "FADENLAUF", 0.8, "middle", math.degrees(math.atan2(d[1], d[0])), "normal"))
+    T.innen.append(("text", m, "FADENLAUF", g, "middle", math.degrees(math.atan2(d[1], d[0])), "normal"))
     for p, dd in ((a, d), (b, -d)):
         T.innen.append(("faden", np.array([p + 1.2 * dd + 0.5 * n, p, p + 1.2 * dd - 0.5 * n])))
 
@@ -675,30 +830,43 @@ def bauen(variante="zweiteilig"):
     masslinie(TB, (1.2, 0), (1.2, tt), f"{zahl(tt)}", t=0.5, g=0.6, unten=True)
     masslinie(TB, (er, 1.2), (tb - er, 1.2), f"Eingriff {zahl(tb - 2 * er)}", t=0.5, g=0.55)
 
-    # Kragen
-    K = kragen(laenge(R.k("Halsloch")), laenge(V.k("Halsloch")))
-    kp = K.punkte
-    st = M["kragen_steg"]
-    umb = LineString(K.k("Ansatz")).offset_curve(st, join_style="round")
-    up = np.array(umb.coords)
-    if up[:, 1].mean() > 0:
-        up = np.array(LineString(K.k("Ansatz")).offset_curve(-st, join_style="round").coords)
-    if np.linalg.norm(up[0]) > np.linalg.norm(up[-1]):
-        up = up[::-1]
-    up = up[up[:, 0] <= kp["e"][0] - 0.3]
-    hilfslinie(K, up, "Umbruchlinie", (6.0, -st - 0.35), groesse=0.55)
-    knips(K, "Ansatz", kp["lh"])  # Schulternaht
-    fadenlauf(K, (3.0, -5.4), (13.0, -5.4))
-    text(K, (17.5, -4.6), "KRAGEN", 1.1, gewicht="bold")
-    text(K, (11.0, -1.7), "2× im Stoffbruch (Ober- und Unterkragen)", 0.55)
-    text(K, (11.0, -0.8), "NZ Ansatz 1,5 cm · Kanten 1 cm", 0.5)
-    text(K, (-0.6, -3.5), "STOFFBRUCH · hintere Mitte", 0.55, rot=-90)
-    text(K, (kp["lh"] + 2.2, 0.75), "Schulter", 0.5)
-    masslinie(K, (0.6, 0), (0.6, -M["kragen_breite"]), f"Breite {zahl(M['kragen_breite'])}", t=0.5, g=0.55, unten=True)
-    masslinie(K, (4.5, 0), (4.5, -st), f"Steg {zahl(st)}", t=0.5, g=0.45, unten=True)
-    nahtmass(K, "Ansatz", "Ansatz", f=0.88, g=0.55)
-    nahtmass(K, "Vorderkante", "Spitze", f=0.5, g=0.55)
-    nahtmass(K, "Außenkante", "Außenkante", f=0.35, g=0.55)
+    # Kragen: Steg + Fall
+    lh_hals = laenge(R.k("Halsloch"))
+    KS, KF, ki = kragen(lh_hals, laenge(V.k("Halsloch")))
+    hm, steg = M["kragen_ansatz_hm"], M["kragen_steg"]
+    yA, yB, yD = -hm, -(hm + steg), -(hm + steg + M["kragen_umbruch"] + M["kragen_fall"])
+    knips(KS, "Ansatz", lh_hals)  # Schulternaht
+    for sm in ki["marken_steg"]:
+        knips(KS, "Stegnaht", sm, von_ende=True, zug=1.0)
+    text(KS, (5.2, yA - 1.6), "KRAGENSTEG", 0.75, gewicht="bold")
+    text(KS, (5.2, yA - 0.8), "2× im Stoffbruch", 0.5)
+    an = KS.k("Ansatz")
+    text(KS, (lh_hals + 1.6, float(np.interp(lh_hals + 1.6, an[:, 0], an[:, 1])) + 0.9), "Schulter", 0.45)
+    # Fadenlauf mittig im Steg zwischen x = 9 und 14
+    pk = KS.poly()
+    mitte = []
+    for xx in (9.5, 14.0):
+        c = schnitt_bis_kante(Polygon(np.array(pk.exterior.coords)[:, ::-1]), xx, -40, 40)
+        mitte.append(c[:, 0].mean())
+    fadenlauf(KS, (9.5, np.mean(mitte)), (14.0, np.mean(mitte)), g=0.45)
+    masslinie(KS, (0.6, yA), (0.6, yB), f"Steg {zahl(steg)}", t=0.5, g=0.5, unten=True)
+    nahtmass(KS, "Ansatz", "Ansatz", f=0.75, g=0.5)
+    nahtmass(KS, "Stegnaht", "Stegnaht", f=0.85, g=0.5, rein=0.6)
+    text(KS, (-0.6, yA - 2.0), "STOFFBRUCH", 0.5, rot=-90)
+
+    for fm in ki["marken_fall"]:
+        knips(KF, "Stegnaht", fm, zug=1.0)
+    hilfslinie(KF, ki["umbruch"], "Umbruchlinie", (4.0, yB - M["kragen_umbruch"] - 0.3), groesse=0.5)
+    text(KF, (13.0, yD + 4.2), "KRAGEN (Fall)", 1.0, gewicht="bold")
+    text(KF, (13.0, yD + 5.1), "2× im Stoffbruch (Ober- und Unterkragen)", 0.55)
+    text(KF, (13.0, yD + 5.9), "NZ Ansatz 1,5 cm · übrige Kanten 1 cm", 0.5)
+    fadenlauf(KF, (3.0, yD + 2.2), (13.0, yD + 2.2))
+    text(KF, (-0.6, (yB + yD) / 2), "STOFFBRUCH · h. M.", 0.5, rot=-90)
+    masslinie(KF, (0.6, yB), (0.6, yD), f"Fall {zahl(yB - yD)}", t=0.5, g=0.5, unten=True)
+    nahtmass(KF, "Vorderkante", "Spitze", f=0.5, g=0.55)
+    nahtmass(KF, "Außenkante", "Außenkante", f=0.45, g=0.55)
+    nahtmass(KF, "Stegnaht", "Stegnaht", f=0.35, g=0.5)
+    nahtmass(KF, "Ansatz", "Ansatz", f=0.5, g=0.45, rein=0.8)
 
     kontrolle = {
         "Brustweite Jacke": M["brust"],
@@ -717,9 +885,11 @@ def bauen(variante="zweiteilig"):
         "Passennaht vorne": round(laenge(VU.k("Passennaht")), 1),
         "Brusttasche (fertig)": f"{zahl(tb)} × {zahl(tt)}",
         "Taschen-Eingriff": round(e1 - e0, 1),
-        "Kragenbreite hintere Mitte": M["kragen_breite"],
-        "Kragensteg bis Umbruch": M["kragen_steg"],
-        "Kragenspitze": M["kragen_spitze"],
+        "Kragensteg hintere Mitte": M["kragen_steg"],
+        "Kragenfall hintere Mitte": M["kragen_umbruch"] + M["kragen_fall"],
+        "Kragenspitze (Vorderkante)": M["kragen_spitze"],
+        "Kragenansatz je Hälfte": round(laenge(KS.k("Ansatz")) + laenge(KF.k("Ansatz")), 1),
+        "Stegnaht Steg / Fall": f"{zahl(laenge(KS.k('Stegnaht')))} / {zahl(laenge(KF.k('Stegnaht')))}",
     }
 
     if variante == "einteilig":
@@ -748,7 +918,7 @@ def bauen(variante="zweiteilig"):
         nahtmass(A, "Armkugel", "Kugel hinten", s0=s_schulter)
         nahtmass(A, "Unterarmnaht vorne", "Unterarmnaht", f=0.3)
         nahtmass(A, "Unterarmnaht hinten", "Unterarmnaht", f=0.7)
-        teile = [[R], [VP, VU], [A], ["quadrat", TB, (K, "quer")]]
+        teile = [[R], [VP, VU], [A], ["quadrat", TB, (KF, "quer"), KS]]
         kontrolle.update({
             "Armkugel gesamt": round(kv, 1),
             "Mehrweite Kugel": round(kv - ah, 1),
@@ -816,7 +986,7 @@ def bauen(variante="zweiteilig"):
         nahtmass(AH, "Armkugel", "Kugel", g=0.55, f=0.4)
         nahtmass(AH, "Unterarmnaht", "Unterarmnaht", f=0.6, g=0.6)
         nahtmass(AH, "Hintere Ärmelnaht", "Hintere Naht", f=0.25, g=0.6)
-        teile = [[R], [VP, VU], [AO], [AH], ["quadrat", TB, (K, "quer")]]
+        teile = [[R], [VP, VU], [AO], [AH], ["quadrat", TB, (KF, "quer"), KS]]
         kontrolle.update({
             "Armkugel gesamt": round(kv, 1),
             "Mehrweite Kugel": round(kv - ah, 1),

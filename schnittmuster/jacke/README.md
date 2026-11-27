@@ -4,14 +4,14 @@ Zwei Varianten, Rumpf identisch:
 
 | Variante | Teile |
 |---|---|
-| **zweiteilig** – hintere Ärmelnaht, Ärmel biegt leicht nach vorn | Rücken (1× im Stoffbruch), vordere Passe (2×), Vorderteil (2×), Oberärmel (2×), Hinterärmel (2×), Taschenbeutel (2×), Kragen (2× im Stoffbruch) |
-| **einteilig** – ohne hintere Ärmelnaht | Rücken (1× im Stoffbruch), vordere Passe (2×), Vorderteil (2×), Ärmel (2×), Taschenbeutel (2×), Kragen (2× im Stoffbruch) |
+| **zweiteilig** – hintere Ärmelnaht, Ärmel biegt leicht nach vorn | Rücken (1× im Stoffbruch), vordere Passe (2×), Vorderteil (2×), Oberärmel (2×), Hinterärmel (2×), Taschenbeutel (2×), Kragensteg + Kragen (je 2× im Stoffbruch) |
+| **einteilig** – ohne hintere Ärmelnaht | Rücken (1× im Stoffbruch), vordere Passe (2×), Vorderteil (2×), Ärmel (2×), Taschenbeutel (2×), Kragensteg + Kragen (je 2× im Stoffbruch) |
 
 Weitere Details (Übertritt, Knopfleiste, Bund, Manschetten) folgen im nächsten Schritt.
 
 | Datei (je Variante `zweiteilig` / `einteilig`) | Zweck |
 |---|---|
-| `grundschnitt_<variante>_A4.pdf` | Seite 1 Übersicht + Kontrollmaße, danach A4-Seiten zum Zusammenkleben (24 bzw. 23) |
+| `grundschnitt_<variante>_A4.pdf` | Seite 1 Übersicht + Kontrollmaße, danach A4-Seiten zum Zusammenkleben (25 bzw. 24) |
 | `grundschnitt_<variante>_A0.pdf` | eine große Seite 1:1 für Copyshop / Plotter |
 | `grundschnitt_<variante>_1zu1.svg` | dasselbe als SVG 1:1 |
 | `masse_<variante>.json` | alle verwendeten Maße und Kontrollmaße |
@@ -21,7 +21,7 @@ Weitere Details (Übertritt, Knopfleiste, Bund, Manschetten) folgen im nächsten
 Kugelhöhe), Weiten auf Brust-, Taillen-, Oberarm- und Ellbogenlinie und am Saum (Rumpf als halbe Weiten),
 Nahtlängen (Halsloch, Schulter, Armloch, Seitennaht, Kugel vorne/hinten, Unterarmnaht, hintere Ärmelnaht).
 
-**Drucken:** 100 % / „Tatsächliche Größe“. Kontrollquadrat (10 × 10 cm, oben rechts, Seite H1) nachmessen.
+**Drucken:** 100 % / „Tatsächliche Größe“. Kontrollquadrat (10 × 10 cm, oben rechts) nachmessen.
 Nahtzugabe 1,5 cm und Saumzugabe 3 cm sind enthalten. Durchgezogene Linie = Schnittkante, gestrichelt = Nahtlinie.
 
 ## Vordere Passe und Brusttasche
@@ -38,19 +38,29 @@ Nähen: Beutel 1 rechts auf rechts an die Eingriffkante des Vorderteils nähen, 
 Beutel 2 an die Nahtzugabe der Passe im Eingriffbereich nähen. Passennaht links und rechts vom Eingriff schließen,
 Beutelteile ringsum zusammennähen, dann den Beutel von außen auf der markierten Linie (14 × 14 cm) absteppen.
 
-## Kragen
+## Kragen (Steg + Fall)
 
-Einteiliger Hemdkragen mit angeschnittenem Steg, hintere Mitte im Stoffbruch, 2× zuschneiden (Ober- und Unterkragen).
+Konstruiert nach der Konstruktionszeichnung „Kragen mit abgetrenntem Steg“. Zwei Teile, beide mit der hinteren Mitte
+im Stoffbruch und je 2× zuzuschneiden (Ober- und Unterseite): **Kragensteg** und **Kragen (Fall)**.
 
-| | |
+| Maß (hintere Mitte, von unten) | |
 |---|---|
-| Breite in der hinteren Mitte | 7 cm (2,8 cm Steg bis zur Umbruchlinie + 4,2 cm sichtbarer Kragen) |
-| Spitze | 7,5 cm lang, steht 2 cm über die vordere Mitte hinaus |
-| Ansatzkante | 21,3 cm je Hälfte = halbes Halsloch (Rücken 8,8 + vorne 12,5), Knips an der Schulternaht |
-| Nahtzugabe | Ansatz 1,5 cm, Außen- und Vorderkante 1 cm |
+| Grundlinie bis Ansatz | 3,5 cm |
+| Steg (Ansatz bis Stegnaht) | 4 cm |
+| Stegnaht bis Umbruchlinie | 0,5 cm |
+| Umbruchlinie bis Außenkante | 5,5 cm |
+| Fall gesamt / Kragen gesamt | 6 cm / 10 cm |
 
-Die Ansatzkante steigt zur vorderen Mitte um 1,5 cm an, damit sich der Steg an den Hals legt. Der Kragen endet an
-der vorderen Mitte; Unterkragen mit Einlage verstärken.
+- Waagerechte = halbes (erweitertes) Halsloch ./. 0,5 cm; vorderes Ende des Ansatzes 0,7 cm über der Grundlinie.
+  Die Waagerechte ist so nachgeführt, dass die Ansatzkante genau dem halben Halsloch entspricht (21,3 cm).
+- Vorderkante (Spitze) 10 cm, Spitze 3,5 cm vor dem vorderen Ansatzende.
+- Die Stegnaht beginnt 3 cm (Bogen) hinter dem vorderen Ansatzende; vorne ist der Kragen ohne Steg angesetzt.
+- Umbruchlinie von der hinteren Mitte (0,5 cm über der Stegnaht) zum vorderen Ansatzende.
+- An den drei Schnittlinien sind Steg und Fall an der Stegnaht je **0,2 cm** zusammengeschoben (Drehpunkt Steg: Ansatz,
+  Fall: Außenkante). Dadurch legt sich der Steg an den Hals und der Fall hat an der Außenkante mehr Weite.
+  Die Zeichnung nennt keinen Betrag; `kragen_einschub` in `grundschnitt.py` ändert ihn (0 = ungeformt).
+- Stegnaht an Steg und Fall gleich lang (19,1 cm), Passmarken an den Schnittstellen, Schulterknips am Ansatz.
+- Nahtzugabe: Ansatz 1,5 cm, alle übrigen Kanten 1 cm.
 
 ## Maße
 
