@@ -7,7 +7,7 @@ Zwei Varianten, Rumpf identisch:
 | **dreiteilig** – vordere und hintere Ärmelnaht, Ärmel biegt leicht nach vorn | Rücken (1× im Stoffbruch), vordere Passe (2×), Vorderteil (2×), Vorderärmel (2×), Oberärmel (2×), Hinterärmel (2×), Taschenbeutel (2×), Kragensteg + Kragen (je 2× im Stoffbruch) |
 | **einteilig** – ohne Ärmelnähte vorne/hinten | Rücken (1× im Stoffbruch), vordere Passe (2×), Vorderteil (2×), Ärmel (2×), Taschenbeutel (2×), Kragensteg + Kragen (je 2× im Stoffbruch) |
 
-Weitere Details (Übertritt, Knopfleiste, Bund, Manschetten) folgen im nächsten Schritt.
+Weitere Details (Bund, Manschetten) folgen im nächsten Schritt.
 
 | Datei (je Variante `dreiteilig` / `einteilig`) | Zweck |
 |---|---|
@@ -37,6 +37,26 @@ Brusttasche nur auf dem **linken Vorderteil** (getragen links), 4,5 cm neben der
 Nähen: Beutel 1 rechts auf rechts an die Eingriffkante des Vorderteils nähen, nach innen wenden, Kante absteppen.
 Beutel 2 an die Nahtzugabe der Passe im Eingriffbereich nähen. Passennaht links und rechts vom Eingriff schließen,
 Beutelteile ringsum zusammennähen, dann den Beutel von außen auf der markierten Linie (14 × 14 cm) absteppen.
+
+## Knopfleiste vorne
+
+Überlappende Knopfleiste, **4 cm** breit, mittig auf der vorderen Mitte (Übertritt 2 cm vor der Mitte). Beide
+Vorderteile (Passe und Vorderteil) haben einen **angeschnittenen Beleg** von 4,5 cm + 1 cm Einschlag:
+
+| Linie (von außen nach innen) | Lage |
+|---|---|
+| Belegkante (Schnittkante = Nahtlinie + 1 cm Einschlag) | 6,5 cm vor der vorderen Mitte |
+| Vorderkante: hier den Beleg nach innen umbrechen | 2 cm vor der vorderen Mitte |
+| vordere Mitte, Knöpfe | 0 |
+| Steppnaht der Leiste: fasst den Beleg 0,5 cm mit | 2 cm hinter der vorderen Mitte |
+
+Liegen beide Vorderteile geschlossen übereinander, überlappen sie sich um die vollen 4 cm. Der Beleg ist oben an der
+Vorderkante gespiegelt (Halsloch) und läuft durch die Passennaht bis in den Saum. Der Kragen endet an der vorderen Mitte,
+die 2 cm Übertritt am Halsloch werden mit dem Beleg versäubert.
+
+Knöpfe (Vorschlag): 6 Stück auf der vorderen Mitte, der erste 1,5 cm unter dem Halsloch, der letzte 4 cm über dem Saum,
+Abstand 10,7 cm. Knopflöcher bei Herrenjacken im linken Vorderteil (getragen links), Knöpfe rechts.
+Mit dem Bund ändert sich die Lage des untersten Knopfs noch.
 
 ## Kragen (Steg + Fall)
 

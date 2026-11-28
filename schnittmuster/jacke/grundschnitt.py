@@ -72,6 +72,13 @@ M = dict(
     tasche_breite=14.0,
     tasche_tiefe=14.0,      # ab Passennaht
     eingriff_rand=0.75,     # Eingriff beginnt/endet so weit innerhalb der Taschenkante
+    # Knopfleiste (überlappend, angeschnittener Beleg)
+    leiste=4.0,             # sichtbare Leiste, mittig auf der vorderen Mitte -> Übertritt = leiste / 2
+    beleg=4.5,              # angeschnittener Beleg ab Vorderkante (reicht 0,5 cm über die Leistensteppung)
+    beleg_einschlag=1.0,    # Nahtzugabe an der Belegkante (einschlagen)
+    knopf_anzahl=6,
+    knopf_oben=1.5,         # erster Knopf unter dem Halsloch (vordere Mitte)
+    knopf_unten=4.0,        # letzter Knopf über dem Saum
     # Kragen mit abgetrenntem Steg (nach Konstruktionszeichnung)
     kragen_ansatz_hm=3.5,   # Grundlinie bis Ansatz in der hinteren Mitte
     kragen_steg=4.0,        # Steghöhe hintere Mitte (Ansatz bis Stegnaht)
@@ -285,26 +292,60 @@ def y_teilen(pts, y):
 
 
 def vorne_teilen(V):
-    """Vorderteil an der waagerechten Passennaht in Passe und unteres Vorderteil teilen."""
+    """Vorderteil an der waagerechten Passennaht teilen; vorne Übertritt + angeschnittener Beleg."""
     yp = V.punkte["cfn"][1] + M["passe_unter_hals"]
     arm_o, arm_u = y_teilen(V.k("Armloch"), yp)
     pa = arm_o[-1]
-    vm = V.k("Vordere Mitte")  # Saum -> Halsloch
+    ue = M["leiste"] / 2
+    xk = -ue                      # Vorderkante (Bruchkante des Belegs)
+    xb = xk - M["beleg"]          # Belegkante
+    zb = M["beleg_einschlag"]
+    hals = V.k("Halsloch")        # vordere Mitte -> HPS
+    cfn = hals[0]
+    hals_ext = cat(seg((xk, cfn[1]), cfn), hals)  # Vorderkante -> HPS
+    # Beleg oben = Halsloch an der Vorderkante gespiegelt (Bereich bis Belegbreite)
+    dichte = np.array([bei(hals_ext, t)[0] for t in np.linspace(0, laenge(hals_ext), 400)])
+    xg = xk + M["beleg"]
+    i = int(np.argmax(dichte[:, 0] >= xg))
+    a_, b_ = dichte[i - 1], dichte[i]
+    pg = a_ + (b_ - a_) * (xg - a_[0]) / (b_[0] - a_[0])
+    teil = np.vstack([dichte[:i], pg])
+    gesp = np.stack([2 * xk - teil[:, 0], teil[:, 1]], axis=-1)  # (xk, cfn) -> (xb, y*)
+    halsloch = cat(gesp[::-1], hals_ext)                          # (xb, y*) -> HPS
     P = Teil("Vordere Passe")
     P.kante("Schulter", V.k("Schulter"), NZ)
     P.kante("Armloch", arm_o, NZ)
-    P.kante("Passennaht", seg(pa, (0, yp)), NZ)
-    P.kante("Vordere Mitte", seg((0, yp), vm[-1]), NZ)
-    P.kante("Halsloch", V.k("Halsloch"), NZ)
+    P.kante("Passennaht", seg(pa, (xb, yp)), NZ)
+    P.kante("Belegkante", seg((xb, yp), gesp[-1]), zb)
+    P.kante("Halsloch", halsloch, NZ)
     U = Teil("Vorderteil")
-    U.kante("Passennaht", seg((0, yp), pa), NZ)
+    U.kante("Passennaht", seg((xb, yp), pa), NZ)
     U.kante("Armloch", arm_u, NZ)
     U.kante("Seitennaht", V.k("Seitennaht"), NZ)
-    U.kante("Saum", V.k("Saum"), SAUMZ)
-    U.kante("Vordere Mitte", seg(vm[0], (0, yp)), NZ)
-    U.punkte = dict(V.punkte, yp=yp, pa=pa)
-    P.punkte = dict(V.punkte, yp=yp, pa=pa)
+    saum = V.k("Saum")
+    U.kante("Saum", seg(saum[0], (xb, saum[-1][1])), SAUMZ)
+    U.kante("Belegkante", seg((xb, saum[-1][1]), (xb, yp)), zb)
+    extra = dict(yp=yp, pa=pa, xk=xk, xb=xb, ue=ue, l_beleg_hals=laenge(gesp) + ue)
+    U.punkte = dict(V.punkte, **extra)
+    P.punkte = dict(V.punkte, **extra)
     return P, U
+
+
+def leiste_zeichnen(T, y0, y1, hals=None):
+    """Vordere Mitte, Vorderkante (Bruch) und Leistensteppung einzeichnen."""
+    p = T.punkte
+    xk, xs_ = p["xk"], M["leiste"] / 2
+    hy = (lambda x: float(np.interp(x, hals[:, 0], hals[:, 1]))) if hals is not None else (lambda x: y0)
+    T.innen.append(("hilf", np.array([(0.0, hy(0.0)), (0.0, y1)])))
+    T.innen.append(("hilf", np.array([(xk, hy(xk)), (xk, y1)])))
+    T.innen.append(("stepp", np.array([(xs_, hy(xs_)), (xs_, y1)])))
+
+
+def knopf(T, y, r=0.85):
+    t = np.linspace(0, 2 * math.pi, 25)
+    T.innen.append(("faden", np.stack([r * np.cos(t), y + r * np.sin(t)], axis=-1)))
+    T.innen.append(("faden", np.array([(-0.45, y), (0.45, y)])))
+    T.innen.append(("faden", np.array([(0.0, y - 0.45), (0.0, y + 0.45)])))
 
 
 def taschenbeutel():
@@ -805,14 +846,17 @@ def bauen(variante="dreiteilig"):
     fadenlauf(VP, (13, 1.0), (13, yp - 1.5))
     text(VP, (6.5, yp - 4.2), "VORDERE PASSE", 1.1, gewicht="bold")
     text(VP, (6.5, yp - 2.8), "2× (gegengleich)", 0.75)
-    text(VP, (2.3, yp - 1.0), "VM", 0.7, anker="middle", rot=-90)
-    masslinie(VP, (0.6, p["cfn"][1]), (0.6, yp), f"{zahl(yp - p['cfn'][1])}", t=0.5, g=0.6, unten=True)
-    nahtmass(VP, "Halsloch", "Halsloch", f=0.6)
+    text(VP, (0.9, yp - 1.6), "VM", 0.6, anker="middle", rot=-90)
+    masslinie(VP, (-3.4, p["cfn"][1]), (-3.4, yp), f"{zahl(yp - p['cfn'][1])}", t=0.5, g=0.55, unten=True)
+    lb = p["l_beleg_hals"]
+    nahtmass(VP, "Halsloch", "Halsloch", s0=lb, f=0.6)
+    leiste_zeichnen(VP, p["cfn"][1], yp, hals=VP.k("Halsloch"))
+    text(VP, (-4.3, yp - 0.9), "BELEG", 0.45, anker="middle")
     nahtmass(VP, "Schulter", "Schulter")
     nahtmass(VP, "Armloch", "Armloch", f=0.5, g=0.55)
-    nahtmass(VP, "Passennaht", "Passennaht", f=0.3, g=0.6)
+    nahtmass(VP, "Passennaht", "Passennaht", s1=float(p["pa"][0]), f=0.45, g=0.6)
     for x in (e0, e1):  # Eingriff (nur linkes Vorderteil)
-        knips(VP, "Passennaht", x, von_ende=True)
+        knips(VP, "Passennaht", x - p["xb"], von_ende=True)
 
     fadenlauf(VU, (3.4, tt + yp + 3), (3.4, p["y_saum"] - 8))
     for y, t in ((p["y_brust"], "Brustlinie"), (M["taille_y"], "Taillenlinie")):
@@ -821,12 +865,25 @@ def bauen(variante="dreiteilig"):
     text(VU, (14.5, 33.0), "VORDERTEIL", 1.8, gewicht="bold")
     text(VU, (14.5, 35.5), "2× zuschneiden (gegengleich)", 1.1)
     text(VU, (14.5, 37.5), kopf, 0.8)
-    text(VU, (14.5, 38.9), "Übertritt/Beleg folgen mit den Details", 0.8)
-    text(VU, (2.3, 56), "VORDERE MITTE", 1.0, anker="middle", rot=-90)
+    text(VU, (14.5, 38.9), "Knopfleiste 4 cm, Beleg angeschnitten", 0.8)
+    text(VU, (0.9, 44.3), "VORDERE MITTE", 0.9, anker="middle", rot=-90)
+    leiste_zeichnen(VU, yp, p["y_saum"])
+    text(VU, (p["xk"] - 0.35, 54.5), "VORDERKANTE · Beleg nach innen umbrechen", 0.55, anker="middle", rot=-90)
+    text(VU, ((p["xk"] + p["xb"]) / 2 + 0.25, 24), "BELEG", 0.6, anker="middle", rot=-90)
+    text(VU, (M["leiste"] / 2 + 0.6, 55.5), "Steppnaht Leiste", 0.5, anker="middle", rot=-90)
+    yy = 33.0
+    masslinie(VU, (p["xb"], yy), (p["xk"], yy), f"Beleg {zahl(M['beleg'])}", t=0.3, g=0.5)
+    masslinie(VU, (p["xk"], yy), (M["leiste"] / 2, yy), f"Leiste {zahl(M['leiste'])}", g=0.5)
+    # Knöpfe (Vorschlag) auf der vorderen Mitte
+    k_o, k_u = p["cfn"][1] + M["knopf_oben"], p["y_saum"] - M["knopf_unten"]
+    knoepfe = np.linspace(k_o, k_u, M["knopf_anzahl"])
+    for yk in knoepfe:
+        knopf(VP if yk < yp else VU, yk)
+    text(VU, (1.3, knoepfe[-1] + 0.25), "Knopf", 0.5, anker="start")
     knips(VU, "Armloch", KN_V, von_ende=True)
     knips(VU, "Seitennaht", bis_y(VU.k("Seitennaht"), M["taille_y"]))
     for x in (e0, e1):
-        knips(VU, "Passennaht", x)
+        knips(VU, "Passennaht", x - p["xb"])
     # Taschenposition = Absteppung des Beutels
     VU.innen.append(("stepp", np.array([(tx, yp), (tx, yp + tt), (tx + tb, yp + tt), (tx + tb, yp)])))
     VU.innen.append(("stepp", np.array([(e0, yp + 0.5), (e1, yp + 0.5)])))
@@ -837,7 +894,7 @@ def bauen(variante="dreiteilig"):
     masslinie(VU, (e0, yp + 1.6), (e1, yp + 1.6), f"Eingriff {zahl(e1 - e0)}", g=0.6)
     masslinie(VU, (tx, yp + tt + 1.0), (tx + tb, yp + tt + 1.0), f"Tasche {zahl(tb)}", t=0.5, g=0.6)
     masslinie(VU, (tx + tb - 1.2, yp), (tx + tb - 1.2, yp + tt), f"{zahl(tt)}", t=0.3, g=0.6, unten=True)
-    masslinie(VU, (0.6, yp), (0.6, p["y_saum"]), f"Vorderlänge ab Passe {zahl(p['y_saum'] - yp)} (gesamt {zahl(p['y_saum'] - p['cfn'][1])})", t=0.42, unten=True)
+    masslinie(VU, (-3.4, yp), (-3.4, p["y_saum"]), f"Vorderlänge ab Passe {zahl(p['y_saum'] - yp)} (gesamt {zahl(p['y_saum'] - p['cfn'][1])})", t=0.42, unten=True)
     weite(VU, p["y_brust"], "½ Brust", t=0.5, x0=0)
     weite(VU, M["taille_y"], "½ Weite Taillenhöhe", t=0.72, x0=0)
     weite(VU, p["y_saum"] - 2.0, "½ Saum", t=0.6, x0=0)
@@ -910,7 +967,10 @@ def bauen(variante="dreiteilig"):
         "Armloch vorne": round(ah_v, 1),
         "Armloch hinten": round(ah_h, 1),
         "Passe vorne ab Halsloch Mitte": round(M["passe_unter_hals"], 1),
-        "Passennaht vorne": round(laenge(VU.k("Passennaht")), 1),
+        "Passennaht vorne (ab vorderer Mitte)": round(float(VU.punkte["pa"][0]), 1),
+        "Knopfleiste (Übertritt je 2)": M["leiste"],
+        "Beleg (angeschnitten) + Einschlag": f"{zahl(M['beleg'])} + {zahl(M['beleg_einschlag'])}",
+        "Knöpfe / Abstand": f"{M['knopf_anzahl']} / {zahl((VU.punkte['y_saum'] - M['knopf_unten'] - VU.punkte['cfn'][1] - M['knopf_oben']) / (M['knopf_anzahl'] - 1))}",
         "Brusttasche (fertig)": f"{zahl(tb)} × {zahl(tt)}",
         "Taschen-Eingriff": round(e1 - e0, 1),
         "Kragensteg hintere Mitte": round(M["kragen_steg"] * kf, 1),
@@ -1239,7 +1299,7 @@ def pdf_a4(elemente, W, H, pfad, kontrolle, titel):
     for k, z in enumerate(zeilen):
         c.drawString(2 * cm, (PH - 3.6 - 0.6 * k) * cm, z)
     # Mini-Layout
-    s = min(17.0 / (nx * TW), 9.0 / (ny * TH))
+    s = min(17.0 / (nx * TW), 8.0 / (ny * TH))
     ox, oy = 2.0, PH - 8.2
     c.saveState()
     c.setLineWidth(0.3)
@@ -1270,8 +1330,8 @@ def pdf_a4(elemente, W, H, pfad, kontrolle, titel):
     items = list(kontrolle.items())
     for k, (n, v) in enumerate(items):
         col, row = divmod(k, (len(items) + 1) // 2)
-        c.drawString((2 + 9 * col) * cm, (ytab - 0.7 - 0.5 * row) * cm, n)
-        c.drawRightString((10 + 9 * col) * cm, (ytab - 0.7 - 0.5 * row) * cm,
+        c.drawString((2 + 9 * col) * cm, (ytab - 0.7 - 0.45 * row) * cm, n)
+        c.drawRightString((10 + 9 * col) * cm, (ytab - 0.7 - 0.45 * row) * cm,
                           (f"{v:g} cm" if not isinstance(v, str) else f"{v} cm").replace(".", ","))
     c.setFont("Helvetica", 8)
     c.drawString(2 * cm, 1.5 * cm, f"Erstellt {date.today().strftime('%d.%m.%Y')} · {len(kacheln)} Druckseiten folgen")
