@@ -11,7 +11,7 @@ Weitere Details (Übertritt, Knopfleiste, Bund, Manschetten) folgen im nächsten
 
 | Datei (je Variante `zweiteilig` / `einteilig`) | Zweck |
 |---|---|
-| `grundschnitt_<variante>_A4.pdf` | Seite 1 Übersicht + Kontrollmaße, danach A4-Seiten zum Zusammenkleben (25 bzw. 24) |
+| `grundschnitt_<variante>_A4.pdf` | Seite 1 Übersicht + Kontrollmaße, danach A4-Seiten zum Zusammenkleben (je 24) |
 | `grundschnitt_<variante>_A0.pdf` | eine große Seite 1:1 für Copyshop / Plotter |
 | `grundschnitt_<variante>_1zu1.svg` | dasselbe als SVG 1:1 |
 | `masse_<variante>.json` | alle verwendeten Maße und Kontrollmaße |
@@ -40,26 +40,28 @@ Beutelteile ringsum zusammennähen, dann den Beutel von außen auf der markierte
 
 ## Kragen (Steg + Fall)
 
-Konstruiert nach der Konstruktionszeichnung „Kragen mit abgetrenntem Steg“. Zwei Teile, beide mit der hinteren Mitte
-im Stoffbruch und je 2× zuzuschneiden (Ober- und Unterseite): **Kragensteg** und **Kragen (Fall)**.
+Konstruiert nach der Konstruktionszeichnung „Kragen mit abgetrenntem Steg“, alle Höhenmaße auf **70 %** verkleinert
+(`kragen_massstab`), damit die Spitze 7 cm lang ist. Die Ansatzlänge bleibt an das Halsloch gebunden.
+Zwei Teile, beide mit der hinteren Mitte im Stoffbruch und je 2× zuzuschneiden (Ober- und Unterseite):
+**Kragensteg** und **Kragen (Fall)**.
 
-| Maß (hintere Mitte, von unten) | |
-|---|---|
-| Grundlinie bis Ansatz | 3,5 cm |
-| Steg (Ansatz bis Stegnaht) | 4 cm |
-| Stegnaht bis Umbruchlinie | 0,5 cm |
-| Umbruchlinie bis Außenkante | 5,5 cm |
-| Fall gesamt / Kragen gesamt | 6 cm / 10 cm |
+| | Zeichnung | verwendet (× 0,7) |
+|---|---|---|
+| Grundlinie bis Ansatz (h. M.) | 3,5 | 2,45 |
+| Steg (h. M.) | 4 | 2,8 |
+| Stegnaht bis Umbruchlinie (h. M.) | 0,5 | 0,35 |
+| Umbruchlinie bis Außenkante (h. M.) | 5,5 | 3,85 |
+| Kragen gesamt (h. M.) | 10 | 7 |
+| vorderes Ansatzende über Grundlinie | 0,7 | 0,49 |
+| Spitze (Vorderkante) / Vorstand | 10 / 3,5 | 7 / 2,45 |
+| Stegnaht beginnt hinter dem vorderen Ansatzende | 3 | 2,1 |
 
-- Waagerechte = halbes (erweitertes) Halsloch ./. 0,5 cm; vorderes Ende des Ansatzes 0,7 cm über der Grundlinie.
-  Die Waagerechte ist so nachgeführt, dass die Ansatzkante genau dem halben Halsloch entspricht (21,3 cm).
-- Vorderkante (Spitze) 10 cm, Spitze 3,5 cm vor dem vorderen Ansatzende.
-- Die Stegnaht beginnt 3 cm (Bogen) hinter dem vorderen Ansatzende; vorne ist der Kragen ohne Steg angesetzt.
-- Umbruchlinie von der hinteren Mitte (0,5 cm über der Stegnaht) zum vorderen Ansatzende.
+- Waagerechte = halbes (erweitertes) Halsloch ./. 0,5 cm, so nachgeführt, dass die Ansatzkante genau dem halben
+  Halsloch entspricht (21,3 cm = Steg 19,2 + Fall 2,1).
 - An den drei Schnittlinien sind Steg und Fall an der Stegnaht je **0,2 cm** zusammengeschoben (Drehpunkt Steg: Ansatz,
-  Fall: Außenkante). Dadurch legt sich der Steg an den Hals und der Fall hat an der Außenkante mehr Weite.
-  Die Zeichnung nennt keinen Betrag; `kragen_einschub` in `grundschnitt.py` ändert ihn (0 = ungeformt).
-- Stegnaht an Steg und Fall gleich lang (19,1 cm), Passmarken an den Schnittstellen, Schulterknips am Ansatz.
+  Fall: Außenkante): Der Steg legt sich an den Hals, der Fall bekommt an der Außenkante Weite. Die Zeichnung nennt
+  keinen Betrag; `kragen_einschub` in `grundschnitt.py` ändert ihn (0 = ungeformt).
+- Stegnaht an Steg und Fall gleich lang (19,3 cm), Passmarken an den Schnittstellen, Schulterknips am Ansatz.
 - Nahtzugabe: Ansatz 1,5 cm, alle übrigen Kanten 1 cm.
 
 ## Maße

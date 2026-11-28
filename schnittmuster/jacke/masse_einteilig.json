@@ -61,7 +61,8 @@
     "kragen_spitze": 10.0,
     "kragen_spitze_aus": 3.5,
     "kragen_steg_vorn": 3.0,
-    "kragen_einschub": 0.2
+    "kragen_einschub": 0.2,
+    "kragen_massstab": 0.7
   },
   "kontrollmasse": {
     "Brustweite Jacke": 114.0,
@@ -80,11 +81,11 @@
     "Passennaht vorne": 20.7,
     "Brusttasche (fertig)": "14 × 14",
     "Taschen-Eingriff": 12.5,
-    "Kragensteg hintere Mitte": 4.0,
-    "Kragenfall hintere Mitte": 6.0,
-    "Kragenspitze (Vorderkante)": 10.0,
+    "Kragensteg hintere Mitte": 2.8,
+    "Kragenfall hintere Mitte": 4.2,
+    "Kragenspitze (Vorderkante)": 7.0,
     "Kragenansatz je Hälfte": 21.3,
-    "Stegnaht Steg / Fall": "19,1 / 19,1",
+    "Stegnaht Steg / Fall": "19,3 / 19,3",
     "Armkugel gesamt": 56.2,
     "Mehrweite Kugel": 1.2,
     "Kugelhöhe": 17.5,
