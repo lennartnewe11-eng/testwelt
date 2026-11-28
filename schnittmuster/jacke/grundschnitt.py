@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Grundschnitt Jacke (Trucker-Form, slim, Größe L): Vorderteil, Rücken, Ärmel
-in zwei Varianten: Ärmel zweiteilig (hintere Ärmelnaht) oder einteilig.
+in zwei Varianten: Ärmel dreiteilig (vordere und hintere Ärmelnaht) oder einteilig.
 
 Alle Maße in cm. Koordinaten: x nach rechts, y nach unten.
 Rücken:    Ursprung = hintere Mitte am Halsausschnitt, x nach außen zur Seitennaht.
@@ -8,7 +8,7 @@ Vorderteil: Ursprung = vordere Mitte auf Höhe hintere Halsmitte, x nach außen.
            Brustlinie und Saum liegen bei Vorder- und Rückenteil auf gleicher Höhe.
 Ärmel:     Ursprung = Kugelhöhe-Oberkante in der Ärmelmitte.
 
-Erzeugt im selben Ordner je Variante <v> = zweiteilig | einteilig:
+Erzeugt im selben Ordner je Variante <v> = dreiteilig | einteilig:
   grundschnitt_<v>_1zu1.svg   alle Teile 1:1 mit Maßen (für Plotter / Copyshop)
   grundschnitt_<v>_A4.pdf     Übersicht + zum Zusammenkleben gekachelte A4-Seiten
   grundschnitt_<v>_A0.pdf     eine große Seite 1:1 (Copyshop / Plotter)
