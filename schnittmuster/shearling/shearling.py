@@ -54,6 +54,8 @@ S = dict(
     tasche_oben=(17.0, 37.0), tasche_unten=(20.0, 54.0), paspel=3.0,
     # Kragen
     kragen_hoehe_hm=13.0, kragen_hoehe_vorn=12.0, kragen_hub=1.5, kragen_ecke=3.0,
+    kragen_klapp=2 / 3,     # Klappnaht (Steg/Fall) auf 2/3 der Kragenhöhe
+    kragen_spreizung=1.0,   # Fall an der Außenkante je Schnitt aufspreizen (3 Schnitte)
 )
 S["seite_v"] = dict(brust=S["brust"] / 2 - S["seite_h"]["brust"], saum=S["saum"] / 2 - S["seite_h"]["saum"])
 
@@ -96,8 +98,23 @@ def rechteck(name, b, h, oben=NZ, unten=NZ, links=NZ, rechts=NZ):
     return T
 
 
+def glaetten(pts, sigma=1.2, schritt=0.2):
+    """Polylinie gleichmäßig abtasten und mit Gauß-Fenster (sigma in cm) glätten; Enden bleiben fest."""
+    L = g.laenge(pts)
+    m = max(int(L / schritt), 10)
+    p = np.array([g.bei(pts, L * i / m)[0] for i in range(m + 1)])
+    k = int(3 * sigma / schritt)
+    w = np.exp(-0.5 * (np.arange(-k, k + 1) * schritt / sigma) ** 2)
+    pad = np.vstack([2 * p[0] - p[k:0:-1], p, 2 * p[-1] - p[-2:-k - 2:-1]])  # gespiegelt fortsetzen
+    q = np.stack([np.convolve(pad[:, j], w / w.sum(), mode="valid") for j in (0, 1)], axis=-1)
+    q[0], q[-1] = p[0], p[-1]
+    return q
+
+
 def kragen(l_halb):
-    """Großer Stehkragen (Fell innen, rollt oben über), hintere Mitte genäht."""
+    """Großer Kragen aus zwei Teilen: Steg bis 2/3 der Höhe, darüber der Fall.
+    An der Klappnaht klappt der Fall nach außen um (Fell zeigt); der Fall ist an der Außenkante
+    aufgespreizt, damit er umgeklappt außen über dem Steg Platz hat."""
     lh, hub = S["halsweite_h"], S["kragen_hub"]
 
     def ansatz(xe):
@@ -109,18 +126,52 @@ def kragen(l_halb):
         lo, hi = (xe, hi) if g.laenge(ansatz(xe)) < l_halb else (lo, xe)
     an = ansatz(xe)
     e = an[-1]
-    hv, hm, r = S["kragen_hoehe_vorn"], S["kragen_hoehe_hm"], S["kragen_ecke"]
+    hv, hm, r, f = S["kragen_hoehe_vorn"], S["kragen_hoehe_hm"], S["kragen_ecke"], S["kragen_klapp"]
     oben_v = e + np.array([0.6, -hv])           # vordere obere Ecke (vor dem Abrunden)
-    d1 = g.unit(e - oben_v)                       # Richtung Vorderkante nach unten
-    d2 = g.unit(np.array([0.0, -hm]) - oben_v)    # Richtung Außenkante zur hinteren Mitte
+    oben = g.seg((0, -hm), oben_v)
+
+    def gleich(pts, n=120):
+        return np.array([g.bei(pts, g.laenge(pts) * i / (n - 1))[0] for i in range(n)])
+
+    klapp = gleich(an) + f * (gleich(oben) - gleich(an))  # hintere Mitte -> Vorderkante
+    s1 = klapp[-1]
+    d1 = g.unit(e - oben_v)
+    d2 = g.unit(np.array([0.0, -hm]) - oben_v)
     p1, p2 = oben_v + r * d1, oben_v + r * d2
-    K = g.Teil("Kragen")
-    K.kante("Ansatz", an, NZ)
-    K.kante("Vorderkante", g.cat(g.seg(e, p1), g.bez(p1, p1 - 0.55 * r * d1, p2 - 0.55 * r * d2, p2, n=24)), 0)
-    K.kante("Außenkante", g.seg(p2, (0, -hm)), 0)
-    K.kante("Hintere Mitte", g.seg((0, -hm), (0, 0)), NZ)
-    K.punkte = dict(e=e, lh=lh)
-    return K
+    aussen = gleich(g.seg(p2, (0, -hm)), 60)
+
+    ST = g.Teil("Kragensteg")
+    ST.kante("Ansatz", an, NZ)
+    ST.kante("Vorderkante", g.seg(e, s1), 0)
+    ST.kante("Klappnaht", klapp[::-1], NZ)
+    ST.kante("Hintere Mitte", g.seg((0, -f * hm), (0, 0)), NZ)
+
+    def x_auf(pts, x):
+        return pts[int(np.argmin(np.abs(pts[:, 0] - x)))].copy()
+
+    schnitte = [(x_auf(klapp, x), x_auf(aussen, x)) for x in (5.0, 11.0, 17.0)]
+    fall_k = [("Klappnaht", klapp, NZ),
+              ("Vorderkante", g.cat(g.seg(s1, p1), g.bez(p1, p1 - 0.55 * r * d1, p2 - 0.55 * r * d2, p2, n=24)), 0),
+              ("Außenkante", aussen, 0),
+              ("Hintere Mitte", g.seg((0, -hm), (0, -f * hm)), NZ)]
+    # y nach unten: positive Drehung um den Drehpunkt auf der Klappnaht öffnet die Außenkante
+    fall_k, drehe, region, _ = g.formen(fall_k, schnitte, "unten", S["kragen_spreizung"], "Außenkante")
+    FA = g.Teil("Kragenfall")
+    for n_, p_, z_ in fall_k:
+        if n_ == "Klappnaht":  # Knicke an den Drehpunkten ausgleichen
+            p_ = glaetten(p_, 1.2)
+        FA.kante(n_, p_, z_)
+
+    def abbilden(p, k=None):
+        """Punkt aus dem ungespreizten Kragen in den gespreizten Fall übertragen; mit Drehwinkel."""
+        p = np.asarray(p, float)
+        k = region(p) if k is None else k
+        q, q2 = drehe(p, k), drehe(p + np.array([1.0, 0.0]), k)
+        return q, math.degrees(math.atan2(q2[1] - q[1], q2[0] - q[0]))
+    marken = [g.laenge(klapp[: int(np.argmin(np.linalg.norm(klapp - b_, axis=1))) + 1]) for b_, _ in schnitte]
+    info = dict(e=e, lh=lh, s1=s1, steg_hm=f * hm, fall_hm=(1 - f) * hm, marken=marken,
+                aussen_vorher=g.laenge(aussen), abbilden=abbilden)
+    return ST, FA, info
 
 
 def bauen():
@@ -239,15 +290,30 @@ def bauen():
 
     # Kragen
     l_halb = g.laenge(R.k("Halsloch")) + g.laenge(V.k("Halsloch"))
-    K = kragen(l_halb)
-    g.knips(K, "Ansatz", K.punkte["lh"], zug=NZ)
-    g.fadenlauf(K, (3, -6.5), (15, -6.5), label=STRICH, g=0.6)
-    g.text(K, (11.5, -9.5), "KRAGEN", 1.3, gewicht="bold")
-    g.text(K, (11.5, -8.3), "2× gegengleich · hintere Mitte genäht", 0.6)
-    g.text(K, (11.5, -3.2), "Außen- und Vorderkante roh (Fell rollt oben über)", 0.5)
-    g.text(K, (K.punkte["lh"], 0.8), "Schulter", 0.5)
-    g.masslinie(K, (0.6, 0), (0.6, -S["kragen_hoehe_hm"]), f"{g.zahl(S['kragen_hoehe_hm'])}", t=0.5, g=0.55, unten=True)
-    g.nahtmass(K, "Ansatz", "Ansatz", f=0.7, g=0.55)
+    KSt, KFa, ki = kragen(l_halb)
+    sh_, fh_ = ki["steg_hm"], ki["fall_hm"]
+    g.knips(KSt, "Ansatz", ki["lh"], zug=NZ)
+    for m_ in ki["marken"]:
+        g.knips(KSt, "Klappnaht", m_, von_ende=True, zug=NZ)
+        g.knips(KFa, "Klappnaht", m_, zug=NZ)
+    g.fadenlauf(KSt, (3, -sh_ / 2 + 0.3), (11, -sh_ / 2 + 0.3), label=STRICH, g=0.5)
+    g.text(KSt, (15.5, -sh_ / 2 - 1.2), "KRAGENSTEG", 1.1, gewicht="bold")
+    g.text(KSt, (15.5, -sh_ / 2 - 0.2), "2× gegengleich · hintere Mitte genäht", 0.5)
+    g.text(KSt, (15.5, -sh_ / 2 + 0.6), "Vorderkante roh", 0.42)
+    g.text(KSt, (15.5, -sh_ / 2 + 1.3), "Fall an der Klappnaht nach außen umklappen", 0.42)
+    g.text(KSt, (ki["lh"], 0.8), "Schulter", 0.5)
+    g.masslinie(KSt, (0.6, 0), (0.6, -sh_), f"Steg {g.zahl(sh_)} (2/3)", t=0.5, g=0.5, unten=True)
+    g.nahtmass(KSt, "Ansatz", "Ansatz", f=0.75, g=0.5)
+    g.nahtmass(KSt, "Klappnaht", "Klappnaht", f=0.3, g=0.5, rein=0.7)
+    ab = ki["abbilden"]
+    g.fadenlauf(KFa, (1.6, -sh_ - fh_ * 0.7), (4.6, -sh_ - fh_ * 0.7), label="STRICH", g=0.3)
+    for (x_, fy, txt, gr, gw) in ((14.0, 0.45, "KRAGENFALL", 0.85, "bold"),
+                                  (14.0, 0.2, "2× gegengleich · Kanten roh", 0.42, "normal")):
+        q, wk = ab((x_, -sh_ - fh_ * fy))
+        g.text(KFa, tuple(q), txt, gr, rot=wk, gewicht=gw)
+    g.masslinie(KFa, (0.6, -sh_), (0.6, -sh_ - fh_), f"Fall {g.zahl(fh_)}", t=0.5, g=0.45, unten=True)
+    g.nahtmass(KFa, "Außenkante", "Außenkante", f=0.35, g=0.5)
+    g.nahtmass(KFa, "Klappnaht", "Klappnaht", f=0.85, g=0.45, rein=0.6)
 
     # Kleinteile
     lo = float(np.linalg.norm(tu - to))
@@ -291,10 +357,13 @@ def bauen():
         "Hintere Ärmelnaht Ober-/Hinterärmel": f"{g.zahl(g.laenge(AO.k('Hintere Ärmelnaht')))} / {g.zahl(g.laenge(AH.k('Hintere Ärmelnaht')))}",
         "Halsloch gesamt": round(2 * l_halb, 1),
         "Kragenhöhe hintere Mitte / vorne": f"{g.zahl(S['kragen_hoehe_hm'])} / {g.zahl(S['kragen_hoehe_vorn'])}",
+        "Kragensteg / Kragenfall (h. M.)": f"{g.zahl(ki['steg_hm'])} / {g.zahl(ki['fall_hm'])}",
+        "Klappnaht Steg / Fall": f"{g.zahl(g.laenge(KSt.k('Klappnaht')))} / {g.zahl(g.laenge(KFa.k('Klappnaht')))}",
+        "Außenkante Fall (vorher / gespreizt)": f"{g.zahl(ki['aussen_vorher'])} / {g.zahl(g.laenge(KFa.k('Außenkante')))}",
         "Taschen-Eingriff": round(lo, 1),
         "Reißverschluss teilbar ca.": round(yk - vp["cfn"][1] + BUND_H - 1, 0),
     }
-    spalten = [[R, TP], [V, KR], [AO], [AH, KS], [(BR, "quer"), (BV, "quer")], ["quadrat", K, TBt, RG]]
+    spalten = [[R, TP], [V, KR], [AO], [AH, KS], [(BR, "quer"), (BV, "quer")], ["quadrat", KSt, KFa, TBt, RG]]
     return spalten, kontrolle
 
 

@@ -63,6 +63,8 @@
     "kragen_hoehe_vorn": 12.0,
     "kragen_hub": 1.5,
     "kragen_ecke": 3.0,
+    "kragen_klapp": 0.6666666666666666,
+    "kragen_spreizung": 1.0,
     "seite_v": {
       "brust": 33.5,
       "saum": 31.5
@@ -87,6 +89,9 @@
     "Hintere Ärmelnaht Ober-/Hinterärmel": "55,7 / 55,2",
     "Halsloch gesamt": 46.5,
     "Kragenhöhe hintere Mitte / vorne": "13 / 12",
+    "Kragensteg / Kragenfall (h. M.)": "8,7 / 4,3",
+    "Klappnaht Steg / Fall": "23,6 / 23,5",
+    "Außenkante Fall (vorher / gespreizt)": "20,7 / 23,7",
     "Taschen-Eingriff": 17.3,
     "Reißverschluss teilbar ca.": 60.0
   }
