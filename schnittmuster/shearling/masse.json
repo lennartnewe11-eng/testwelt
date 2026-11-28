@@ -1,0 +1,93 @@
+{
+  "koerper": {
+    "Brustumfang": {
+      "wert": 106,
+      "quelle": "annahme Gr. L (wie Truckerschnitt)"
+    },
+    "Umfang auf Höhe Truckersaum": {
+      "wert": 96,
+      "quelle": "vorgabe"
+    },
+    "Schulterbreite (Jacke anliegend)": {
+      "wert": 50,
+      "quelle": "vorgabe Truckerschnitt"
+    },
+    "Armlänge ab Schulterpunkt": {
+      "wert": 64,
+      "quelle": "annahme Gr. L"
+    },
+    "Oberarmumfang": {
+      "wert": 34,
+      "quelle": "annahme Gr. L"
+    }
+  },
+  "felldicke": 1.2,
+  "konstruktion": {
+    "brust": 136.0,
+    "saum": 128.0,
+    "schulterbreite": 60.0,
+    "rueckenlaenge": 67.0,
+    "armloch_tiefe": 30.0,
+    "halsweite_h": 9.0,
+    "halsweite_v": 8.7,
+    "hals_hoch_h": 2.5,
+    "vorn_mehr": 1.0,
+    "halstiefe_v": 9.5,
+    "schulterneig_h": 15.0,
+    "schulterneig_v": 19.0,
+    "schulter_mehr_h": 0.3,
+    "rueckenbreite": 27.5,
+    "brustbreite": 26.5,
+    "seite_h": {
+      "brust": 34.5,
+      "saum": 32.5
+    },
+    "aermellaenge": 61.0,
+    "oberarm": 56.0,
+    "aermelsaum": 34.0,
+    "ellbogen": 33.0,
+    "kugel_mehrweite": 0.5,
+    "hinternaht_kugel": 15.0,
+    "hinternaht_saum": 0.45,
+    "ellbogen_mehrweite": 0.5,
+    "tasche_oben": [
+      17.0,
+      37.0
+    ],
+    "tasche_unten": [
+      20.0,
+      54.0
+    ],
+    "paspel": 3.0,
+    "kragen_hoehe_hm": 13.0,
+    "kragen_hoehe_vorn": 12.0,
+    "kragen_hub": 1.5,
+    "kragen_ecke": 3.0,
+    "seite_v": {
+      "brust": 33.5,
+      "saum": 31.5
+    }
+  },
+  "kontrollmasse": {
+    "Brustweite (Leder)": 136.0,
+    "Brustweite innen (abzgl. Felldicke)": 128.5,
+    "Weite unten / Bund": 128.0,
+    "Schulterbreite (überschnitten)": 60.0,
+    "Rückenlänge gesamt": 67.0,
+    "Vorderlänge gesamt": 61.0,
+    "Bundhöhe": 8.0,
+    "Schulternaht vorne / hinten": "21,4 / 21,7",
+    "Seitennaht vorne / hinten": "29,1 / 29,1",
+    "Armloch gesamt": 61.3,
+    "Armkugel gesamt": 61.8,
+    "Kugelhöhe": 12.4,
+    "Ärmellänge": 61.0,
+    "Oberarmweite Ärmel": 56.0,
+    "Saumweite Ärmel": 34.0,
+    "Hintere Ärmelnaht Ober-/Hinterärmel": "55,7 / 55,2",
+    "Halsloch gesamt": 46.5,
+    "Kragenhöhe hintere Mitte / vorne": "13 / 12",
+    "Taschen-Eingriff": 17.3,
+    "Reißverschluss teilbar ca.": 60.0
+  }
+}

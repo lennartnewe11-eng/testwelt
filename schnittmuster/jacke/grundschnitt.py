@@ -695,13 +695,13 @@ def knips(T, kname, s, von_ende=False, doppelt=False, zug=NZ):
     return out
 
 
-def fadenlauf(T, a, b, g=0.8):
+def fadenlauf(T, a, b, g=0.8, label="FADENLAUF"):
     a, b = np.array(a, float), np.array(b, float)
     d = unit(b - a)
     n = perp(d)
     T.innen.append(("faden", np.array([a, b])))
     m = (a + b) / 2 + 0.6 * n
-    T.innen.append(("text", m, "FADENLAUF", g, "middle", math.degrees(math.atan2(d[1], d[0])), "normal"))
+    T.innen.append(("text", m, label, g, "middle", math.degrees(math.atan2(d[1], d[0])), "normal"))
     for p, dd in ((a, d), (b, -d)):
         T.innen.append(("faden", np.array([p + 1.2 * dd + 0.5 * n, p, p + 1.2 * dd - 0.5 * n])))
 
@@ -1246,17 +1246,18 @@ def pdf_zeichnen(c, elemente, H):
     c.setDash([])
 
 
-def pdf_gross(elemente, W, H, pfad, titel):
+def pdf_gross(elemente, W, H, pfad, titel, kopf="Grundschnitt Jacke"):
     from reportlab.lib.units import cm
     from reportlab.pdfgen import canvas
     c = canvas.Canvas(pfad, pagesize=(W * cm, H * cm))
-    c.setTitle(f"Grundschnitt Jacke 1:1 – {titel}")
+    c.setTitle(f"{kopf} 1:1 – {titel}")
     pdf_zeichnen(c, elemente, H)
     c.showPage()
     c.save()
 
 
-def pdf_a4(elemente, W, H, pfad, kontrolle, titel):
+def pdf_a4(elemente, W, H, pfad, kontrolle, titel, kopf="Grundschnitt Jacke · Gr. L · slim",
+           zugaben="Nahtzugabe 1,5 cm, Saumzugabe 3 cm enthalten.", kurz="Grundschnitt Jacke L"):
     from reportlab.lib.units import cm
     from reportlab.pdfgen import canvas
     PW, PH = 21.0, 29.7
@@ -1280,15 +1281,15 @@ def pdf_a4(elemente, W, H, pfad, kontrolle, titel):
                 belegt.add((int(x // TW), int(y // TH)))
     kacheln = [(i, j) for j in range(ny) for i in range(nx) if (i, j) in belegt]
     c = canvas.Canvas(pfad, pagesize=(PW * cm, PH * cm))
-    c.setTitle(f"Grundschnitt Jacke – {titel} – A4 zum Zusammenkleben")
+    c.setTitle(f"{kopf} – {titel} – A4 zum Zusammenkleben")
     spalten = "ABCDEFGHIJKLMNOP"
 
     # Seite 1: Übersicht
     c.setFont("Helvetica-Bold", 18)
-    c.drawString(2 * cm, (PH - 2.5) * cm, "Grundschnitt Jacke · Gr. L · slim")
+    c.drawString(2 * cm, (PH - 2.5) * cm, kopf)
     c.setFont("Helvetica", 10)
     zeilen = [
-        f"{titel} · Nahtzugabe 1,5 cm, Saumzugabe 3 cm enthalten.",
+        f"{titel} · {zugaben}",
         "Rote Maße = Nahtlinie (ohne Zugaben), in cm.",
         "Drucken mit 100 % / „Tatsächliche Größe“ (nicht „An Seite anpassen“).",
         "Danach das Kontrollquadrat nachmessen: es muss genau 10 × 10 cm groß sein.",
@@ -1357,7 +1358,7 @@ def pdf_a4(elemente, W, H, pfad, kontrolle, titel):
         c.drawString(RAND * cm, (PH - 0.8) * cm, f"{spalten[i]}{j + 1}")
         c.setFont("Helvetica", 7)
         c.drawRightString((PW - RAND) * cm, (PH - 0.8) * cm,
-                          f"Grundschnitt Jacke L · Seite {n}/{len(kacheln)} · links an {spalten[i - 1] + str(j + 1) if i else '–'}, oben an {spalten[i] + str(j) if j else '–'}")
+                          f"{kurz} · Seite {n}/{len(kacheln)} · links an {spalten[i - 1] + str(j + 1) if i else '–'}, oben an {spalten[i] + str(j) if j else '–'}")
         # Passmarken in Rahmenmitte
         c.setStrokeColorRGB(0, 0, 0)
         for (x, y, dx, dy) in ((RAND + TW / 2, RAND, 0, 1), (RAND + TW / 2, RAND + TH, 0, -1),
