@@ -1,5 +1,5 @@
 {
-  "variante": "Ärmel zweiteilig (mit hinterer Ärmelnaht)",
+  "variante": "Ärmel dreiteilig (vordere und hintere Ärmelnaht)",
   "koerper": {
     "Umfang auf Saumhöhe (dort endet die Jacke)": {
       "wert": 96,
@@ -46,6 +46,8 @@
     "kugel_mehrweite": 1.2,
     "hinternaht_kugel": 14.0,
     "hinternaht_saum": 0.45,
+    "vordernaht_kugel": 14.0,
+    "vordernaht_saum": 0.45,
     "ellbogen_mehrweite": 1.0,
     "passe_unter_hals": 8.1,
     "tasche_x": 4.5,
@@ -97,6 +99,7 @@
     "Hintere Ärmelnaht Hinterärmel": 55.7,
     "Ellbogen-Mehrweite (einhalten)": 1.0,
     "Vorschub am Ärmelsaum": 1.1,
+    "Vordere Ärmelnaht (beide Teile)": 55.4,
     "Halsloch gesamt (für Kragen)": 42.6
   }
 }

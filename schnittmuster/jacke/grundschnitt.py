@@ -63,6 +63,8 @@ M = dict(
     kugel_mehrweite=1.2,  # Mehrweite Kugel gegenüber Armloch (Denim: wenig)
     hinternaht_kugel=14.0,  # hintere Ärmelnaht beginnt so weit (Bogen) über der Unterarmnaht
     hinternaht_saum=0.45,   # Lage am Saum: Anteil der halben Saumweite hinter der Mitte
+    vordernaht_kugel=14.0,  # vordere Ärmelnaht (dreiteilig): so weit (Bogen) über der vorderen Unterarmnaht
+    vordernaht_saum=0.45,   # Lage am Saum: Anteil der halben Saumweite vor der Mitte (spiegelgleich zur hinteren)
     ellbogen_mehrweite=1.0,  # Oberärmel an der hinteren Naht länger -> Ärmel biegt nach vorn
     # Passe und Brusttasche (Vorderteil)
     passe_unter_hals=8.1,   # Passennaht: so weit unter der vorderen Mitte am Halsloch (waagerecht)
@@ -552,7 +554,7 @@ def aermel_einteilig(ah_v, ah_h):
     return T, dict(h=h, w=w, s=s, L=L, ye=M["ellbogen"])
 
 
-def aermel(ah_v, ah_h):
+def aermel(ah_v, ah_h, vordernaht=False):
     """Zweiteiliger Ärmel: Oberärmel + Hinterärmel, hintere Naht mit Ellbogen-Mehrweite."""
     w = M["oberarm"] / 2
     ziel = ah_v + ah_h + M["kugel_mehrweite"]
@@ -596,10 +598,33 @@ def aermel(ah_v, ah_h):
     vorn = bez(fh2, fh2 + 2 / 3 * (pf - fh2), fa + 2 / 3 * (pf - fa), fa, n=96)
 
     O = Teil("Oberärmel")
-    O.kante("Unterarmnaht", vorn, NZ)
-    O.kante("Armkugel", cat(v, b1), NZ)
-    O.kante("Hintere Ärmelnaht", naht_o, NZ)
-    O.kante("Ärmelsaum", seg(sb, fh2), SAUMZ)
+    VA, vinfo = None, {}
+    if vordernaht:
+        # vordere Naht spiegelgleich zur hinteren; unterhalb des Ellbogens mit dem Oberärmel gedreht
+        v1, v2 = teilen(v, M["vordernaht_kugel"])
+        cf = v2[0]
+        fb = np.array([-M["vordernaht_saum"] * s, L])
+        fu = auf_linie(cf, fb, ye)
+        fl, fbr = rot_um(fu, pf, th), rot_um(fb, pf, th)
+        du, dl = unit(fu - cf), unit(fbr - fl)
+        Af, Bf = fu - 5 * du, fl + 5 * dl
+        naht_v = cat(seg(cf, Af), bez(Af, Af + 2.5 * du, Bf - 2.5 * dl, Bf), seg(Bf, fbr))
+        O.kante("Vordere Ärmelnaht", naht_v[::-1], NZ)
+        O.kante("Armkugel", cat(v2, b1), NZ)
+        O.kante("Hintere Ärmelnaht", naht_o, NZ)
+        O.kante("Ärmelsaum", seg(sb, fbr), SAUMZ)
+        VA = Teil("Vorderärmel")
+        VA.kante("Unterarmnaht", vorn, NZ)
+        VA.kante("Armkugel", v1, NZ)
+        VA.kante("Vordere Ärmelnaht", naht_v, NZ)
+        VA.kante("Ärmelsaum", seg(fbr, fh2), SAUMZ)
+        vinfo = dict(cf=cf, fb=fb, fu=fu, fbr=fbr, kv1=laenge(v1),
+                     af_oben=float(np.linalg.norm(Af - cf)), bf_unten=float(np.linalg.norm(fbr - Bf)))
+    else:
+        O.kante("Unterarmnaht", vorn, NZ)
+        O.kante("Armkugel", cat(v, b1), NZ)
+        O.kante("Hintere Ärmelnaht", naht_o, NZ)
+        O.kante("Ärmelsaum", seg(sb, fh2), SAUMZ)
 
     H = Teil("Hinterärmel")
     H.kante("Hintere Ärmelnaht", seg(sh, ct), NZ)
@@ -609,7 +634,7 @@ def aermel(ah_v, ah_h):
 
     info = dict(h=h, w=w, s=s, L=L, ye=ye, th=th, ct=ct, sh=sh, su=su, pf=pf,
                 a_oben=float(np.linalg.norm(A - ct)), b_unten=float(np.linalg.norm(sb - B)),
-                vorschub=float(-(rot_um(np.array([0.0, L]), pf, th)[0])))
+                vorschub=float(-(rot_um(np.array([0.0, L]), pf, th)[0])), VA=VA, **vinfo)
     return O, H, info
 
 
@@ -728,12 +753,12 @@ def schnitt_bis_kante(poly, y, x0, x1):
 
 # ---------------------------------------------------------------- Aufbau
 VARIANTEN = {
-    "zweiteilig": "Ärmel zweiteilig (mit hinterer Ärmelnaht)",
+    "dreiteilig": "Ärmel dreiteilig (vordere und hintere Ärmelnaht)",
     "einteilig": "Ärmel einteilig (ohne hintere Ärmelnaht)",
 }
 
 
-def bauen(variante="zweiteilig"):
+def bauen(variante="dreiteilig"):
     R, V = ruecken(), vorderteil()
     ah_h, ah_v = laenge(R.k("Armloch")), laenge(V.k("Armloch"))
     ah = ah_h + ah_v
@@ -932,44 +957,84 @@ def bauen(variante="zweiteilig"):
             "Unterarmnaht": round(laenge(A.k("Unterarmnaht hinten")), 1),
         })
     else:
-        AO, AH, p = aermel(ah_v, ah_h)
-        kv = laenge(AO.k("Armkugel")) + laenge(AH.k("Armkugel"))
+        drei = variante == "dreiteilig"
+        AO, AH, p = aermel(ah_v, ah_h, vordernaht=drei)
+        AV = p["VA"]
+        kv = laenge(AO.k("Armkugel")) + laenge(AH.k("Armkugel")) + (laenge(AV.k("Armkugel")) if drei else 0)
         xs = lambda y: auf_linie(p["ct"], p["sh"], y)[0]
         xb = lambda y: p["w"] - (p["w"] - p["s"]) * (y - p["h"]) / (p["L"] - p["h"])
         ye, h, L = p["ye"], p["h"], p["L"]
-
-        # Oberärmel
-        fadenlauf(AO, (3.2, h + 3), (3.2, L - 8))
-        hilfslinie(AO, [(-p["w"], h), (xs(h), h)], "Oberarmlinie", (-p["w"] + 1.5, h - 0.4), groesse=0.8)
-        hilfslinie(AO, [p["pf"], p["su"]], "Ellbogenlinie", (p["pf"][0] + 1.5, ye - 0.4), groesse=0.8)
-        text(AO, (-10.5, h + 9), "OBERÄRMEL", 1.8, gewicht="bold")
-        text(AO, (-10.5, h + 11.5), "2× zuschneiden (gegengleich)", 1.0)
-        text(AO, (-10.5, h + 13.3), kopf, 0.8)
-        text(AO, (-p["w"] + 4.5, h + 4), "vorne", 1.0)
-        text(AO, (xs(ye + 4) - 1.2, ye + 4), "Mehrweite", 0.7, anker="end")
-        text(AO, (xs(ye + 5) - 1.2, ye + 5), "einhalten", 0.7, anker="end")
-        knips(AO, "Armkugel", KN_V + 0.2)
-        knips(AO, "Armkugel", s_schulter)
-        knips(AO, "Unterarmnaht", bis_y(AO.k("Unterarmnaht")[::-1], ye), von_ende=True)
-        knips(AO, "Hintere Ärmelnaht", p["a_oben"])
-        knips(AO, "Hintere Ärmelnaht", p["b_unten"], von_ende=True)
         knick = np.array([-0.8, ye])
         unten = rot_um(np.array([-0.8, L]), p["pf"], p["th"])
+
+        # Oberärmel
+        if drei:
+            xf = lambda y: auf_linie(p["cf"], p["fb"], y)[0]
+            k0 = p["kv1"]  # Kugel des Oberärmels beginnt an der vorderen Naht
+            fadenlauf(AO, (-5.5, h + 3), (-5.5, L - 9))
+            hilfslinie(AO, [(xf(h), h), (xs(h), h)], "Oberarmlinie", (xf(h) + 0.8, h - 0.4), groesse=0.7)
+            hilfslinie(AO, [p["fu"], p["su"]], "Ellbogenlinie", (p["fu"][0] + 0.8, ye - 0.4), groesse=0.7)
+            text(AO, (5.4, h + 8), "OBERÄRMEL", 1.3, gewicht="bold")
+            text(AO, (5.4, h + 9.6), "2× zuschneiden", 0.8)
+            text(AO, (5.4, h + 10.7), "(gegengleich)", 0.8)
+            text(AO, (5.4, h + 11.8), kopf, 0.5)
+            knips(AO, "Armkugel", s_schulter - k0)
+            knips(AO, "Vordere Ärmelnaht", p["af_oben"], von_ende=True)
+            knips(AO, "Vordere Ärmelnaht", p["bf_unten"])
+            nahtmass(AO, "Armkugel", "Kugel vorne", s1=s_schulter - k0, g=0.55)
+            nahtmass(AO, "Armkugel", "Kugel hinten", s0=s_schulter - k0, f=0.45, g=0.55)
+            nahtmass(AO, "Vordere Ärmelnaht", "Vordere Naht", f=0.2, g=0.6)
+            saum_a = p["fbr"]
+        else:
+            fadenlauf(AO, (3.2, h + 3), (3.2, L - 8))
+            hilfslinie(AO, [(-p["w"], h), (xs(h), h)], "Oberarmlinie", (-p["w"] + 1.5, h - 0.4), groesse=0.8)
+            hilfslinie(AO, [p["pf"], p["su"]], "Ellbogenlinie", (p["pf"][0] + 1.5, ye - 0.4), groesse=0.8)
+            text(AO, (-10.5, h + 9), "OBERÄRMEL", 1.8, gewicht="bold")
+            text(AO, (-10.5, h + 11.5), "2× zuschneiden (gegengleich)", 1.0)
+            text(AO, (-10.5, h + 13.3), kopf, 0.8)
+            text(AO, (-p["w"] + 4.5, h + 4), "vorne", 1.0)
+            knips(AO, "Armkugel", KN_V + 0.2)
+            knips(AO, "Armkugel", s_schulter)
+            knips(AO, "Unterarmnaht", bis_y(AO.k("Unterarmnaht")[::-1], ye), von_ende=True)
+            nahtmass(AO, "Armkugel", "Kugel vorne", s1=s_schulter)
+            nahtmass(AO, "Armkugel", "Kugel hinten", s0=s_schulter, f=0.45)
+            nahtmass(AO, "Unterarmnaht", "Unterarmnaht", f=0.3)
+            saum_a = AO.k("Ärmelsaum")[-1]
+        text(AO, (xs(ye + 4) - 1.2, ye + 4), "Mehrweite", 0.7, anker="end")
+        text(AO, (xs(ye + 5) - 1.2, ye + 5), "einhalten", 0.7, anker="end")
+        knips(AO, "Hintere Ärmelnaht", p["a_oben"])
+        knips(AO, "Hintere Ärmelnaht", p["b_unten"], von_ende=True)
         masslinie(AO, (-0.8, 0), knick, "", t=0.5)
         masslinie(AO, knick, unten, f"Ärmellänge Mitte {zahl(ye + np.linalg.norm(unten - knick))} (64 + Ellbogenweite)", t=0.7)
         AO.innen = [e for e in AO.innen if not (e[0] == "text" and e[2] == "")]
         masslinie(AO, (0.8, 0), (0.8, h), f"Kugelhöhe {zahl(h)}", t=0.55, unten=True)
         weite(AO, h, "Oberarm", t=0.6)
         weite(AO, ye, "Ellbogen", t=0.6)
-        sb, fh2 = AO.k("Ärmelsaum")[0], AO.k("Ärmelsaum")[-1]
-        nn = perp(unit(sb - fh2))
-        if not AO.poly().contains(Point((sb + fh2) / 2 + 0.1 * nn)):
-            nn = -nn
-        masslinie(AO, fh2, sb, f"Saum {zahl(np.linalg.norm(sb - fh2))}", t=0.25)
-        nahtmass(AO, "Armkugel", "Kugel vorne", s1=s_schulter)
-        nahtmass(AO, "Armkugel", "Kugel hinten", s0=s_schulter, f=0.45)
-        nahtmass(AO, "Unterarmnaht", "Unterarmnaht", f=0.3)
+        sb = AO.k("Ärmelsaum")[0]
+        masslinie(AO, saum_a, sb, f"Saum {zahl(np.linalg.norm(sb - saum_a))}", t=0.25)
         nahtmass(AO, "Hintere Ärmelnaht", "Hintere Naht", f=0.8)
+
+        # Vorderärmel
+        if drei:
+            xa = lambda y: -xb(y)  # vordere Unterarmnaht oberhalb des Ellbogens
+            xmv = (xf(ye) + p["pf"][0]) / 2
+            fadenlauf(AV, (xmv - 1.0, ye - 14), (xmv - 1.0, ye + 20))
+            hilfslinie(AV, [(-p["w"], h), (xf(h), h)])
+            hilfslinie(AV, [p["pf"], p["fu"]])
+            text(AV, (xmv + 1.3, ye + 12), "VORDERÄRMEL", 1.3, rot=-90, gewicht="bold")
+            text(AV, (xmv + 2.5, ye + 12), "2× (gegengleich)", 0.8, rot=-90)
+            text(AV, (xa(h + 3) + 1.2, h + 3), "vorne", 0.9, anker="start")
+            knips(AV, "Armkugel", KN_V + 0.2)
+            knips(AV, "Unterarmnaht", bis_y(AV.k("Unterarmnaht")[::-1], ye), von_ende=True)
+            knips(AV, "Vordere Ärmelnaht", p["af_oben"])
+            knips(AV, "Vordere Ärmelnaht", p["bf_unten"], von_ende=True)
+            weite(AV, h, "Oberarm", t=0.5, g=0.55)
+            weite(AV, ye, "Ellbogen", t=0.5, g=0.55)
+            fh2 = AV.k("Ärmelsaum")[-1]
+            masslinie(AV, fh2, p["fbr"], f"Saum {zahl(np.linalg.norm(p['fbr'] - fh2))}", t=0.5, g=0.55)
+            nahtmass(AV, "Armkugel", "Kugel", g=0.55, f=0.6)
+            nahtmass(AV, "Unterarmnaht", "Unterarmnaht", f=0.3, g=0.6)
+            nahtmass(AV, "Vordere Ärmelnaht", "Vordere Naht", f=0.75, g=0.6)
 
         # Hinterärmel
         xm = (xs(ye) + xb(ye)) / 2
@@ -989,7 +1054,7 @@ def bauen(variante="zweiteilig"):
         nahtmass(AH, "Armkugel", "Kugel", g=0.55, f=0.4)
         nahtmass(AH, "Unterarmnaht", "Unterarmnaht", f=0.6, g=0.6)
         nahtmass(AH, "Hintere Ärmelnaht", "Hintere Naht", f=0.25, g=0.6)
-        teile = [[R], [VP, VU], [AO], [AH], ["quadrat", TB, (KF, "quer"), KS]]
+        teile = [[R], [VP, VU]] + ([[AV]] if drei else []) + [[AO], [AH], ["quadrat", TB, (KF, "quer"), KS]]
         kontrolle.update({
             "Armkugel gesamt": round(kv, 1),
             "Mehrweite Kugel": round(kv - ah, 1),
@@ -1002,6 +1067,7 @@ def bauen(variante="zweiteilig"):
             "Hintere Ärmelnaht Hinterärmel": round(laenge(AH.k("Hintere Ärmelnaht")), 1),
             "Ellbogen-Mehrweite (einhalten)": round(laenge(AO.k("Hintere Ärmelnaht")) - laenge(AH.k("Hintere Ärmelnaht")), 1),
             "Vorschub am Ärmelsaum": round(p["vorschub"], 1),
+            **({"Vordere Ärmelnaht (beide Teile)": round(laenge(AV.k("Vordere Ärmelnaht")), 1)} if drei else {}),
         })
     kontrolle["Halsloch gesamt (für Kragen)"] = round(2 * (laenge(V.k("Halsloch")) + laenge(R.k("Halsloch"))), 1)
     return teile, kontrolle
